@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-fire-500: #f97316;
+  --color-fire-600: #ea580c;
+  --color-fire-400: #fb923c;
+  --color-fire-300: #fdba74;
+  --color-arena-dark: #0a0a0f;
+  --color-arena-card: #12121a;
+  --color-arena-border: #1e1e2e;
+  --color-neo-500: #3b82f6;
+  --color-neo-600: #2563eb;
+  --color-neo-400: #60a5fa;
+  --color-neo-300: #93c5fd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-arena-dark);
+  color: #fafafa;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #12121a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3b82f6, #f97316);
+  border-radius: 3px;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #3b82f6, #60a5fa, #f97316, #fb923c);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-card {
+  background: rgba(18, 18, 26, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.fire-glow {
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.12), 0 0 60px rgba(249, 115, 22, 0.08);
+}
+
+.btn-fire {
+  background: linear-gradient(135deg, #3b82f6, #2563eb, #f97316, #ea580c);
+  transition: all 0.2s ease;
+}
+
+.btn-fire:hover {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6, #fb923c, #f97316);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
+}
+
+.input-field {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 0.2s ease;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}

@@ -1,0 +1,542 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PLAYER
+  HOST
+  ADMIN
+  MODERATOR
+  SUPER_ADMIN
+}
+
+enum TournamentStatus {
+  DRAFT
+  REGISTRATION
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  PENDING_PAYOUT
+  PAID
+}
+
+enum TournamentFormat {
+  SOLO
+  DUO
+  SQUAD
+}
+
+enum Platform {
+  MOBILE
+  PC
+}
+
+enum GameMode {
+  FULL_MAP
+  CLASH_SQUAD
+}
+
+enum TeamMemberRole {
+  LEADER
+  MEMBER
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  ENTRY_FEE
+  PRIZE
+  REFUND
+  ESCROW_HOLD
+  ESCROW_RELEASE
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EscrowStatus {
+  HELD
+  RELEASED
+  REFUNDED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  uid           String    @unique
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String
+  googleId      String?   @unique
+  freeFireId    String?   @unique
+  ign           String?
+  displayName   String?
+  avatarUrl     String?
+  verificationScreenshotUrl String?
+  role          UserRole  @default(PLAYER)
+  isVerified    Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  ignUpdatedAt  DateTime?
+  notifyTournaments Boolean @default(true)
+  notifyResults     Boolean @default(true)
+  notifyAlerts      Boolean @default(true)
+
+  wallet              Wallet?
+  teamMemberships     TeamMember[]
+  ledTeams            Team[]              @relation("TeamLeader")
+  tournamentEntries   TournamentEntry[]
+  transactions        Transaction[]
+  verifications       VerificationRequest[]
+  refreshTokens       RefreshToken[]
+  createdTournaments  Tournament[]        @relation("TournamentCreator")
+  winnerProofs        WinnerProof[]
+  depositRequests     DepositRequest[]
+  redeemRequests      RedeemRequest[]
+  esportsRegistrations EsportsTeam[] @relation("EsportsRegistrations")
+  esportsBans         EsportsBan[]   @relation("EsportsBans")
+  notifications       Notification[]
+  storeRedemptions    StoreItem[]    @relation("StoreRedemptions")
+  warnings            Warning[]
+  issuedWarnings      Warning[]      @relation("IssuedWarnings")
+  supportTickets      SupportTicket[]
+  giftCardRedemptions GiftCardRedemption[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Warning {
+  id         String   @id @default(cuid())
+  userId     String
+  issuedById String
+  reason     String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  issuedBy  User @relation("IssuedWarnings", fields: [issuedById], references: [id])
+
+  @@index([userId])
+  @@index([userId, isRead])
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Decimal  @default(0) @db.Decimal(12, 2)
+  currency  String  @default("INR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  escrows      Escrow[]
+
+  @@index([userId])
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  tag         String   @unique @db.VarChar(6)
+  logoUrl     String?
+  leaderId    String
+  maxMembers  Int      @default(4)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  leader   User         @relation("TeamLeader", fields: [leaderId], references: [id])
+  members  TeamMember[]
+  entries  TournamentEntry[]
+
+  @@index([leaderId])
+}
+
+model TeamMember {
+  id       String         @id @default(cuid())
+  teamId   String
+  userId   String
+  role     TeamMemberRole @default(MEMBER)
+  joinedAt DateTime       @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Tournament {
+  id              String           @id @default(cuid())
+  uid             String           @unique
+  title           String
+  description     String?
+  format          TournamentFormat
+  platform        Platform         @default(MOBILE)
+  gameMode        GameMode         @default(FULL_MAP)
+  status          TournamentStatus @default(DRAFT)
+  entryFee        Decimal          @db.Decimal(12, 2)
+  prizePool       Decimal          @db.Decimal(12, 2)
+  maxParticipants Int
+  mapName         String?
+  roomId          String?
+  roomPassword    String?
+  rules           String?
+  creatorId       String
+  registrationStart DateTime
+  registrationEnd   DateTime
+  startTime       DateTime
+  endTime         DateTime?
+
+  platformCommission Decimal  @default(0) @db.Decimal(12, 2)
+  hostCommission     Decimal  @default(0) @db.Decimal(12, 2)
+  remainingPool      Decimal  @default(0) @db.Decimal(12, 2)
+  prizeFirst         Decimal  @default(0) @db.Decimal(12, 2)
+  prizeSecond        Decimal? @db.Decimal(12, 2)
+  prizeThird         Decimal? @db.Decimal(12, 2)
+
+  delayedCount  Int      @default(0)
+  delayedAt     DateTime?
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  creator User              @relation("TournamentCreator", fields: [creatorId], references: [id])
+  entries TournamentEntry[]
+  escrows Escrow[]
+  winnerProofs WinnerProof[]
+
+  @@index([status])
+  @@index([startTime])
+  @@index([creatorId])
+}
+
+model TournamentEntry {
+  id           String   @id @default(cuid())
+  tournamentId String
+  userId       String?
+  teamId       String?
+  placement    Int?
+  kills        Int      @default(0)
+  points       Int      @default(0)
+  isPaid       Boolean  @default(false)
+  registeredAt DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  team       Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([tournamentId, userId])
+  @@unique([tournamentId, teamId])
+  @@index([tournamentId])
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  walletId    String
+  userId      String
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  amount      Decimal           @db.Decimal(12, 2)
+  description String?
+  reference   String?           @unique
+  metadata    Json?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([userId])
+  @@index([type])
+}
+
+model Escrow {
+  id           String       @id @default(cuid())
+  walletId     String
+  tournamentId String
+  amount       Decimal      @db.Decimal(12, 2)
+  status       EscrowStatus @default(HELD)
+  createdAt    DateTime     @default(now())
+  releasedAt   DateTime?
+
+  wallet     Wallet     @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([tournamentId])
+}
+
+model VerificationRequest {
+  id              String             @id @default(cuid())
+  userId          String
+  freeFireId      String
+  screenshotUrl   String
+  status          VerificationStatus @default(PENDING)
+  rejectionReason String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model WinnerProof {
+  id                  String             @id @default(cuid())
+  tournamentId        String
+  userId              String
+  winnerUid           String
+  winnerIgn           String
+  screenshotUrl       String
+  status              WinnerProofStatus  @default(PENDING)
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  rejectionReason     String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([status])
+}
+
+model DepositRequest {
+  id              String             @id @default(cuid())
+  userId          String
+  amount          Decimal            @db.Decimal(12, 2)
+  screenshotUrl   String
+  status          DepositStatus      @default(PENDING)
+  rejectionReason String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum DepositStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model RedeemRequest {
+  id              String             @id @default(cuid())
+  userId          String
+  amount          Decimal            @db.Decimal(12, 2)
+  type            RedeemType
+  accountDetails  String?
+  status          RedeemStatus       @default(PENDING)
+  rejectionReason String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum RedeemType {
+  GIFT_CARD
+  BANK_TRANSFER
+}
+
+enum RedeemStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+model StoreItem {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  type       String
+  amount     Int
+  isRedeemed Boolean  @default(false)
+  redeemedBy String?
+  redeemedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  redeemer User? @relation("StoreRedemptions", fields: [redeemedBy], references: [id], onDelete: SetNull)
+}
+
+enum TicketStatus {
+  PENDING
+  RESOLVED
+}
+
+enum TicketType {
+  BUG
+  FEEDBACK
+}
+
+model SupportTicket {
+  id          String      @id @default(cuid())
+  userId      String?
+  type        TicketType
+  subject     String
+  description String
+  status      TicketStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum WinnerProofStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EsportsTeamStatus {
+  REGISTERED
+  DISQUALIFIED
+  WINNER
+}
+
+model EsportsSeason {
+  id                 String   @id @default(cuid())
+  seasonNumber       Int      @unique
+  registrationDeadline DateTime?
+  registrationOpen   Boolean  @default(true)
+  matchDate          DateTime?
+  matchMap           String?
+  matchMode          String?
+  nextSeasonDate     DateTime?
+  winnerTeamId       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  teams EsportsTeam[]
+}
+
+model EsportsTeam {
+  id             String            @id @default(cuid())
+  seasonId       String
+  teamName       String
+  player1Uid     String
+  player1Ign     String
+  player2Uid     String
+  player2Ign     String
+  player3Uid     String
+  player3Ign     String
+  player4Uid     String
+  player4Ign     String
+  screenshotUrl  String
+  teamLogoUrl    String?
+  status         EsportsTeamStatus @default(REGISTERED)
+  registeredById String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  season       EsportsSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  registeredBy User          @relation("EsportsRegistrations", fields: [registeredById], references: [id])
+
+  @@unique([seasonId, player1Uid, player2Uid, player3Uid, player4Uid])
+  @@index([seasonId])
+  @@index([status])
+}
+
+model EsportsBan {
+  id         String   @id @default(cuid())
+  uid        String   @unique
+  reason     String?
+  bannedById String
+  createdAt  DateTime @default(now())
+
+  bannedBy User @relation("EsportsBans", fields: [bannedById], references: [id])
+
+  @@index([uid])
+}
+
+model GiftCard {
+  id          String   @id @default(cuid())
+  name        String
+  value       Decimal  @db.Decimal(12, 2)
+  imageUrl    String?
+  priceInCoins Decimal @db.Decimal(12, 2)
+  stockCount  Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  redemptions GiftCardRedemption[]
+}
+
+model GiftCardRedemption {
+  id         String   @id @default(cuid())
+  userId     String
+  giftCardId String
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  giftCard GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
