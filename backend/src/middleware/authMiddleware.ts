@@ -5,6 +5,8 @@ export type AuthUser = Express.User;
 export interface AuthenticatedRequest extends Request {
   params: Record<string, string>;
   user?: AuthUser;
+  body: any;
+  query: any;
 }
 
 export const authenticate: RequestHandler = (req, res, next): void => {
