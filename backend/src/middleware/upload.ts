@@ -25,7 +25,7 @@ const verificationStorage = multer.diskStorage({
   },
 });
 
-const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (_req: any, file: any, cb: any) => {
   const allowed = /\.(jpg|jpeg|png|gif|webp)$/i;
   if (allowed.test(path.extname(file.originalname))) {
     cb(null, true);
