@@ -7,8 +7,9 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthUser;
   body: any;
   query: any;
-  file?: Express.Multer.File;
-  files?: Express.Multer.File[];
+ file?: any;
+files?: any[];
+headers: any;
 }
 
 export const authenticate: RequestHandler = (req, res, next): void => {
