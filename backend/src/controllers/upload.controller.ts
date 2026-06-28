@@ -11,9 +11,9 @@ export async function uploadAvatar(req: AuthenticatedRequest, res: Response): Pr
       return;
     }
 
-    console.log('[Upload] File received:', req.file.originalname, req.file.filename, req.file.size, 'bytes');
+    const avatarUrl = req.file.path;
 
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    console.log('[Upload] File received:', req.file.originalname, 'Cloudinary URL:', avatarUrl);
 
     const { prisma } = await import('../config/db');
     await prisma.user.update({
@@ -36,7 +36,7 @@ export async function uploadTeamLogo(req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    const logoUrl = `/uploads/team-logos/${req.file.filename}`;
+    const logoUrl = req.file.path;
     res.json({ success: true, data: { logoUrl } });
   } catch (error) {
     console.error('[Upload] team logo error:', error);
@@ -51,7 +51,7 @@ export async function uploadVerificationScreenshot(req: AuthenticatedRequest, re
       return;
     }
 
-    const screenshotUrl = `/uploads/verification/${req.file.filename}`;
+    const screenshotUrl = req.file.path;
     res.json({ success: true, data: { screenshotUrl } });
   } catch (error) {
     console.error('[Upload] verification screenshot error:', error);
@@ -66,7 +66,7 @@ export async function uploadGiftCardImage(req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    const imageUrl = `/uploads/verification/${req.file.filename}`;
+    const imageUrl = req.file.path;
     res.json({ success: true, data: { imageUrl } });
   } catch (error) {
     console.error('[Upload] gift card image error:', error);
