@@ -84,6 +84,10 @@ export interface Team {
 }
 
 export const authApi = {
+  checkUsername: async (username: string) => {
+    const res = await api.get<ApiResponse<{ available: boolean }>>('/auth/check-username', { params: { username } });
+    return res.data;
+  },
   register: async (data: { email: string; username: string; password: string; displayName?: string }) => {
     const res = await api.post<ApiResponse<{ user: User; accessToken: string; refreshToken: string }>>('/auth/register', data);
     if (res.data.data) setAuthTokens(res.data.data.accessToken, res.data.data.refreshToken);
@@ -217,33 +221,25 @@ export const uploadApi = {
   avatar: async (file: File) => {
     const formData = new FormData();
     formData.append('avatar', file);
-    const res = await api.post('/upload/avatar', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const res = await api.post('/upload/avatar', formData);
     return res.data;
   },
   teamLogo: async (file: File) => {
     const formData = new FormData();
     formData.append('teamLogo', file);
-    const res = await api.post('/upload/team-logo', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const res = await api.post('/upload/team-logo', formData);
     return res.data;
   },
   verificationScreenshot: async (file: File) => {
     const formData = new FormData();
     formData.append('screenshot', file);
-    const res = await api.post('/upload/verification', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const res = await api.post('/upload/verification', formData);
     return res.data;
   },
   giftCardImage: async (file: File) => {
     const formData = new FormData();
     formData.append('image', file);
-    const res = await api.post('/upload/gift-card-image', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const res = await api.post('/upload/gift-card-image', formData);
     return res.data;
   },
 };

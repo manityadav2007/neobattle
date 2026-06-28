@@ -5,11 +5,12 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart3,
-  LayoutDashboard,
+  CircleHelp,
   LogOut,
   Medal,
   Menu,
   Radio,
+  Settings,
   Shield,
   ShoppingBag,
   Trophy,
@@ -31,14 +32,6 @@ const navLinks = [
   { href: '/stats', label: 'Stats', icon: BarChart3 },
   { href: '/shop', label: 'Shop', icon: ShoppingBag },
 ];
-
-function getAccountLinks(isHost: boolean) {
-  const links: { href: string; label: string; icon: any }[] = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  ];
-  if (!isHost) links.push({ href: '/wallet', label: 'Wallet', icon: Wallet });
-  return links;
-}
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -143,56 +136,72 @@ export default function Navbar() {
           animate={{ opacity: 1, y: 0 }}
           className="md:hidden glass-card border-t border-white/5 px-4 py-4 space-y-2"
         >
-          {navLinks.map((link) => {
-            const Icon = link.icon;
-            return (
+          {!user && (
+            <div className="space-y-2 pt-2">
+              <Link href="/login" onClick={() => setMobileOpen(false)} className="block px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5 text-sm font-medium">
+                Login
+              </Link>
+              <Link href="/register" onClick={() => setMobileOpen(false)} className="block btn-fire px-4 py-3 rounded-lg text-center text-white font-semibold text-sm">
+                Join Arena
+              </Link>
+            </div>
+          )}
+
+          {user && (
+            <div className="space-y-1">
               <Link
-                key={link.href}
-                href={link.href}
+                href="/dashboard"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
               >
-                <Icon className="w-5 h-5 text-fire-400" />
-                {link.label}
+                <User className="w-5 h-5 text-fire-400" />
+                My Profile
               </Link>
-            );
-          })}
-          {!user && (
-            <>
-              <Link href="/login" onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-zinc-300">Login</Link>
-              <Link href="/register" onClick={() => setMobileOpen(false)} className="block btn-fire px-4 py-3 rounded-lg text-center text-white font-semibold">Join Arena</Link>
-            </>
-          )}
-          {user && (
-            <div className="pt-2 border-t border-white/5 space-y-2">
-              {/* Mobile: consolidated admin/host entry */}
-              {(isSuperAdmin || isHost) && (
-                <Link href={isHost ? '/host-dashboard' : '/admin'} onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-fire-500/10 hover:text-fire-400"
+
+              {(user.role === 'ADMIN' || isSuperAdmin) && (
+                <Link
+                  href="/admin"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
                 >
-                  <Shield className="w-5 h-5 text-fire-400" /> {isHost ? 'My Tournaments' : 'Admin Panel'}
+                  <Shield className="w-5 h-5 text-fire-400" />
+                  Admin Panel
                 </Link>
               )}
-              {getAccountLinks(isHost).map((link) => {
-                const Icon = link.icon;
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
-                  >
-                    <Icon className="w-5 h-5 text-fire-400" />
-                    {link.label}
-                  </Link>
-                );
-              })}
+
+              <Link
+                href="/dashboard/wallet"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
+              >
+                <Wallet className="w-5 h-5 text-fire-400" />
+                Wallet
+              </Link>
+
+              <Link
+                href="/dashboard/settings"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
+              >
+                <Settings className="w-5 h-5 text-fire-400" />
+                Settings
+              </Link>
+
+              <Link
+                href="/help"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
+              >
+                <CircleHelp className="w-5 h-5 text-fire-400" />
+                Help &amp; Feedback
+              </Link>
+
               <button
                 type="button"
                 onClick={() => { setMobileOpen(false); logout(); }}
-                className="flex w-full items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
+                className="flex w-full items-center gap-3 px-4 py-3 rounded-lg text-red-400 hover:bg-red-500/10"
               >
-                <LogOut className="w-5 h-5 text-fire-400" />
+                <LogOut className="w-5 h-5" />
                 Logout
               </button>
             </div>

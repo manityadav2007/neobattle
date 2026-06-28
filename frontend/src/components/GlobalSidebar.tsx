@@ -107,7 +107,7 @@ export default function GlobalSidebar() {
 
   return (
     <>
-      <aside className="fixed left-2 top-20 z-40 flex sm:left-3">
+      <aside className="fixed left-2 top-20 z-40 max-md:hidden md:flex sm:left-3">
         <div className="flex w-14 flex-col items-center rounded-[1.75rem] border border-white/10 bg-black/25 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:w-16 sm:rounded-[2rem] sm:py-4">
           <button
             type="button"

@@ -158,6 +158,16 @@ export async function me(req: AuthenticatedRequest, res: Response): Promise<void
   });
 }
 
+export async function checkUsername(req: Request, res: Response): Promise<void> {
+  const { username } = req.query;
+  if (!username || typeof username !== 'string' || username.length < 3) {
+    res.status(400).json({ success: false, message: 'Username must be at least 3 characters' });
+    return;
+  }
+  const existing = await prisma.user.findUnique({ where: { username } });
+  res.json({ success: true, data: { available: !existing } });
+}
+
 export async function updateIgn(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { ign } = req.body;
   if (!ign || typeof ign !== 'string') {

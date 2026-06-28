@@ -1,53 +1,60 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, Lock, User, AlertCircle, Search, CheckCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, AlertCircle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import LogoAsset from '@/components/LogoAsset';
 import AuthSocialButtons from '@/components/AuthSocialButtons';
-import { authApi, gameApi, GameProfile } from '@/lib/services';
+import { authApi } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
+
+const USERNAME_REGEX = /^[a-zA-Z0-9]+$/;
 
 export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: '', username: '', password: '', displayName: '' });
-  const [freeFireId, setFreeFireId] = useState('');
-  const [fetchedIgn, setFetchedIgn] = useState<string | null>(null);
-  const [profile, setProfile] = useState<GameProfile | null>(null);
-  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const handleFetchIgn = async () => {
-    if (!freeFireId || freeFireId.length < 5) return;
-    setFetching(true);
-    setError('');
-    try {
-      const res = await gameApi.fetchProfile(freeFireId);
-      if (res.data) {
-        setProfile(res.data);
-        setFetchedIgn(res.data.ign);
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setFetching(false);
+  useEffect(() => {
+    const { username } = form;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!username) {
+      setUsernameStatus('idle');
+      return;
     }
-  };
+    if (!USERNAME_REGEX.test(username) || username.length < 3) {
+      setUsernameStatus('invalid');
+      return;
+    }
+
+    setUsernameStatus('checking');
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await authApi.checkUsername(username);
+        setUsernameStatus(res.data?.available ? 'available' : 'taken');
+      } catch {
+        setUsernameStatus('idle');
+      }
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [form.username]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fetchedIgn) {
-      setError('Please fetch and confirm your IGN first.');
-      return;
-    }
     setError('');
     setLoading(true);
 
     try {
-      await authApi.register({ ...form, freeFireId } as any);
+      await authApi.register({ displayName: form.displayName, username: form.username, email: form.email, password: form.password });
       router.push('/dashboard');
     } catch (err) {
       setError(getErrorMessage(err));
@@ -107,11 +114,23 @@ export default function RegisterPage() {
                 type="text"
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
-                className="input-field w-full pl-10 pr-4 py-3 rounded-lg text-white"
-                placeholder="unique_username"
+                className="input-field w-full pl-10 pr-10 py-3 rounded-lg text-white"
+                placeholder="alphanumeric username"
                 required
               />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                {usernameStatus === 'checking' && <Loader2 className="w-4 h-4 text-zinc-400 animate-spin" />}
+                {usernameStatus === 'available' && <CheckCircle className="w-4 h-4 text-green-400" />}
+                {usernameStatus === 'taken' && <XCircle className="w-4 h-4 text-red-400" />}
+                {usernameStatus === 'invalid' && <XCircle className="w-4 h-4 text-red-400" />}
+              </span>
             </div>
+            {usernameStatus === 'invalid' && (
+              <p className="mt-1 text-xs text-red-400">Letters and numbers only, 3-20 characters</p>
+            )}
+            {usernameStatus === 'taken' && (
+              <p className="mt-1 text-xs text-red-400">Username already taken</p>
+            )}
           </div>
 
           <div>
@@ -127,34 +146,6 @@ export default function RegisterPage() {
                 required
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Free Fire UID</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={freeFireId}
-                onChange={(e) => setFreeFireId(e.target.value)}
-                className="input-field flex-1 px-4 py-3 rounded-lg text-white font-mono"
-                placeholder="Enter your UID"
-                required
-              />
-              <button
-                type="button"
-                onClick={handleFetchIgn}
-                disabled={fetching || freeFireId.length < 5}
-                className="px-4 py-3 rounded-lg bg-fire-500/10 text-fire-400 hover:bg-fire-500/20 transition-colors disabled:opacity-50"
-              >
-                {fetching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
-              </button>
-            </div>
-            {profile && (
-              <div className="mt-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                IGN: <span className="font-bold font-mono">{profile.ign}</span> (Lv.{profile.level} — {profile.region})
-              </div>
-            )}
           </div>
 
           <div>
@@ -174,7 +165,7 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading || !fetchedIgn}
+            disabled={loading || usernameStatus !== 'available'}
             className="btn-fire w-full py-3 rounded-lg font-semibold text-white disabled:opacity-50"
           >
             {loading ? 'Creating account...' : 'Create Account'}

@@ -3,6 +3,7 @@ import { Inter, Orbitron } from 'next/font/google';
 import GlobalSidebar from '@/components/GlobalSidebar';
 import GlobalBackButton from '@/components/GlobalBackButton';
 import Navbar from '@/components/Navbar';
+import BottomNav from '@/components/BottomNav';
 import ConditionalFooter from '@/components/ConditionalFooter';
 import { AuthProvider } from '@/hooks/useAuth';
 import './globals.css';
@@ -25,10 +26,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <Navbar />
           <GlobalSidebar />
-          <main className="min-h-screen pl-20 pt-16 sm:pl-24">
+          <main className="min-h-screen pt-16 md:pl-20 pb-16 md:pb-0 max-w-full overflow-x-hidden">
             <GlobalBackButton />
             {children}
           </main>
+          <BottomNav />
           <ConditionalFooter />
         </AuthProvider>
       </body>

@@ -12,9 +12,10 @@ export const validate =
       next();
     } catch (error) {
       if (error instanceof ZodError) {
+        const first = error.errors[0];
         res.status(400).json({
           success: false,
-          message: 'Validation failed',
+          message: first?.message || 'Validation failed',
           errors: error.errors.map((e) => ({
             field: e.path.join('.'),
             message: e.message,
