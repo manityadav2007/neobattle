@@ -687,7 +687,7 @@ export function getCountdown(date: string): string {
 export function resolveAssetUrl(path: string | null | undefined): string | undefined {
   if (!path) return undefined;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '') || 'http://localhost:4000';
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
   return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
