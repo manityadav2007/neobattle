@@ -81,6 +81,9 @@ export function getErrorMessage(error: unknown): string {
 export function setAuthTokens(accessToken: string, refreshToken: string): void {
   localStorage.setItem('accessToken', accessToken);
   localStorage.setItem('refreshToken', refreshToken);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:tokens-changed'));
+  }
 }
 
 export function clearAuthTokens(): void {

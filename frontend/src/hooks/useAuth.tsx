@@ -68,6 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetchUser();
+
+    const handleTokensChanged = () => {
+      if (isAuthenticated()) {
+        fetchUser();
+      }
+    };
+    window.addEventListener('auth:tokens-changed', handleTokensChanged);
+    return () => window.removeEventListener('auth:tokens-changed', handleTokensChanged);
   }, [fetchUser]);
 
   const logout = async () => {
