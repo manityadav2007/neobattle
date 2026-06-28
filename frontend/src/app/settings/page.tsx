@@ -347,21 +347,23 @@ export default function SettingsPage() {
       )}
 
       {/* Tabs */}
-      <div className="mt-8 flex gap-2 border-b border-white/5">
+      <div className="mt-8 flex gap-2 border-b border-white/5 overflow-x-auto whitespace-nowrap">
         {tabs.map((tab) => {
           const Icon = tab.icon;
+          const active = activeTab === tab.key;
           return (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.key
-                  ? 'border-fire-500 text-white'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                active ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               <Icon className="h-4 w-4" />
               {tab.label}
+              {active && (
+                <span className="absolute bottom-0 left-2 right-2 bg-fire-500 rounded-full" style={{ height: '2px' }} />
+              )}
             </button>
           );
         })}

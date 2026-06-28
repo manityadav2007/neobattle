@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wallet, Smartphone, Copy, CheckCircle, AlertCircle, Loader2, X, ArrowRight, Landmark } from 'lucide-react';
+import { Wallet, Copy, CheckCircle, AlertCircle, Loader2, X, ArrowRight, Landmark } from 'lucide-react';
+import { SiGoogleplay } from 'react-icons/si';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/services';
@@ -22,7 +23,7 @@ const methods: WithdrawMethod[] = [
     id: 'GOOGLE_PLAY',
     name: 'Google Play Redeem Code',
     description: 'Withdraw your winnings as a Google Play gift code',
-    icon: Smartphone,
+    icon: SiGoogleplay,
     color: 'text-green-400',
     bgClass: 'bg-green-500/10 border-green-500/20',
   },
@@ -157,7 +158,7 @@ export default function ShopPage() {
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-green-400" />
+                  <SiGoogleplay className="w-5 h-5 text-green-400" />
                   Google Play Redeem
                 </h2>
                 <button onClick={handleClose} className="p-1 rounded-lg hover:bg-white/10 text-zinc-400 transition-colors">
@@ -243,7 +244,7 @@ export default function ShopPage() {
                     disabled={submitting || amount <= 0 || amount > balance}
                     className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-400 transition-colors disabled:opacity-50"
                   >
-                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <SiGoogleplay className="w-4 h-4" />}
                     {submitting ? 'Processing...' : `Redeem ₹${amount.toLocaleString('en-IN')}`}
                   </button>
                 </div>

@@ -94,9 +94,9 @@ export default function AdminPage() {
     }
   };
 
-  const handleRedeemReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+  const handleRedeemReview = async (id: string, status: 'APPROVED' | 'COMPLETED' | 'REJECTED') => {
     try {
-      await adminApi.reviewRedeem(id, status, status === 'REJECTED' ? 'Request denied' : undefined);
+      await adminApi.reviewRedeem(id, status, status === 'REJECTED' ? { rejectionReason: 'Request denied' } : undefined);
       setActionMsg(`Redeem ${status.toLowerCase()}`);
       await loadData();
     } catch (err) {
@@ -120,7 +120,7 @@ export default function AdminPage() {
             </h1>
             <p className="text-zinc-400 mt-1">Platform management & revenue dashboard</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Link href="/admin/esports" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 text-sm font-medium hover:bg-yellow-500/30 transition-colors">
               <Trophy className="w-4 h-4" /> Esports Config
             </Link>

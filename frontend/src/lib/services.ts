@@ -221,25 +221,25 @@ export const uploadApi = {
   avatar: async (file: File) => {
     const formData = new FormData();
     formData.append('avatar', file);
-    const res = await api.post('/upload/avatar', formData);
+    const res = await api.post('/upload/avatar', formData, { timeout: 30000 });
     return res.data;
   },
   teamLogo: async (file: File) => {
     const formData = new FormData();
     formData.append('teamLogo', file);
-    const res = await api.post('/upload/team-logo', formData);
+    const res = await api.post('/upload/team-logo', formData, { timeout: 30000 });
     return res.data;
   },
   verificationScreenshot: async (file: File) => {
     const formData = new FormData();
     formData.append('screenshot', file);
-    const res = await api.post('/upload/verification', formData);
+    const res = await api.post('/upload/verification', formData, { timeout: 30000 });
     return res.data;
   },
   giftCardImage: async (file: File) => {
     const formData = new FormData();
     formData.append('image', file);
-    const res = await api.post('/upload/gift-card-image', formData);
+    const res = await api.post('/upload/gift-card-image', formData, { timeout: 30000 });
     return res.data;
   },
 };
@@ -337,8 +337,12 @@ export const adminApi = {
     const res = await api.get('/redeem/pending');
     return res.data;
   },
-  reviewRedeem: async (id: string, status: 'APPROVED' | 'REJECTED', rejectionReason?: string) => {
-    const res = await api.patch(`/redeem/${id}/review`, { status, rejectionReason });
+  listRedeems: async (status?: string) => {
+    const res = await api.get('/redeem/all', { params: { status } });
+    return res.data;
+  },
+  reviewRedeem: async (id: string, status: 'APPROVED' | 'COMPLETED' | 'REJECTED', data?: { rejectionReason?: string; giftCode?: string }) => {
+    const res = await api.patch(`/redeem/${id}/review`, { status, ...data });
     return res.data;
   },
   promoteUser: async (userId: string) => {
@@ -503,6 +507,10 @@ export const depositApi = {
 export const redeemApi = {
   request: async (data: { amount: number; type: string; accountDetails?: string }) => {
     const res = await api.post('/redeem/request', data);
+    return res.data;
+  },
+  myRequests: async () => {
+    const res = await api.get('/redeem/my-requests');
     return res.data;
   },
 };

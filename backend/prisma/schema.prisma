@@ -368,6 +368,7 @@ model RedeemRequest {
   type            RedeemType
   accountDetails  String?
   status          RedeemStatus       @default(PENDING)
+  giftCode        String?
   rejectionReason String?
   reviewedBy      String?
   reviewedAt      DateTime?
@@ -388,6 +389,7 @@ enum RedeemType {
 enum RedeemStatus {
   PENDING
   APPROVED
+  COMPLETED
   REJECTED
 }
 

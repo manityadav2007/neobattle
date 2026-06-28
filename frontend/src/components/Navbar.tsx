@@ -170,7 +170,7 @@ export default function Navbar() {
               )}
 
               <Link
-                href="/dashboard/wallet"
+                href="/wallet"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
               >
@@ -179,7 +179,7 @@ export default function Navbar() {
               </Link>
 
               <Link
-                href="/dashboard/settings"
+                href="/settings"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
               >
@@ -188,7 +188,7 @@ export default function Navbar() {
               </Link>
 
               <Link
-                href="/help"
+                href="/help-feedback"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
               >

@@ -57,10 +57,27 @@ export async function createRedeemRequest(req: AuthenticatedRequest, res: Respon
   });
 }
 
-export async function listRedeemRequests(_req: AuthenticatedRequest, res: Response): Promise<void> {
+export async function listRedeemRequests(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const validStatuses = ['PENDING', 'APPROVED', 'COMPLETED', 'REJECTED'] as const;
+  const statusParam = req.query.status;
+  const statusFilter = typeof statusParam === 'string' && validStatuses.includes(statusParam as any) ? statusParam as 'PENDING' | 'APPROVED' | 'COMPLETED' | 'REJECTED' : undefined;
+  const where = statusFilter ? { status: statusFilter } : {};
   const requests = await prisma.redeemRequest.findMany({
-    where: { status: 'PENDING' },
+    where,
     include: { user: { select: { id: true, username: true, email: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+
+  res.json({
+    success: true,
+    data: requests.map((r) => ({ ...r, amount: Number(r.amount) })),
+  });
+}
+
+export async function listMyRequests(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const requests = await prisma.redeemRequest.findMany({
+    where: { userId: req.user!.id },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -71,7 +88,7 @@ export async function listRedeemRequests(_req: AuthenticatedRequest, res: Respon
 }
 
 export async function reviewRedeemRequest(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const { status, rejectionReason } = req.body;
+  const { status, rejectionReason, giftCode } = req.body;
   const requestId = req.params.id;
 
   const request = await prisma.redeemRequest.findUnique({ where: { id: requestId } });
@@ -90,10 +107,16 @@ export async function reviewRedeemRequest(req: AuthenticatedRequest, res: Respon
     return;
   }
 
+  if (status === 'COMPLETED' && !giftCode) {
+    res.status(400).json({ success: false, message: 'Gift code required to complete' });
+    return;
+  }
+
   await prisma.redeemRequest.update({
     where: { id: requestId },
     data: {
       status,
+      giftCode: status === 'COMPLETED' ? giftCode : null,
       reviewedBy: req.user!.id,
       reviewedAt: new Date(),
       ...(status === 'REJECTED' ? { rejectionReason } : {}),
@@ -123,7 +146,7 @@ export async function reviewRedeemRequest(req: AuthenticatedRequest, res: Respon
     }
   }
 
-  if (status === 'APPROVED') {
+  if (status === 'APPROVED' || status === 'COMPLETED') {
     const wallet = await prisma.wallet.findUnique({ where: { userId: request.userId } });
     if (wallet) {
       await prisma.transaction.create({
@@ -133,8 +156,14 @@ export async function reviewRedeemRequest(req: AuthenticatedRequest, res: Respon
           type: TransactionType.WITHDRAWAL,
           status: TransactionStatus.COMPLETED,
           amount: request.amount,
-          description: `${request.type} redeem approved — funds released`,
-          metadata: { redeemRequestId: requestId, approvedBy: req.user!.id },
+          description: status === 'COMPLETED'
+            ? `${request.type} redeem completed — gift code provided`
+            : `${request.type} redeem approved — funds released`,
+          metadata: {
+            redeemRequestId: requestId,
+            approvedBy: req.user!.id,
+            ...(giftCode ? { giftCode } : {}),
+          },
         },
       });
     }

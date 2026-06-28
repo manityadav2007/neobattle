@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Shield, AlertCircle, CheckCircle, Loader2, ArrowLeft, Gamepad2, Upload, X, Eye } from 'lucide-react';
@@ -78,13 +79,9 @@ export default function VerifyPage() {
     return (
       <div className="max-w-xl mx-auto px-4 py-10">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </button>
+          <Link href="/dashboard" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+          </Link>
 
           <div className="glass-card rounded-2xl p-8 text-center">
             <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
@@ -113,13 +110,9 @@ export default function VerifyPage() {
   return (
     <div className="max-w-xl mx-auto px-4 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+        </Link>
 
         <div className="text-center mb-8">
           <Shield className="w-10 h-10 text-fire-400 mx-auto mb-4" />

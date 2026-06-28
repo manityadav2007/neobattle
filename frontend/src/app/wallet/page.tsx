@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Wallet, ArrowDownLeft, ArrowUpRight, History, AlertCircle, CheckCircle, CreditCard } from 'lucide-react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { formatCurrency, formatDate } from '@/lib/services';
@@ -82,7 +83,7 @@ export default function WalletPage() {
               className="flex items-center justify-center gap-2 btn-fire py-3 rounded-lg font-semibold text-white disabled:opacity-50"
             >
               <CreditCard className="w-4 h-4" />
-              Deposit via Razorpay
+              Deposit
             </button>
             <button
               onClick={handleWithdraw}
@@ -111,10 +112,15 @@ export default function WalletPage() {
         </div>
 
         <div className="glass-card rounded-2xl p-6">
-          <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <History className="w-5 h-5 text-fire-400" />
-            Recent Transactions
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-fire-400" />
+              Recent Transactions
+            </h2>
+            <Link href="/wallet/history" className="text-xs text-fire-400 hover:text-fire-300 font-medium transition-colors">
+              Withdrawal History &rarr;
+            </Link>
+          </div>
           {wallet?.transactions && wallet.transactions.length > 0 ? (
             <div className="space-y-3">
               {wallet.transactions.map((tx) => (
