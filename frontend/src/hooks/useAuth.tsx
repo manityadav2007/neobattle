@@ -11,6 +11,7 @@ interface AuthContextType {
   refetch: () => Promise<void>;
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
+  setUser: (user: User | null) => void;
   isAdmin: boolean;
   isSuperAdmin: boolean;
   isHost: boolean;
@@ -92,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canAccessWallet = !!user && !isHost;
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, refetch: fetchUser, refreshUser, logout, isAdmin, isSuperAdmin, isHost, canAccessWallet, isOwner }}>
+    <AuthContext.Provider value={{ user, loading, error, refetch: fetchUser, refreshUser, logout, setUser, isAdmin, isSuperAdmin, isHost, canAccessWallet, isOwner }}>
       {children}
     </AuthContext.Provider>
   );
