@@ -10,18 +10,49 @@ import { gameProfileService } from '../services/gameProfile.service';
 
 export async function createTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
   const data = req.body;
+  const isFree = data.isFree === true;
 
-  const entryFeeNum = Number(data.entryFee);
+  const entryFeeNum = isFree ? 0 : Number(data.entryFee);
   const maxPlayers = data.maxParticipants;
-  const prizePoolNum = Number(data.prizePool);
+  const prizePoolNum = isFree ? 0 : Number(data.prizePool);
 
-  const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum);
+  if (!isFree) {
+    const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum);
+    if (!validation.valid) {
+      res.status(400).json({ success: false, message: validation.message, breakdown: validation.breakdown });
+      return;
+    }
 
-  if (!validation.valid) {
-    res.status(400).json({ success: false, message: validation.message, breakdown: validation.breakdown });
+    const lastTour = await prisma.tournament.findFirst({ orderBy: { uid: 'desc' } });
+    const lastTourNum = lastTour?.uid ? parseInt(lastTour.uid.replace('T-', '')) || 9000 : 9000;
+    const tourUid = `T-${lastTourNum + 1}`;
+
+    const tournament = await prisma.tournament.create({
+      data: {
+        ...data,
+        uid: tourUid,
+        entryFee: new Decimal(entryFeeNum),
+        prizePool: new Decimal(prizePoolNum),
+        creatorId: req.user!.id,
+        registrationStart: new Date(data.registrationStart),
+        registrationEnd: new Date(data.registrationEnd),
+        startTime: new Date(data.startTime),
+        platformCommission: new Decimal(validation.breakdown.platformCommission),
+        hostCommission: new Decimal(validation.breakdown.hostCommission),
+        remainingPool: new Decimal(validation.breakdown.remainingPool),
+        prizeFirst: data.prizeFirst !== undefined ? new Decimal(data.prizeFirst) : new Decimal(0),
+        prizeSecond: data.prizeSecond != null ? new Decimal(data.prizeSecond) : null,
+        prizeThird: data.prizeThird != null ? new Decimal(data.prizeThird) : null,
+      },
+      include: { creator: { select: { id: true, username: true } } },
+    });
+
+    await cacheDel('tournaments:list');
+    res.status(201).json({ success: true, data: tournament, breakdown: validation.breakdown });
     return;
   }
 
+  // Free tournament — skip validation, set all commission fields to 0
   const lastTour = await prisma.tournament.findFirst({ orderBy: { uid: 'desc' } });
   const lastTourNum = lastTour?.uid ? parseInt(lastTour.uid.replace('T-', '')) || 9000 : 9000;
   const tourUid = `T-${lastTourNum + 1}`;
@@ -30,24 +61,24 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
     data: {
       ...data,
       uid: tourUid,
-      entryFee: new Decimal(data.entryFee),
-      prizePool: new Decimal(data.prizePool),
+      entryFee: new Decimal(0),
+      prizePool: new Decimal(0),
       creatorId: req.user!.id,
       registrationStart: new Date(data.registrationStart),
       registrationEnd: new Date(data.registrationEnd),
       startTime: new Date(data.startTime),
-      platformCommission: new Decimal(validation.breakdown.platformCommission),
-      hostCommission: new Decimal(validation.breakdown.hostCommission),
-      remainingPool: new Decimal(validation.breakdown.remainingPool),
-      prizeFirst: data.prizeFirst !== undefined ? new Decimal(data.prizeFirst) : new Decimal(0),
-      prizeSecond: data.prizeSecond != null ? new Decimal(data.prizeSecond) : null,
-      prizeThird: data.prizeThird != null ? new Decimal(data.prizeThird) : null,
+      platformCommission: new Decimal(0),
+      hostCommission: new Decimal(0),
+      remainingPool: new Decimal(0),
+      prizeFirst: new Decimal(0),
+      prizeSecond: null,
+      prizeThird: null,
     },
     include: { creator: { select: { id: true, username: true } } },
   });
 
   await cacheDel('tournaments:list');
-  res.status(201).json({ success: true, data: tournament, breakdown: validation.breakdown });
+  res.status(201).json({ success: true, data: tournament, message: 'Free tournament created. You can award prize money later from the tournament list.' });
 }
 
 export async function listTournaments(req: AuthenticatedRequest, res: Response): Promise<void> {

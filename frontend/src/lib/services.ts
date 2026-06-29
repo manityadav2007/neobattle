@@ -353,6 +353,10 @@ export const adminApi = {
     const res = await api.patch(`/admin/demote-user/${userId}`);
     return res.data;
   },
+  awardPrize: async (data: { userId: string; amount: number; tournamentId: string }) => {
+    const res = await api.post('/admin/award-prize', data);
+    return res.data;
+  },
 };
 
 export interface PlatformStats {

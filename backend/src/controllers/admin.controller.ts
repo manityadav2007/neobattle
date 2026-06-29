@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import { UserRole, TournamentStatus } from '@prisma/client';
+import { UserRole, TournamentStatus, TransactionType, TransactionStatus } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
 
 export async function getDashboardStats(_req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -228,6 +229,67 @@ export async function refundTournament(req: AuthenticatedRequest, res: Response)
   });
 
   res.json({ success: true, message: 'Tournament refunded', data: results });
+}
+
+export async function awardPrize(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { userId, amount, tournamentId } = req.body;
+
+  if (!userId || !amount || !tournamentId) {
+    res.status(400).json({ success: false, message: 'userId, amount, and tournamentId are required' });
+    return;
+  }
+
+  const prizeAmount = Number(amount);
+  if (prizeAmount <= 0) {
+    res.status(400).json({ success: false, message: 'Prize amount must be greater than 0' });
+    return;
+  }
+
+  const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+  if (!tournament) {
+    res.status(404).json({ success: false, message: 'Tournament not found' });
+    return;
+  }
+
+  if (Number(tournament.entryFee) !== 0) {
+    res.status(400).json({ success: false, message: 'Prize award is only available for free tournaments' });
+    return;
+  }
+
+  const winner = await prisma.user.findUnique({ where: { id: userId } });
+  if (!winner) {
+    res.status(404).json({ success: false, message: 'User not found' });
+    return;
+  }
+
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+  if (!wallet) {
+    res.status(404).json({ success: false, message: 'Winner wallet not found' });
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: prizeAmount } },
+    }),
+    prisma.transaction.create({
+      data: {
+        walletId: wallet.id,
+        userId,
+        type: TransactionType.PRIZE,
+        status: TransactionStatus.COMPLETED,
+        amount: new Decimal(prizeAmount),
+        description: `Prize money awarded for tournament: ${tournament.title}`,
+        metadata: { tournamentId, awardedBy: req.user!.id },
+      },
+    }),
+  ]);
+
+  res.json({
+    success: true,
+    message: `₹${prizeAmount} awarded to ${winner.username} for tournament "${tournament.title}"`,
+  });
 }
 
 export async function getSystemHealth(_req: AuthenticatedRequest, res: Response): Promise<void> {
