@@ -18,5 +18,6 @@ router.post('/tournaments/:id/release-prizes', ownerOnly, adminController.releas
 router.post('/tournaments/:id/refund', ownerOnly, adminController.refundTournament);
 router.post('/award-prize', adminController.awardPrize);
 router.get('/revenue', adminController.getRevenueStats);
+router.get('/transactions', adminController.getTransactions);
 
 export default router;

@@ -357,6 +357,14 @@ export const adminApi = {
     const res = await api.post('/admin/award-prize', data);
     return res.data;
   },
+  revenue: async () => {
+    const res = await api.get('/admin/revenue');
+    return res.data;
+  },
+  transactions: async (page = 1) => {
+    const res = await api.get('/admin/transactions', { params: { page, limit: 20 } });
+    return res.data;
+  },
 };
 
 export interface PlatformStats {

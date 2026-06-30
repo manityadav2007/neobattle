@@ -51,6 +51,32 @@ async function startServer(): Promise<void> {
   app.listen(PORT, () => {
     console.log(`🔥 NEOBATTLE API running on http://localhost:${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log('\n📋 Registered routes:');
+    function printRoutes(stack: any[], prefix: string): void {
+      for (const layer of stack) {
+        if (layer.route) {
+          const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
+          console.log(`   ${methods} ${prefix}${layer.route.path}`);
+        } else if (layer.name === 'router' && layer.handle.stack) {
+          let layerPath = layer.regexp.source
+            .replace(/\\\//g, '/')
+            .replace(/\^/g, '')
+            .replace(/\/\?\(\?\=\/\|\$\)\/\?/g, '')
+            .replace(/\(\?:\(\[\^\\\/\]\+\?\)\)/g, ':param')
+            .replace(/\(\?:\(\[\^\\\/\]\+\?\)\)/g, ':param')
+            .replace(/\\\$/g, '')
+            .replace(/\/\?/g, '')
+            .replace(/\?/g, '')
+            .replace(/\/i$/g, '');
+          if (!layerPath || layerPath === '/^\\/?$/') layerPath = '';
+          if (layerPath) prefix += layerPath;
+          printRoutes(layer.handle.stack, prefix);
+        }
+      }
+    }
+    if (app._router && app._router.stack) {
+      printRoutes(app._router.stack, '');
+    }
   });
 }
 

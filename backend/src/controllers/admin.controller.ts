@@ -327,6 +327,39 @@ export async function getRevenueStats(_req: AuthenticatedRequest, res: Response)
   }
 }
 
+export async function getTransactions(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+    const type = req.query.type as string | undefined;
+    const status = req.query.status as string | undefined;
+
+    const where: any = {};
+    if (type) where.type = type;
+    if (status) where.status = status;
+
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: { user: { select: { id: true, uid: true, username: true, email: true } } },
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: { transactions, total, page, limit, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    console.error('[Admin] getTransactions error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch transactions' });
+  }
+}
+
 export async function getSystemHealth(_req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     await prisma.$queryRaw`SELECT 1`;
