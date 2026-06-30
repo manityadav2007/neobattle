@@ -17,7 +17,7 @@ app.use(helmet({
 }));
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: ['https://neobattle.live', 'https://www.neobattle.live'],
     credentials: true,
   })
 );
