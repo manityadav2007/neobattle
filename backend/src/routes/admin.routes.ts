@@ -17,5 +17,6 @@ router.patch('/users/:id/toggle-active', adminController.toggleUserActive);
 router.post('/tournaments/:id/release-prizes', ownerOnly, adminController.releaseTournamentPrizes);
 router.post('/tournaments/:id/refund', ownerOnly, adminController.refundTournament);
 router.post('/award-prize', adminController.awardPrize);
+router.get('/revenue', adminController.getRevenueStats);
 
 export default router;

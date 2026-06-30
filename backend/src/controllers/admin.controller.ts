@@ -292,6 +292,41 @@ export async function awardPrize(req: AuthenticatedRequest, res: Response): Prom
   });
 }
 
+export async function getRevenueStats(_req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const [totalDeposits, totalWithdrawals, totalPrizePayouts, totalPlatformCommission] = await Promise.all([
+      prisma.transaction.aggregate({
+        where: { type: TransactionType.DEPOSIT, status: TransactionStatus.COMPLETED },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: { type: TransactionType.WITHDRAWAL, status: TransactionStatus.COMPLETED },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: { type: TransactionType.PRIZE, status: TransactionStatus.COMPLETED },
+        _sum: { amount: true },
+      }),
+      prisma.tournament.aggregate({
+        _sum: { platformCommission: true },
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalDeposits: Number(totalDeposits._sum.amount || 0),
+        totalWithdrawals: Number(totalWithdrawals._sum.amount || 0),
+        totalPrizePayouts: Number(totalPrizePayouts._sum.amount || 0),
+        totalPlatformCommission: Number(totalPlatformCommission._sum.platformCommission || 0),
+      },
+    });
+  } catch (error) {
+    console.error('[Admin] getRevenueStats error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch revenue stats' });
+  }
+}
+
 export async function getSystemHealth(_req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     await prisma.$queryRaw`SELECT 1`;

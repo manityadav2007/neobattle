@@ -5,6 +5,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { TransactionStatus, TransactionType } from '@prisma/client';
 import crypto from 'crypto';
 
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 
 export async function createOrder(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -13,6 +14,12 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
 
   if (!amount || amount <= 0) {
     res.status(400).json({ success: false, message: 'Invalid amount' });
+    return;
+  }
+
+  if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+    console.error('[Payment] Missing Razorpay credentials — set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env');
+    res.status(500).json({ success: false, message: 'Payment gateway not configured. Please contact support.' });
     return;
   }
 
@@ -25,7 +32,7 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
   try {
     const Razorpay = require('razorpay');
     const instance = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID || '',
+      key_id: RAZORPAY_KEY_ID,
       key_secret: RAZORPAY_KEY_SECRET,
     });
 
@@ -51,7 +58,8 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
 
     res.json({ success: true, data: { orderId: order.id, amount: order.amount, currency: order.currency } });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Failed to create payment order' });
+    console.error('[Payment] createOrder error:', err);
+    res.status(500).json({ success: false, message: 'Failed to create payment order: ' + (err instanceof Error ? err.message : 'Unknown error') });
   }
 }
 
