@@ -157,7 +157,16 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
     ? tournament.entries.some((e) => e.userId === req.user!.id)
     : false;
 
-  res.json({ success: true, data: { ...tournament, isRegistered } });
+  const { roomId, roomPassword, ...rest } = tournament;
+
+  res.json({
+    success: true,
+    data: {
+      ...rest,
+      isRegistered,
+      ...(isRegistered ? { roomId, roomPassword } : {}),
+    },
+  });
 }
 
 export async function updateTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -208,6 +217,23 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
   if (tournament.status !== TournamentStatus.REGISTRATION) {
     res.status(400).json({ success: false, message: 'Registration is not open' });
     return;
+  }
+
+  const currentUser = await prisma.user.findUnique({ where: { id: userId }, select: { isVerified: true, gameLevel: true } });
+  if (!currentUser) {
+    res.status(404).json({ success: false, message: 'User not found' });
+    return;
+  }
+
+  if (tournament.requiredLevel > 0) {
+    if (!currentUser.isVerified) {
+      res.status(400).json({ success: false, message: 'Your Free Fire ID is not verified. Please complete verification first.' });
+      return;
+    }
+    if (currentUser.gameLevel < tournament.requiredLevel) {
+      res.status(400).json({ success: false, message: `Your game level (${currentUser.gameLevel}) is below the required level (${tournament.requiredLevel})` });
+      return;
+    }
   }
 
   const now = new Date();

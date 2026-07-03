@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, ArrowLeft, DollarSign,
-  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy,
+  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
@@ -28,6 +28,16 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [squadUids, setSquadUids] = useState<string[]>(['', '', '', '']);
   const [squadIgns, setSquadIgns] = useState<(string | null)[]>([null, null, null, null]);
   const [fetchingIgn, setFetchingIgn] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyRoomDetails = async () => {
+    const text = `Room ID: ${tournament?.roomId}${tournament?.roomPassword ? `\nPassword: ${tournament?.roomPassword}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
 
   const handleRegister = async () => {
     if (!user) { router.push('/login'); return; }
@@ -225,6 +235,26 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 <div className="flex items-center gap-2 text-green-400 font-semibold">
                   <CheckCircle className="w-5 h-5" /> You are registered for this tournament
                 </div>
+                {tournament.roomId && (
+                  <div className="w-full mt-2 p-3 rounded-lg bg-white/5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-400">Room ID:</span>
+                      <span className="text-white font-mono font-bold">{tournament.roomId}</span>
+                    </div>
+                    {tournament.roomPassword && (
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-zinc-400">Password:</span>
+                        <span className="text-white font-mono font-bold">{tournament.roomPassword}</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={handleCopyRoomDetails}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-300 hover:text-white transition-colors"
+                    >
+                      {copied ? <><ClipboardCheck className="w-3.5 h-3.5 text-green-400" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Room Details</>}
+                    </button>
+                  </div>
+                )}
                 {myStats && <LeagueBadge wins={myStats.totalWins} size="md" />}
               </div>
             ) : !user ? (
@@ -233,6 +263,20 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 className="w-full py-4 rounded-xl text-base font-bold text-white flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-lg"
               >
                 <Trophy className="w-5 h-5" /> Login to Register
+              </button>
+            ) : tournament.requiredLevel > 0 && !user.isVerified ? (
+              <button
+                disabled
+                className="w-full py-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 bg-gray-600 cursor-not-allowed opacity-50"
+              >
+                <AlertCircle className="w-5 h-5" /> Please verify your Free Fire ID first
+              </button>
+            ) : tournament.requiredLevel > 0 && user.gameLevel < tournament.requiredLevel ? (
+              <button
+                disabled
+                className="w-full py-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 bg-gray-600 cursor-not-allowed opacity-50"
+              >
+                <AlertCircle className="w-5 h-5" /> Level too low (req: {tournament.requiredLevel}, yours: {user.gameLevel})
               </button>
             ) : entryFee > 0 && !hasSufficientBalance ? (
               <button

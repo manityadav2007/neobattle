@@ -89,6 +89,7 @@ model User {
   verificationScreenshotUrl String?
   role          UserRole  @default(PLAYER)
   isVerified    Boolean   @default(false)
+  gameLevel     Int       @default(0)
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -210,6 +211,7 @@ model Tournament {
   mapName         String?
   roomId          String?
   roomPassword    String?
+  requiredLevel   Int       @default(0)
   rules           String?
   creatorId       String
   registrationStart DateTime

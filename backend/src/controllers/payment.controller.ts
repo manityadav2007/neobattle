@@ -12,7 +12,10 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
   const { amount } = req.body;
   const userId = req.user!.id;
 
+  console.log('[Payment] createOrder called', { amount, userId: userId?.slice(0, 8), hasKey: !!RAZORPAY_KEY_ID, hasSecret: !!RAZORPAY_KEY_SECRET, url: req.headers.origin });
+
   if (!amount || amount <= 0) {
+    console.log('[Payment] Invalid amount:', amount);
     res.status(400).json({ success: false, message: 'Invalid amount' });
     return;
   }
@@ -25,23 +28,31 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
 
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   if (!wallet) {
+    console.log('[Payment] Wallet not found for userId:', userId?.slice(0, 8));
     res.status(404).json({ success: false, message: 'Wallet not found' });
     return;
   }
 
+  console.log('[Payment] Wallet found:', { walletId: wallet.id?.slice(0, 8), balance: wallet.balance });
+
   try {
     const Razorpay = require('razorpay');
+    console.log('[Payment] Initializing Razorpay with key_id:', RAZORPAY_KEY_ID.slice(0, 8) + '...');
     const instance = new Razorpay({
       key_id: RAZORPAY_KEY_ID,
       key_secret: RAZORPAY_KEY_SECRET,
     });
 
-    const order = await instance.orders.create({
+    const orderPayload = {
       amount: amount * 100,
       currency: 'INR',
       receipt: `DEP-${userId.slice(0, 8)}-${Date.now()}`,
       notes: { userId },
-    });
+    };
+    console.log('[Payment] Creating Razorpay order:', { amountPaise: orderPayload.amount, currency: orderPayload.currency });
+
+    const order = await instance.orders.create(orderPayload);
+    console.log('[Payment] Razorpay order created:', { orderId: order.id, amount: order.amount });
 
     await prisma.transaction.create({
       data: {
@@ -56,10 +67,17 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
       },
     });
 
+    console.log('[Payment] Transaction record created for order:', order.id);
     res.json({ success: true, data: { orderId: order.id, amount: order.amount, currency: order.currency } });
-  } catch (err) {
-    console.error('[Payment] createOrder error:', err);
-    res.status(500).json({ success: false, message: 'Failed to create payment order: ' + (err instanceof Error ? err.message : 'Unknown error') });
+  } catch (err: any) {
+    console.error('[Payment] createOrder FAILED:', {
+      message: err.message,
+      stack: err.stack?.split('\n').slice(0, 3).join('\n'),
+      statusCode: err.statusCode,
+      error: err.error,
+      name: err.name,
+    });
+    res.status(500).json({ success: false, message: 'Failed to create payment order: ' + (err.message || 'Unknown error') });
   }
 }
 

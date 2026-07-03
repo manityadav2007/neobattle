@@ -9,6 +9,7 @@ export interface User {
   username: string;
   role: UserRole;
   isVerified: boolean;
+  gameLevel: number;
   freeFireId: string | null;
   ign: string | null;
   displayName: string | null;
@@ -39,6 +40,7 @@ export interface Tournament {
   mapName: string | null;
   roomId: string | null;
   roomPassword?: string | null;
+  requiredLevel: number;
   rules?: string | null;
   registrationStart?: string;
   startTime: string;
@@ -355,6 +357,10 @@ export const adminApi = {
   },
   awardPrize: async (data: { userId: string; amount: number; tournamentId: string }) => {
     const res = await api.post('/admin/award-prize', data);
+    return res.data;
+  },
+  verifyUserGameLevel: async (userId: string, gameLevel: number) => {
+    const res = await api.patch(`/admin/users/${userId}/verify-game-level`, { gameLevel });
     return res.data;
   },
   revenue: async () => {

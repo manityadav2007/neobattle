@@ -40,6 +40,12 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response): P
   try {
     const { displayName, avatarUrl, freeFireId, username, notifyTournaments, notifyResults, notifyAlerts } = req.body;
 
+    if (req.body.gameLevel !== undefined || req.body.isVerified !== undefined) {
+      console.log('[User] Blocked attempt to update protected fields (gameLevel/isVerified) by user:', req.user!.id);
+      delete req.body.gameLevel;
+      delete req.body.isVerified;
+    }
+
     console.log('[User] updateProfile called for user:', req.user!.id, 'with body:', JSON.stringify(req.body));
 
     if (username) {

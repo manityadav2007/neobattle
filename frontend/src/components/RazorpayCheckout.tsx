@@ -65,8 +65,10 @@ export default function RazorpayCheckout({ amount, onSuccess }: RazorpayCheckout
         setLoading(false);
       });
       rzp.open();
-    } catch {
-      setErr('Failed to initiate payment. Try again.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Unknown error';
+      console.error('[RazorpayCheckout] Payment initiation failed:', { message: msg, status: e?.response?.status, data: e?.response?.data });
+      setErr('Failed to initiate payment. (' + msg + ')');
       setLoading(false);
     }
   };

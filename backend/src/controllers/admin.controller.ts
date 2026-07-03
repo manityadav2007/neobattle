@@ -292,6 +292,35 @@ export async function awardPrize(req: AuthenticatedRequest, res: Response): Prom
   });
 }
 
+export async function verifyUserGameLevel(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { gameLevel } = req.body;
+  const userId = req.params.id;
+
+  if (gameLevel === undefined || gameLevel === null || gameLevel < 0) {
+    res.status(400).json({ success: false, message: 'gameLevel is required and must be >= 0' });
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { isVerified: true, gameLevel: Number(gameLevel) },
+      select: { id: true, uid: true, username: true, freeFireId: true, isVerified: true, gameLevel: true },
+    });
+
+    res.json({ success: true, data: updated, message: `User verified with game level ${gameLevel}` });
+  } catch (error) {
+    console.error('[Admin] verifyUserGameLevel error:', error);
+    res.status(500).json({ success: false, message: 'Failed to verify user' });
+  }
+}
+
 export async function getRevenueStats(_req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const [totalDeposits, totalWithdrawals, totalPrizePayouts, totalPlatformCommission] = await Promise.all([
