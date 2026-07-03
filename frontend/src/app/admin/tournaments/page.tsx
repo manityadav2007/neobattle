@@ -30,7 +30,7 @@ export default function AdminTournamentsPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [isFree, setIsFree] = useState(false);
-  const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+  const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -109,7 +109,7 @@ export default function AdminTournamentsPage() {
       await tournamentApi.create(payload);
       setShowCreate(false);
       setIsFree(false);
-      setForm({ title: '', entryFee: 10, maxParticipants: 50, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+      setForm({ title: '', entryFee: 10, maxParticipants: 50, requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
       setSuccessMsg(isFree ? 'Free tournament created!' : 'Tournament created!');
       await loadData();
     } catch (err) {
@@ -240,6 +240,10 @@ export default function AdminTournamentsPage() {
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Max Participants</label>
                 <input type="number" value={form.maxParticipants} onChange={(e) => setForm({ ...form, maxParticipants: Number(e.target.value) })} placeholder="Enter max players" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={2} required />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">Required Level <span className="text-zinc-600">(0 = no restriction)</span></label>
+                <input type="number" value={form.requiredLevel} onChange={(e) => setForm({ ...form, requiredLevel: Number(e.target.value) })} placeholder="Enter min game level" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} />
               </div>
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Registration Start</label>
