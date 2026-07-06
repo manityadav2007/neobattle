@@ -30,6 +30,8 @@ router.post(
   tournamentController.registerForTournament
 );
 
+router.patch('/:id/complete', authenticate, adminCheck, tournamentController.completeTournament);
+
 router.patch(
   '/entries/:entryId/score',
   authenticate,

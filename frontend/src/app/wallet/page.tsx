@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { formatCurrency, formatDate } from '@/lib/services';
-import RazorpayCheckout from '@/components/RazorpayCheckout';
+import UpiPayment from '@/components/RazorpayCheckout';
 
 export default function WalletPage() {
   const router = useRouter();
@@ -17,7 +17,7 @@ export default function WalletPage() {
   const [amount, setAmount] = useState('');
   const [action, setAction] = useState<'deposit' | 'withdraw' | null>(null);
   const [message, setMessage] = useState('');
-  const [showRazorpay, setShowRazorpay] = useState(false);
+  const [showUpi, setShowUpi] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
@@ -69,7 +69,7 @@ export default function WalletPage() {
             <input
               type="number"
               value={amount}
-              onChange={(e) => { setAmount(e.target.value); setShowRazorpay(false); }}
+               onChange={(e) => { setAmount(e.target.value); setShowUpi(false); }}
               className="input-field flex-1 px-4 py-3 rounded-lg text-white"
               placeholder="Amount (₹)"
               min="1"
@@ -78,7 +78,7 @@ export default function WalletPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <button
-              onClick={() => setShowRazorpay(true)}
+              onClick={() => setShowUpi(true)}
               disabled={!amount || parseFloat(amount) <= 0}
               className="flex items-center justify-center gap-2 btn-fire py-3 rounded-lg font-semibold text-white disabled:opacity-50"
             >
@@ -95,13 +95,13 @@ export default function WalletPage() {
             </button>
           </div>
 
-          {showRazorpay && amount && parseFloat(amount) > 0 && (
+          {showUpi && amount && parseFloat(amount) > 0 && (
             <div className="mt-4">
-              <RazorpayCheckout amount={parseFloat(amount)} onSuccess={() => { refetch(); setShowRazorpay(false); setAmount(''); setMessage('Wallet credited!'); }} />
+              <UpiPayment amount={parseFloat(amount)} onSuccess={() => { refetch(); setShowUpi(false); setAmount(''); setMessage('Deposit submitted! Awaiting admin approval.'); }} />
             </div>
           )}
 
-          {(error || message) && !showRazorpay && (
+          {(error || message) && !showUpi && (
             <div className={`flex items-center gap-2 mt-4 p-3 rounded-lg text-sm ${
               message ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
             }`}>

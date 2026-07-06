@@ -8,6 +8,7 @@ import { connectRedis, disconnectRedis } from './config/redis';
 import { globalLimiter } from './middleware/rateLimiter';
 import routes from './routes';
 import { startTournamentNotifier } from './jobs/tournament-notifier';
+import { startTournamentCompleter } from './jobs/tournament-completer';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000', 10);
@@ -47,6 +48,7 @@ async function startServer(): Promise<void> {
   await connectRedis();
 
   startTournamentNotifier();
+  startTournamentCompleter();
 
   app.listen(PORT, () => {
     console.log(`🔥 NEOBATTLE API running on http://localhost:${PORT}`);

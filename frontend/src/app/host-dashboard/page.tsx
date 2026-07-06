@@ -55,7 +55,7 @@ export default function HostDashboardPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, format: 'SOLO' as string, platform: 'MOBILE' as string, gameMode: 'FULL_MAP' as string, mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+  const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '' as string, format: 'SOLO' as string, platform: 'MOBILE' as string, gameMode: 'FULL_MAP' as string, mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
   const [prizes, setPrizes] = useState({ first: 0, second: 0, third: 0 });
   const [prizeCount, setPrizeCount] = useState(3);
   const [breakdown, setBreakdown] = useState<CommissionBreakdown | null>(null);
@@ -79,9 +79,13 @@ export default function HostDashboardPage() {
     }
   }, [user, isHost, isAdmin]);
 
+  const effectiveMaxParticipants = form.gameMode === 'CLASH_SQUAD'
+    ? ({ '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 }[form.teamSize] || 0)
+    : form.maxParticipants;
+
   useEffect(() => {
-    if (form.maxParticipants > 0) {
-      const bd = calculateCommission(form.entryFee, form.maxParticipants);
+    if (effectiveMaxParticipants > 0) {
+      const bd = calculateCommission(form.entryFee, effectiveMaxParticipants);
       setBreakdown(bd);
       if (bd.maxPrizePool > 0) {
         distributePrizes(bd.maxPrizePool, prizeCount);
@@ -91,7 +95,7 @@ export default function HostDashboardPage() {
     } else {
       setBreakdown(null);
     }
-  }, [form.entryFee, form.maxParticipants, prizeCount]);
+  }, [form.entryFee, effectiveMaxParticipants, prizeCount]);
 
   function distributePrizes(total: number, count: number) {
     if (count === 1) {
@@ -120,7 +124,9 @@ export default function HostDashboardPage() {
     setCreating(true);
     try {
       const prizePoolTotal = totalPrizes;
-      const data = {
+      const isClashSquad = form.gameMode === 'CLASH_SQUAD';
+      const teamSizeMap: Record<string, number> = { '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 };
+      const data: any = {
         ...form,
         format: form.format,
         platform: form.platform,
@@ -130,15 +136,16 @@ export default function HostDashboardPage() {
         prizeFirst: prizes.first,
         prizeSecond: prizeCount >= 2 ? prizes.second : null,
         prizeThird: prizeCount >= 3 ? prizes.third : null,
-        maxParticipants: Number(form.maxParticipants),
+        maxParticipants: isClashSquad ? teamSizeMap[form.teamSize] || 2 : Number(form.maxParticipants),
         registrationStart: new Date(form.registrationStart).toISOString(),
         registrationEnd: new Date(form.registrationEnd).toISOString(),
         startTime: new Date(form.startTime).toISOString(),
       };
+      if (isClashSquad) data.teamSize = form.teamSize;
 
       await hostApi.createTournament(data);
       setShowCreate(false);
-      setForm({ title: '', entryFee: 10, maxParticipants: 50, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+      setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
       setPrizes({ first: 0, second: 0, third: 0 });
       setPrizeCount(3);
       const res = await hostApi.getMyTournaments();
@@ -252,10 +259,23 @@ export default function HostDashboardPage() {
                 <label className="text-xs text-zinc-400 mb-1 block">Entry Fee (₹)</label>
                 <input type="number" value={form.entryFee} onChange={(e) => setForm({ ...form, entryFee: Number(e.target.value) })} placeholder="Enter entry fee" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} required />
               </div>
-              <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Max Participants</label>
-                <input type="number" value={form.maxParticipants} onChange={(e) => setForm({ ...form, maxParticipants: Number(e.target.value) })} placeholder="Enter max players" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={2} required />
-              </div>
+              {form.gameMode === 'CLASH_SQUAD' ? (
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">Team Size</label>
+                  <select value={form.teamSize} onChange={(e) => setForm({ ...form, teamSize: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm" required>
+                    <option value="" disabled className="bg-gray-800 text-zinc-400">Select Team Size</option>
+                    <option value="1v1" className="bg-gray-800 text-white">1v1</option>
+                    <option value="2v2" className="bg-gray-800 text-white">2v2</option>
+                    <option value="4v4" className="bg-gray-800 text-white">4v4</option>
+                    <option value="6v6" className="bg-gray-800 text-white">6v6</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">Max Participants</label>
+                  <input type="number" value={form.maxParticipants} onChange={(e) => setForm({ ...form, maxParticipants: Number(e.target.value) })} placeholder="Enter max players" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={2} required />
+                </div>
+              )}
               <div className="sm:col-span-2">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs text-zinc-400 block">Prize Distribution</label>

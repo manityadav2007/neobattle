@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Users, Trophy, AlertCircle, CheckCircle, XCircle,
   Activity, RefreshCw, DollarSign, Banknote, Gift, Ban, ShoppingBag,
-  MessageSquareMore, Eye,
+  MessageSquareMore, Eye, Smartphone,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { adminApi, winnerProofApi, WinnerProof, DepositRequest, RedeemRequest, AdminStats, formatCurrency } from '@/lib/services';
@@ -135,6 +135,9 @@ export default function AdminPage() {
             </Link>
             <Link href="/admin/support" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-sm font-medium hover:bg-blue-500/30 transition-colors">
               <MessageSquareMore className="w-4 h-4" /> Support
+            </Link>
+            <Link href="/admin/payments" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/20 text-green-400 text-sm font-medium hover:bg-green-500/30 transition-colors">
+              <DollarSign className="w-4 h-4" /> UPI Payments
             </Link>
             <Link href="/admin/gift-cards" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-500/20 text-pink-400 text-sm font-medium hover:bg-pink-500/30 transition-colors">
               <Gift className="w-4 h-4" /> Gift Cards

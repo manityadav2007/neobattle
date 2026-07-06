@@ -411,3 +411,27 @@ export async function deleteTournament(req: AuthenticatedRequest, res: Response)
   await cacheDel('tournaments:list');
   res.json({ success: true, message: 'Tournament cancelled' });
 }
+
+export async function completeTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const tournament = await prisma.tournament.findUnique({ where: { id: req.params.id } });
+
+  if (!tournament) {
+    res.status(404).json({ success: false, message: 'Tournament not found' });
+    return;
+  }
+
+  if (tournament.status === TournamentStatus.COMPLETED || tournament.status === TournamentStatus.CANCELLED) {
+    res.status(400).json({ success: false, message: `Tournament is already ${tournament.status.toLowerCase()}` });
+    return;
+  }
+
+  const updated = await prisma.tournament.update({
+    where: { id: req.params.id },
+    data: { status: TournamentStatus.COMPLETED, endTime: new Date() },
+  });
+
+  await cacheDel('tournaments:list');
+  await cacheDel(`tournament:${req.params.id}`);
+
+  res.json({ success: true, data: updated, message: 'Tournament marked as completed' });
+}

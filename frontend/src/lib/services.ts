@@ -37,6 +37,7 @@ export interface Tournament {
   prizeSecond?: number | string | null;
   prizeThird?: number | string | null;
   maxParticipants: number;
+  teamSize: string | null;
   mapName: string | null;
   roomId: string | null;
   roomPassword?: string | null;
@@ -137,6 +138,10 @@ export const tournamentApi = {
   },
   create: async (data: Record<string, unknown>) => {
     const res = await api.post('/tournaments', data);
+    return res.data;
+  },
+  complete: async (id: string) => {
+    const res = await api.patch(`/tournaments/${id}/complete`);
     return res.data;
   },
 };

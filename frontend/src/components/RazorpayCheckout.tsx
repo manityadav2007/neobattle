@@ -4,93 +4,84 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 
-interface RazorpayCheckoutProps {
+interface UpiPaymentProps {
   amount: number;
+  tournamentId?: string;
   onSuccess: () => void;
 }
 
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
-
-export default function RazorpayCheckout({ amount, onSuccess }: RazorpayCheckoutProps) {
+export default function UpiPayment({ amount, tournamentId, onSuccess }: UpiPaymentProps) {
+  const [utrNumber, setUtrNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
-  const handlePayment = async () => {
+  const handleSubmit = async () => {
+    if (!utrNumber.trim() || utrNumber.trim().length < 4) {
+      setErr('Please enter a valid UTR/Transaction ID');
+      return;
+    }
     setLoading(true);
     setErr('');
     setMsg('');
-
     try {
-      const orderRes = await api.post('/payment/create-order', { amount });
-      const { orderId } = orderRes.data.data;
-
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
-        amount: orderRes.data.data.amount,
-        currency: orderRes.data.data.currency || 'INR',
-        name: 'NEOBATTLE',
-        description: `Wallet deposit of ₹${amount}`,
-        order_id: orderId,
-        handler: async function (response: any) {
-          try {
-            const verifyRes = await api.post('/payment/verify', {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-            setMsg(verifyRes.data.message || 'Payment successful!');
-            onSuccess();
-          } catch {
-            setErr('Payment verification failed. Contact support.');
-          }
-        },
-        modal: {
-          ondismiss: () => setLoading(false),
-        },
-        prefill: {
-          contact: '',
-          email: '',
-        },
-        theme: { color: '#f97316' },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function () {
-        setErr('Payment failed. Please try again.');
-        setLoading(false);
+      const res = await api.post('/payment/upi/create', {
+        amount,
+        tournamentId: tournamentId || undefined,
+        utrNumber: utrNumber.trim(),
       });
-      rzp.open();
+      setMsg(res.data.message || 'Payment submitted!');
+      setUtrNumber('');
+      onSuccess();
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || 'Unknown error';
-      console.error('[RazorpayCheckout] Payment initiation failed:', { message: msg, status: e?.response?.status, data: e?.response?.data });
-      setErr('Failed to initiate payment. (' + msg + ')');
+      setErr(msg);
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
+    <div className="space-y-4">
+      <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
+        <p className="text-sm text-zinc-400">Pay via UPI to:</p>
+        <p className="text-lg font-bold text-fire-400 font-mono">neobattle@upi</p>
+        <div className="flex justify-center py-3">
+          <div className="w-40 h-40 bg-white rounded-xl flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-32 h-32 mx-auto bg-zinc-200 rounded-lg flex items-center justify-center">
+                <span className="text-zinc-500 text-xs">QR Code Placeholder</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p className="text-center text-sm text-white font-semibold">Amount: ₹{amount}</p>
+      </div>
+
+      <input
+        type="text"
+        value={utrNumber}
+        onChange={(e) => setUtrNumber(e.target.value)}
+        placeholder="Enter UTR / Transaction ID"
+        className="input-field w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
+      />
+
       <button
-        type="button"
-        onClick={handlePayment}
+        onClick={handleSubmit}
         disabled={loading}
         className="btn-fire w-full py-3 rounded-xl font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
       >
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-        {loading ? 'Opening Razorpay...' : `Pay ₹${amount} via Razorpay`}
+        {loading ? 'Submitting...' : 'Submit Payment'}
       </button>
+
       {err && (
-        <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
           <AlertCircle className="w-4 h-4 shrink-0" /> {err}
         </div>
       )}
       {msg && (
-        <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm">
           <CheckCircle className="w-4 h-4 shrink-0" /> {msg}
         </div>
       )}

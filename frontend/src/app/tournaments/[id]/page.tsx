@@ -7,18 +7,19 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, ArrowLeft, DollarSign,
-  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck,
+  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
 import { tournamentApi, gameApi, userApi, formatCurrency, formatDate, getStatusColor, getMapTheme, type UserStats } from '@/lib/services';
+import UpiPayment from '@/components/RazorpayCheckout';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
 
 export default function TournamentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { tournament, loading, error } = useTournament(id);
   const [registering, setRegistering] = useState(false);
   const [message, setMessage] = useState('');
@@ -29,6 +30,24 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [squadIgns, setSquadIgns] = useState<(string | null)[]>([null, null, null, null]);
   const [fetchingIgn, setFetchingIgn] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [endingTournament, setEndingTournament] = useState(false);
+  const [showUpiModal, setShowUpiModal] = useState(false);
+
+  const handleEndTournament = async () => {
+    if (!confirm('Mark this tournament as COMPLETED? This cannot be undone.')) return;
+    setEndingTournament(true);
+    setRegisterError('');
+    setMessage('');
+    try {
+      await tournamentApi.complete(tournament!.id);
+      setMessage('Tournament marked as completed!');
+      window.location.reload();
+    } catch (err) {
+      setRegisterError(getErrorMessage(err));
+    } finally {
+      setEndingTournament(false);
+    }
+  };
 
   const handleCopyRoomDetails = async () => {
     const text = `Room ID: ${tournament?.roomId}${tournament?.roomPassword ? `\nPassword: ${tournament?.roomPassword}` : ''}`;
@@ -181,7 +200,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </div>
               {[
                 { icon: DollarSign, label: 'Entry Fee', value: entryFee === 0 ? 'FREE' : formatCurrency(entryFee), color: 'text-fire-400' },
-                { icon: Users, label: 'Participants', value: `${entryCount}/${tournament.maxParticipants}`, color: 'text-blue-400' },
+                { icon: Users, label: tournament.teamSize ? 'Team Size' : 'Participants', value: tournament.teamSize ? tournament.teamSize : `${entryCount}/${tournament.maxParticipants}`, color: 'text-blue-400' },
                 { icon: MapPin, label: 'Map', value: tournament.mapName || 'TBA', color: 'text-purple-400' },
                 { icon: Clock, label: 'Start Time', value: formatDate(tournament.startTime), color: 'text-yellow-400' },
                 { icon: Clock, label: 'Registration Ends', value: formatDate(tournament.registrationEnd), color: 'text-orange-400' },
@@ -229,6 +248,17 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
             {message && <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> {message}</div>}
             {registerError && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {registerError}</div>}
+
+            {isSuperAdmin && !isEnded && (
+              <button
+                onClick={handleEndTournament}
+                disabled={endingTournament}
+                className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 transition-all disabled:opacity-50"
+              >
+                {endingTournament ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />}
+                {endingTournament ? 'Ending...' : 'End Tournament'}
+              </button>
+            )}
 
             {tournament.isRegistered ? (
               <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-green-500/10">
@@ -279,12 +309,40 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 <AlertCircle className="w-5 h-5" /> Level too low (req: {tournament.requiredLevel}, yours: {user.gameLevel})
               </button>
             ) : entryFee > 0 && !hasSufficientBalance ? (
-              <button
-                disabled
-                className="w-full py-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 bg-gray-600 cursor-not-allowed opacity-50"
-              >
-                <AlertCircle className="w-5 h-5" /> Insufficient Balance
-              </button>
+              <div className="space-y-2">
+                <button
+                  disabled
+                  className="w-full py-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 bg-gray-600 cursor-not-allowed opacity-50"
+                >
+                  <AlertCircle className="w-5 h-5" /> Insufficient Balance
+                </button>
+                <button
+                  onClick={() => setShowUpiModal(true)}
+                  className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 transition-all"
+                >
+                  <Smartphone className="w-4 h-4" /> Pay ₹{entryFee} via UPI
+                </button>
+              </div>
+            ) : entryFee > 0 ? (
+              <div className="space-y-2">
+                <button
+                  onClick={handleRegister}
+                  disabled={registering || (isSquad && !allIgnsFetched)}
+                  className="w-full py-4 rounded-xl text-base font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-lg"
+                >
+                  {registering ? (
+                    <><Loader2 className="w-5 h-5 animate-spin" /> Registering...</>
+                  ) : (
+                    <><Trophy className="w-5 h-5" /> Register with Wallet (₹{entryFee})</>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowUpiModal(true)}
+                  className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 transition-all"
+                >
+                  <Smartphone className="w-4 h-4" /> Pay via UPI
+                </button>
+              </div>
             ) : (
               <button
                 onClick={handleRegister}
@@ -301,6 +359,17 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
       </motion.div>
+
+      {showUpiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowUpiModal(false)}>
+          <div className="bg-zinc-900 rounded-2xl p-6 max-w-md w-full mx-4 border border-white/10 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-green-400" /> Pay via UPI
+            </h3>
+            <UpiPayment amount={entryFee} tournamentId={id} onSuccess={() => { setShowUpiModal(false); setMessage('Payment submitted! Admin will verify shortly.'); }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

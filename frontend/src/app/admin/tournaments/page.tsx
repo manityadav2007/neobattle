@@ -30,7 +30,7 @@ export default function AdminTournamentsPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [isFree, setIsFree] = useState(false);
-  const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+  const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -93,6 +93,8 @@ export default function AdminTournamentsPage() {
     setCreateErr('');
     setCreating(true);
     try {
+      const isClashSquad = form.gameMode === 'CLASH_SQUAD';
+      const teamSizeMap: Record<string, number> = { '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 };
       const payload: any = {
         ...form,
         format: form.format,
@@ -100,16 +102,17 @@ export default function AdminTournamentsPage() {
         gameMode: form.gameMode,
         entryFee: isFree ? 0 : Number(form.entryFee),
         prizePool: 0,
-        maxParticipants: Number(form.maxParticipants),
+        maxParticipants: isClashSquad ? teamSizeMap[form.teamSize] || 2 : Number(form.maxParticipants),
         registrationStart: new Date(form.registrationStart).toISOString(),
         registrationEnd: new Date(form.registrationEnd).toISOString(),
         startTime: new Date(form.startTime).toISOString(),
         isFree,
       };
+      if (isClashSquad) payload.teamSize = form.teamSize;
       await tournamentApi.create(payload);
       setShowCreate(false);
       setIsFree(false);
-      setForm({ title: '', entryFee: 10, maxParticipants: 50, requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+      setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
       setSuccessMsg(isFree ? 'Free tournament created!' : 'Tournament created!');
       await loadData();
     } catch (err) {
@@ -237,10 +240,23 @@ export default function AdminTournamentsPage() {
                 <label className="text-xs text-zinc-400 mb-1 block">Entry Fee (₹)</label>
                 <input type="number" value={isFree ? 0 : form.entryFee} onChange={(e) => setForm({ ...form, entryFee: Number(e.target.value) })} placeholder="Enter entry fee" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} disabled={isFree} required />
               </div>
-              <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Max Participants</label>
-                <input type="number" value={form.maxParticipants} onChange={(e) => setForm({ ...form, maxParticipants: Number(e.target.value) })} placeholder="Enter max players" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={2} required />
-              </div>
+              {form.gameMode === 'CLASH_SQUAD' ? (
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">Team Size</label>
+                  <select value={form.teamSize} onChange={(e) => setForm({ ...form, teamSize: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm" required>
+                    <option value="" disabled className="bg-gray-800 text-zinc-400">Select Team Size</option>
+                    <option value="1v1" className="bg-gray-800 text-white">1v1</option>
+                    <option value="2v2" className="bg-gray-800 text-white">2v2</option>
+                    <option value="4v4" className="bg-gray-800 text-white">4v4</option>
+                    <option value="6v6" className="bg-gray-800 text-white">6v6</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">Max Participants</label>
+                  <input type="number" value={form.maxParticipants} onChange={(e) => setForm({ ...form, maxParticipants: Number(e.target.value) })} placeholder="Enter max players" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={2} required />
+                </div>
+              )}
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Required Level <span className="text-zinc-600">(0 = no restriction)</span></label>
                 <input type="number" value={form.requiredLevel} onChange={(e) => setForm({ ...form, requiredLevel: Number(e.target.value) })} placeholder="Enter min game level" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} />
