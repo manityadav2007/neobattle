@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { TournamentFormat, TournamentStatus, Platform, GameMode } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
-import { cacheGet, cacheSet, cacheDel } from '../config/redis';
+import { cacheGet, cacheSet, cacheDel, cacheDelPattern } from '../config/redis';
 import { validatePrizePool } from '../services/commission.service';
 import { gameProfileService } from '../services/gameProfile.service';
 
@@ -34,6 +34,7 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
         entryFee: new Decimal(entryFeeNum),
         prizePool: new Decimal(prizePoolNum),
         creatorId: req.user!.id,
+        status: TournamentStatus.REGISTRATION,
         registrationStart: new Date(data.registrationStart),
         registrationEnd: new Date(data.registrationEnd),
         startTime: new Date(data.startTime),
@@ -47,7 +48,7 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       include: { creator: { select: { id: true, username: true } } },
     });
 
-    await cacheDel('tournaments:list');
+    await cacheDelPattern('tournaments:list*');
     res.status(201).json({ success: true, data: tournament, breakdown: validation.breakdown });
     return;
   }
@@ -64,6 +65,7 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       entryFee: new Decimal(0),
       prizePool: new Decimal(0),
       creatorId: req.user!.id,
+      status: TournamentStatus.REGISTRATION,
       registrationStart: new Date(data.registrationStart),
       registrationEnd: new Date(data.registrationEnd),
       startTime: new Date(data.startTime),
@@ -77,7 +79,7 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
     include: { creator: { select: { id: true, username: true } } },
   });
 
-  await cacheDel('tournaments:list');
+  await cacheDelPattern('tournaments:list*');
   res.status(201).json({ success: true, data: tournament, message: 'Free tournament created. You can award prize money later from the tournament list.' });
 }
 
@@ -91,7 +93,7 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
   const skip = (page - 1) * limit;
 
   const where = {
-    ...(status && { status }),
+    ...(status ? { status } : { status: { not: TournamentStatus.COMPLETED } }),
     ...(format && { format }),
     ...(platform && { platform }),
     ...(gameMode && { gameMode }),
@@ -214,6 +216,8 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
     return;
   }
 
+  console.log(`[registerForTournament] tournamentId=${tournamentId} status=${tournament.status} serverTime=${new Date().toISOString()} regStart=${tournament.registrationStart.toISOString()} regEnd=${tournament.registrationEnd.toISOString()}`);
+
   if (tournament.status !== TournamentStatus.REGISTRATION) {
     res.status(400).json({ success: false, message: 'Registration is not open' });
     return;
@@ -224,6 +228,8 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
     res.status(404).json({ success: false, message: 'User not found' });
     return;
   }
+
+  console.log(`[registerForTournament] userCheck: isVerified=${currentUser.isVerified} gameLevel=${currentUser.gameLevel} requiredLevel=${tournament.requiredLevel}`);
 
   if (tournament.requiredLevel > 0) {
     if (!currentUser.isVerified) {
@@ -237,6 +243,7 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
   }
 
   const now = new Date();
+  console.log(`[registerForTournament] windowCheck: now=${now.toISOString()} registrationStart=${tournament.registrationStart.toISOString()} registrationEnd=${tournament.registrationEnd.toISOString()} insideWindow=${now >= tournament.registrationStart && now <= tournament.registrationEnd}`);
   if (now < tournament.registrationStart || now > tournament.registrationEnd) {
     res.status(400).json({ success: false, message: 'Outside registration window' });
     return;
@@ -408,7 +415,7 @@ export async function deleteTournament(req: AuthenticatedRequest, res: Response)
     data: { status: TournamentStatus.CANCELLED },
   });
 
-  await cacheDel('tournaments:list');
+  await cacheDelPattern('tournaments:list*');
   res.json({ success: true, message: 'Tournament cancelled' });
 }
 
@@ -430,7 +437,7 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
     data: { status: TournamentStatus.COMPLETED, endTime: new Date() },
   });
 
-  await cacheDel('tournaments:list');
+  await cacheDelPattern('tournaments:list*');
   await cacheDel(`tournament:${req.params.id}`);
 
   res.json({ success: true, data: updated, message: 'Tournament marked as completed' });

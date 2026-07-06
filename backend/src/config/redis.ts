@@ -58,3 +58,12 @@ export async function cacheDel(key: string): Promise<void> {
   if (!client) return;
   await client.del(key);
 }
+
+export async function cacheDelPattern(pattern: string): Promise<void> {
+  const client = getRedis();
+  if (!client) return;
+  const keys = await client.keys(pattern);
+  if (keys.length > 0) {
+    await client.del(...keys);
+  }
+}

@@ -144,6 +144,10 @@ export const tournamentApi = {
     const res = await api.patch(`/tournaments/${id}/complete`);
     return res.data;
   },
+  update: async (id: string, data: Record<string, unknown>) => {
+    const res = await api.patch(`/tournaments/${id}`, data);
+    return res.data;
+  },
 };
 
 export const walletApi = {

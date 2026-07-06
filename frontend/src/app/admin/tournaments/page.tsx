@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Trophy, AlertCircle, RefreshCw, Loader2, Users, DollarSign, MapPin, Clock,
-  Plus, CheckCircle, XCircle, Gift,
+  Plus, CheckCircle, XCircle, Gift, Save,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentApi, adminApi, formatCurrency, formatDate, getStatusColor, type Tournament } from '@/lib/services';
@@ -37,6 +37,10 @@ export default function AdminTournamentsPage() {
   const [expandedTournament, setExpandedTournament] = useState<string | null>(null);
   const [entries, setEntries] = useState<Record<string, TournamentEntry[]>>({});
   const [entriesLoading, setEntriesLoading] = useState<Record<string, boolean>>({});
+
+  const [matchDetails, setMatchDetails] = useState<Record<string, { roomId: string; roomPassword: string }>>({});
+  const [savingMatch, setSavingMatch] = useState<string | null>(null);
+  const [matchMsg, setMatchMsg] = useState<Record<string, string>>({});
 
   const [awardModal, setAwardModal] = useState<{ tournamentId: string; tournamentTitle: string; winnerId: string; winnerName: string } | null>(null);
   const [prizeAmount, setPrizeAmount] = useState('');
@@ -79,12 +83,30 @@ export default function AdminTournamentsPage() {
     }
   };
 
-  const toggleExpand = (id: string) => {
+  const toggleExpand = (id: string, tournament: Tournament) => {
     if (expandedTournament === id) {
       setExpandedTournament(null);
     } else {
       setExpandedTournament(id);
       if (!entries[id]) loadEntries(id);
+      if (!matchDetails[id]) {
+        setMatchDetails((prev) => ({ ...prev, [id]: { roomId: tournament.roomId || '', roomPassword: tournament.roomPassword || '' } }));
+      }
+    }
+  };
+
+  const handleSaveMatchDetails = async (id: string) => {
+    setSavingMatch(id);
+    setMatchMsg((prev) => ({ ...prev, [id]: '' }));
+    try {
+      await tournamentApi.update(id, { roomId: matchDetails[id]?.roomId, roomPassword: matchDetails[id]?.roomPassword });
+      setMatchMsg((prev) => ({ ...prev, [id]: 'Match details saved!' }));
+      setTimeout(() => setMatchMsg((prev) => ({ ...prev, [id]: '' })), 3000);
+      loadData();
+    } catch (err) {
+      setMatchMsg((prev) => ({ ...prev, [id]: getErrorMessage(err) }));
+    } finally {
+      setSavingMatch(null);
     }
   };
 
@@ -337,7 +359,7 @@ export default function AdminTournamentsPage() {
                     </div>
 
                     <button
-                      onClick={() => toggleExpand(t.id)}
+                      onClick={() => toggleExpand(t.id, t)}
                       className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-zinc-400 text-xs font-medium hover:bg-white/10 transition-colors"
                     >
                       <Users className="w-3.5 h-3.5" />
@@ -373,6 +395,43 @@ export default function AdminTournamentsPage() {
                         ) : (
                           <p className="text-center text-zinc-500 text-xs py-3">No players registered</p>
                         )}
+                      </div>
+                    )}
+
+                    {expandedTournament === t.id && (
+                      <div className="mt-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                        <h4 className="text-xs font-bold text-zinc-300 mb-2 uppercase tracking-wider">Match Details</h4>
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-xs text-zinc-500">Room ID</label>
+                            <input
+                              value={matchDetails[t.id]?.roomId || ''}
+                              onChange={(e) => setMatchDetails((prev) => ({ ...prev, [t.id]: { ...prev[t.id], roomId: e.target.value, roomPassword: prev[t.id]?.roomPassword || '' } }))}
+                              placeholder="Enter room ID"
+                              className="input-field w-full px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm mt-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-500">Room Password <span className="text-zinc-600">(optional)</span></label>
+                            <input
+                              value={matchDetails[t.id]?.roomPassword || ''}
+                              onChange={(e) => setMatchDetails((prev) => ({ ...prev, [t.id]: { roomId: prev[t.id]?.roomId || '', roomPassword: e.target.value } }))}
+                              placeholder="Enter room password"
+                              className="input-field w-full px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm mt-1"
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleSaveMatchDetails(t.id)}
+                            disabled={savingMatch === t.id}
+                            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            {savingMatch === t.id ? 'Saving...' : 'Save Match Details'}
+                          </button>
+                          {matchMsg[t.id] && (
+                            <p className={`text-xs mt-1 ${matchMsg[t.id].includes('saved') ? 'text-green-400' : 'text-red-400'}`}>{matchMsg[t.id]}</p>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
