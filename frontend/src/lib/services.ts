@@ -52,6 +52,7 @@ export interface Tournament {
   hostCommission?: number | string;
   remainingPool?: number | string;
   isRegistered?: boolean;
+  canSeeRoom?: boolean;
   _count?: { entries: number };
   creator?: { id: string; username: string };
   creatorId: string;

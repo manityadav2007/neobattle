@@ -52,7 +52,7 @@ class NotificationService {
       await this.sendToTournamentParticipants(t.id, {
         type: 'TOURNAMENT_STARTING',
         title: 'Tournament Starting Soon',
-        message: `"${t.title}" starts at ${t.startTime.toLocaleTimeString()}. Get ready!`,
+        message: `"${t.title}" starts at ${t.startTime.toISOString()}. Get ready!`,
         link: `/tournaments/${t.id}`,
       });
     }
@@ -62,7 +62,7 @@ class NotificationService {
     await this.sendToTournamentParticipants(tournamentId, {
       type: 'TOURNAMENT_DELAYED',
       title: 'Tournament Delayed',
-      message: `The tournament start has been delayed to ${newStartTime.toLocaleTimeString()}.`,
+      message: `The tournament start has been delayed to ${newStartTime.toISOString()}.`,
       link: `/tournaments/${tournamentId}`,
     });
   }
@@ -71,7 +71,7 @@ class NotificationService {
     await this.sendToTournamentParticipants(tournamentId, {
       type: 'MATCH_UPDATE',
       title: 'Match Schedule Updated',
-      message: `Your match has been scheduled for ${matchDate.toLocaleString()}. Check details now.`,
+      message: `Your match has been scheduled for ${matchDate.toISOString()}. Check details now.`,
       link: `/tournaments/${tournamentId}`,
     });
   }
@@ -80,7 +80,7 @@ class NotificationService {
     await this.sendToTournamentParticipants(tournamentId, {
       type: 'DEADLINE',
       title: 'Registration Deadline Approaching',
-      message: `Registration for "${title}" ends at ${deadline.toLocaleString()}. Register now!`,
+      message: `Registration for "${title}" ends at ${deadline.toISOString()}. Register now!`,
       link: `/tournaments/${tournamentId}`,
     });
   }

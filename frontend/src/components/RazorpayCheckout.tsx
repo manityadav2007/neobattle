@@ -43,16 +43,14 @@ export default function UpiPayment({ amount, tournamentId, onSuccess }: UpiPayme
 
   return (
     <div className="space-y-4">
-      <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
-        <p className="text-sm text-zinc-400">Pay via UPI to:</p>
-        <p className="text-lg font-bold text-fire-400 font-mono">neobattle@upi</p>
-        <div className="flex justify-center py-3">
-          <div className="w-40 h-40 bg-white rounded-xl flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-32 h-32 mx-auto bg-zinc-200 rounded-lg flex items-center justify-center">
-                <span className="text-zinc-500 text-xs">QR Code Placeholder</span>
-              </div>
-            </div>
+      <div className="p-6 rounded-xl bg-white/5 border border-white/10 space-y-4">
+        <div className="flex justify-center">
+          <div className="p-3 bg-white rounded-2xl border-2 border-zinc-200 shadow-xl">
+            <img
+              src="/my_qr.png"
+              alt="UPI QR Code"
+              className="w-48 h-48 object-contain"
+            />
           </div>
         </div>
         <p className="text-center text-sm text-white font-semibold">Amount: ₹{amount}</p>

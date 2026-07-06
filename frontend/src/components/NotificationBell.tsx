@@ -6,6 +6,19 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/services';
 import { motion, AnimatePresence } from 'framer-motion';
 
+function formatMessageDates(msg: string): string {
+  return msg.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, (iso) => {
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      }).format(new Date(iso));
+    } catch {
+      return iso;
+    }
+  });
+}
+
 interface Notification {
   id: string;
   type: string;
@@ -135,7 +148,7 @@ export default function NotificationBell() {
                           <p className={`text-sm ${notif.isRead ? 'text-zinc-300' : 'text-white font-medium'}`}>
                             {notif.title}
                           </p>
-                          <p className="text-xs text-zinc-500 mt-0.5 truncate">{notif.message}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5 truncate">{formatMessageDates(notif.message)}</p>
                           <p className="text-[10px] text-zinc-600 mt-1">{formatDate(notif.createdAt)}</p>
                         </div>
                       </div>

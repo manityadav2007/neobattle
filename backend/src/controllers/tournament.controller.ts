@@ -159,6 +159,10 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
     ? tournament.entries.some((e) => e.userId === req.user!.id)
     : false;
 
+  const now = new Date();
+  const fiveMinBeforeStart = new Date(tournament.startTime.getTime() - 5 * 60 * 1000);
+  const canSeeRoom = isRegistered && now >= fiveMinBeforeStart;
+
   const { roomId, roomPassword, ...rest } = tournament;
 
   res.json({
@@ -166,7 +170,8 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
     data: {
       ...rest,
       isRegistered,
-      ...(isRegistered ? { roomId, roomPassword } : {}),
+      canSeeRoom,
+      ...(canSeeRoom ? { roomId, roomPassword } : {}),
     },
   });
 }
@@ -231,15 +236,13 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
 
   console.log(`[registerForTournament] userCheck: isVerified=${currentUser.isVerified} gameLevel=${currentUser.gameLevel} requiredLevel=${tournament.requiredLevel}`);
 
-  if (tournament.requiredLevel > 0) {
-    if (!currentUser.isVerified) {
-      res.status(400).json({ success: false, message: 'Your Free Fire ID is not verified. Please complete verification first.' });
-      return;
-    }
-    if (currentUser.gameLevel < tournament.requiredLevel) {
-      res.status(400).json({ success: false, message: `Your game level (${currentUser.gameLevel}) is below the required level (${tournament.requiredLevel})` });
-      return;
-    }
+  if (!currentUser.isVerified) {
+    res.status(403).json({ success: false, message: 'Free Fire ID not verified. Please complete verification first.' });
+    return;
+  }
+  if (currentUser.gameLevel < tournament.requiredLevel) {
+    res.status(403).json({ success: false, message: 'Level too low to register' });
+    return;
   }
 
   const now = new Date();

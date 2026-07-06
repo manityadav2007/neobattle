@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, ArrowLeft, DollarSign,
-  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone,
+  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone, Shield,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
@@ -50,7 +50,8 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   };
 
   const handleCopyRoomDetails = async () => {
-    const text = `Room ID: ${tournament?.roomId}${tournament?.roomPassword ? `\nPassword: ${tournament?.roomPassword}` : ''}`;
+    if (!tournament?.roomId) return;
+    const text = `Room ID: ${tournament.roomId}${tournament.roomPassword ? `\nPassword: ${tournament.roomPassword}` : ''}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -165,23 +166,37 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             )}
             <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, rgba(59,130,246,0.35), rgba(249,115,22,0.2), rgba(10,10,15,0.7))` }} />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(249,115,22,0.15),transparent_70%)]" />
-            <div className="absolute bottom-6 left-6 right-6">
-              <div className="flex gap-2 mb-3 flex-wrap">
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(tournament.status)}`}>{tournament.status}</span>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-purple-400 bg-purple-400/10">{tournament.format}</span>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-cyan-400 bg-cyan-400/10">{tournament.platform === 'MOBILE' ? 'Mobile' : 'PC'}</span>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-green-400 bg-green-400/10">{tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad'}</span>
+
+            <div className="absolute top-4 left-4 right-4">
+              <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
+                {[
+                  { label: tournament.status, color: getStatusColor(tournament.status).split(' ')[0] || 'text-white', icon: Shield },
+                  { label: tournament.format, color: 'text-purple-300', icon: Trophy },
+                  { label: tournament.platform === 'MOBILE' ? 'Mobile' : 'PC', color: 'text-cyan-300', icon: Smartphone },
+                  { label: tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad', color: 'text-green-300', icon: Gamepad2 },
+                ].map((item) => (
+                  <span
+                    key={item.label}
+                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl backdrop-blur-md bg-white/15 border border-white/30 shadow-lg hover:scale-110 hover:shadow-xl transition-all duration-200 ${item.color}`}
+                  >
+                    <item.icon className="w-3.5 h-3.5" />
+                    {item.label}
+                  </span>
+                ))}
               </div>
-              <h1 className="text-3xl font-display font-black text-white">{tournament.title}</h1>
-              <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
+            </div>
+
+            <div className="absolute bottom-6 left-6 right-6">
+              <h1 className="text-3xl font-display font-black text-white drop-shadow-lg">{tournament.title}</h1>
+              <div className="flex items-center gap-4 mt-2 text-xs text-zinc-300">
                 <button
                   onClick={() => navigator.clipboard.writeText(tournament.uid)}
-                  className="flex items-center gap-1 hover:text-fire-400 transition-colors font-mono"
+                  className="flex items-center gap-1 hover:text-fire-400 transition-colors font-mono drop-shadow"
                   title="Copy UID"
                 >
                   {tournament.uid} <Copy className="w-3 h-3" />
                 </button>
-                <span>Host: <span className="text-zinc-400">{tournament.creator?.username || tournament.creatorId}</span></span>
+                <span>Host: <span className="text-zinc-200">{tournament.creator?.username || tournament.creatorId}</span></span>
               </div>
             </div>
           </div>
@@ -265,7 +280,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 <div className="flex items-center gap-2 text-green-400 font-semibold">
                   <CheckCircle className="w-5 h-5" /> You are registered for this tournament
                 </div>
-                {tournament.roomId && (
+                {tournament.canSeeRoom && tournament.roomId ? (
                   <div className="w-full mt-2 p-3 rounded-lg bg-white/5 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-400">Room ID:</span>
@@ -283,6 +298,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                     >
                       {copied ? <><ClipboardCheck className="w-3.5 h-3.5 text-green-400" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Room Details</>}
                     </button>
+                  </div>
+                ) : (
+                  <div className="w-full mt-2 p-3 rounded-lg bg-yellow-500/10 text-yellow-400 text-xs text-center">
+                    <Clock className="w-4 h-4 inline mr-1" />
+                    Room details will be available 5 minutes before the match starts.
                   </div>
                 )}
                 {myStats && <LeagueBadge wins={myStats.totalWins} size="md" />}
