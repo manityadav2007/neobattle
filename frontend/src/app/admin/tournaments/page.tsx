@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Trophy, AlertCircle, RefreshCw, Loader2, Users, DollarSign, MapPin, Clock,
-  Plus, CheckCircle, XCircle, Gift, Save,
+  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentApi, adminApi, formatCurrency, formatDate, getStatusColor, type Tournament } from '@/lib/services';
+import { calculateCommission, type CommissionBreakdown } from '@/lib/commission';
 import { getErrorMessage } from '@/lib/api';
 
 interface TournamentEntry {
@@ -31,6 +32,9 @@ export default function AdminTournamentsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [isFree, setIsFree] = useState(false);
   const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+  const [prizes, setPrizes] = useState({ first: 0, second: 0, third: 0 });
+  const [prizeCount, setPrizeCount] = useState(3);
+  const [breakdown, setBreakdown] = useState<CommissionBreakdown | null>(null);
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -83,6 +87,41 @@ export default function AdminTournamentsPage() {
     }
   };
 
+  const effectiveMaxParticipants = form.gameMode === 'CLASH_SQUAD'
+    ? ({ '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 }[form.teamSize] || 0)
+    : form.maxParticipants;
+
+  useEffect(() => {
+    if (isFree || effectiveMaxParticipants <= 0) { setBreakdown(null); return; }
+    const bd = calculateCommission(Number(form.entryFee), effectiveMaxParticipants);
+    setBreakdown(bd);
+    if (bd.maxPrizePool > 0) {
+      distributePrizes(bd.maxPrizePool, prizeCount);
+    } else {
+      setPrizes({ first: 0, second: 0, third: 0 });
+    }
+  }, [form.entryFee, effectiveMaxParticipants, prizeCount, isFree]);
+
+  function distributePrizes(total: number, count: number) {
+    if (count === 1) {
+      setPrizes({ first: total, second: 0, third: 0 });
+    } else if (count === 2) {
+      const first = Math.round(total * 0.7 * 100) / 100;
+      setPrizes({ first, second: Math.round((total - first) * 100) / 100, third: 0 });
+    } else {
+      const first = Math.round(total * 0.5 * 100) / 100;
+      const second = Math.round(total * 0.3 * 100) / 100;
+      setPrizes({ first, second, third: Math.round((total - first - second) * 100) / 100 });
+    }
+  }
+
+  const totalPrizes = prizes.first + (prizeCount >= 2 ? prizes.second : 0) + (prizeCount >= 3 ? prizes.third : 0);
+  const maxPool = breakdown?.maxPrizePool || 0;
+  const isPrizesBalanced = !isFree && maxPool > 0 && Math.abs(totalPrizes - maxPool) < 0.01;
+  const prizeError = !isFree && maxPool > 0 && !isPrizesBalanced
+    ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPool)} (currently ${formatCurrency(totalPrizes)})`
+    : '';
+
   const toggleExpand = (id: string, tournament: Tournament) => {
     if (expandedTournament === id) {
       setExpandedTournament(null);
@@ -112,18 +151,23 @@ export default function AdminTournamentsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isFree && !isPrizesBalanced) return;
     setCreateErr('');
     setCreating(true);
     try {
       const isClashSquad = form.gameMode === 'CLASH_SQUAD';
       const teamSizeMap: Record<string, number> = { '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 };
+      const prizePoolTotal = totalPrizes;
       const payload: any = {
         ...form,
         format: form.format,
         platform: form.platform,
         gameMode: form.gameMode,
         entryFee: isFree ? 0 : Number(form.entryFee),
-        prizePool: 0,
+        prizePool: prizePoolTotal,
+        prizeFirst: prizes.first,
+        prizeSecond: prizeCount >= 2 ? prizes.second : null,
+        prizeThird: prizeCount >= 3 ? prizes.third : null,
         maxParticipants: isClashSquad ? teamSizeMap[form.teamSize] || 2 : Number(form.maxParticipants),
         registrationStart: new Date(form.registrationStart).toISOString(),
         registrationEnd: new Date(form.registrationEnd).toISOString(),
@@ -135,6 +179,8 @@ export default function AdminTournamentsPage() {
       setShowCreate(false);
       setIsFree(false);
       setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+      setPrizes({ first: 0, second: 0, third: 0 });
+      setPrizeCount(3);
       setSuccessMsg(isFree ? 'Free tournament created!' : 'Tournament created!');
       await loadData();
     } catch (err) {
@@ -283,6 +329,135 @@ export default function AdminTournamentsPage() {
                 <label className="text-xs text-zinc-400 mb-1 block">Required Level <span className="text-zinc-600">(0 = no restriction)</span></label>
                 <input type="number" value={form.requiredLevel} onChange={(e) => setForm({ ...form, requiredLevel: Number(e.target.value) })} placeholder="Enter min game level" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} />
               </div>
+
+              {!isFree && (
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs text-zinc-400 block">Prize Distribution</label>
+                    {maxPool > 0 && (
+                      <span className="text-xs text-zinc-500">
+                        Max Prize Pool: <span className="text-yellow-400 font-semibold">{formatCurrency(maxPool)}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">1st Place</label>
+                        <input
+                          type="number"
+                          value={prizes.first}
+                          onChange={(e) => setPrizes({ ...prizes, first: Number(e.target.value) })}
+                          placeholder="1st place prize"
+                          className="input-field w-full px-3 py-2 rounded-lg bg-fire-500/10 border border-fire-500/30 text-fire-400 text-sm font-bold"
+                          min={0}
+                          required
+                        />
+                      </div>
+                      <div className="pt-5">
+                        <span className="text-fire-400 text-lg">🥇</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">2nd Place</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (prizeCount >= 2) {
+                                setPrizes({ ...prizes, first: prizes.first + prizes.second, second: 0 });
+                                setPrizeCount(1);
+                              } else {
+                                setPrizeCount(2);
+                                const total = maxPool || prizes.first;
+                                const first = Math.round(total * 0.7 * 100) / 100;
+                                setPrizes({ first, second: Math.round((total - first) * 100) / 100, third: 0 });
+                              }
+                            }}
+                            className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                          >
+                            {prizeCount >= 2 ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-zinc-600" />}
+                            {prizeCount >= 2 ? 'On' : 'Off'}
+                          </button>
+                        </div>
+                        {prizeCount >= 2 ? (
+                          <input
+                            type="number"
+                            value={prizes.second}
+                            onChange={(e) => setPrizes({ ...prizes, second: Number(e.target.value) })}
+                            placeholder="2nd place prize"
+                            className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
+                            min={0}
+                          />
+                        ) : (
+                          <div className="w-full px-3 py-2 rounded-lg bg-white/3 border border-white/5 text-zinc-600 text-sm italic">Not offered</div>
+                        )}
+                      </div>
+                      <div className="pt-5">
+                        <span className="text-zinc-500 text-lg">🥈</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">3rd Place</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (prizeCount >= 3) {
+                                setPrizes({ ...prizes, first: prizes.first + prizes.third, second: prizeCount >= 2 ? prizes.second : 0, third: 0 });
+                                setPrizeCount(2);
+                              } else if (prizeCount === 2) {
+                                setPrizeCount(3);
+                                const first = Math.round(prizes.first * 0.6 * 100) / 100;
+                                const second = Math.round(prizes.second * 0.6 * 100) / 100;
+                                const total = prizes.first + prizes.second;
+                                setPrizes({ first: Math.round(total * 0.5 * 100) / 100, second: Math.round(total * 0.3 * 100) / 100, third: Math.round(total * 0.2 * 100) / 100 });
+                              }
+                            }}
+                            className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                          >
+                            {prizeCount >= 3 ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-zinc-600" />}
+                            {prizeCount >= 3 ? 'On' : 'Off'}
+                          </button>
+                        </div>
+                        {prizeCount >= 3 ? (
+                          <input
+                            type="number"
+                            value={prizes.third}
+                            onChange={(e) => setPrizes({ ...prizes, third: Number(e.target.value) })}
+                            placeholder="3rd place prize"
+                            className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
+                            min={0}
+                          />
+                        ) : (
+                          <div className="w-full px-3 py-2 rounded-lg bg-white/3 border border-white/5 text-zinc-600 text-sm italic">Not offered</div>
+                        )}
+                      </div>
+                      <div className="pt-5">
+                        <span className="text-zinc-500 text-lg">🥉</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {maxPool > 0 && (
+                    <div className={`mt-2 flex items-center justify-between text-xs ${isPrizesBalanced ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className="flex items-center gap-1">
+                        {isPrizesBalanced ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                        {isPrizesBalanced ? 'Prize distribution is balanced' : prizeError}
+                      </span>
+                      <span className="text-zinc-500">
+                        Total: {formatCurrency(totalPrizes)} / {formatCurrency(maxPool)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Registration Start</label>
                 <input type="datetime-local" value={form.registrationStart} onChange={(e) => setForm({ ...form, registrationStart: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" required />
@@ -301,9 +476,33 @@ export default function AdminTournamentsPage() {
               </div>
             </div>
 
+            {!isFree && breakdown && (
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                <p className="text-sm font-semibold text-white mb-3">Commission Breakdown</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <p className="text-zinc-500">Total Collection</p>
+                    <p className="text-white font-bold">{formatCurrency(breakdown.totalCollection)}</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500">Platform (28%)</p>
+                    <p className="text-fire-400 font-bold">{formatCurrency(breakdown.platformCommission)}</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500">Host (20%)</p>
+                    <p className="text-green-400 font-bold">{formatCurrency(breakdown.hostCommission)}</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500">Max Prize Pool</p>
+                    <p className="font-bold text-yellow-400">{formatCurrency(breakdown.maxPrizePool)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {createErr && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {createErr}</div>}
 
-            <button type="submit" disabled={creating} className="btn-fire px-6 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50">
+            <button type="submit" disabled={creating || (!isFree && !isPrizesBalanced)} className="btn-fire px-6 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50">
               {creating ? 'Creating...' : isFree ? 'Create Free Tournament' : 'Create Tournament'}
             </button>
           </motion.form>

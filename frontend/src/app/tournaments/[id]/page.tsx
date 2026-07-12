@@ -7,11 +7,12 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, ArrowLeft, DollarSign,
-  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone, Shield,
+  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
-import { tournamentApi, gameApi, userApi, formatCurrency, formatDate, getStatusColor, getMapTheme, type UserStats } from '@/lib/services';
+import TournamentTags, { tagColorMap, tagIcons } from '@/components/TournamentTags';
+import { tournamentApi, gameApi, userApi, formatCurrency, formatDate, getMapTheme, type UserStats } from '@/lib/services';
 import UpiPayment from '@/components/RazorpayCheckout';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
@@ -168,22 +169,15 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(249,115,22,0.15),transparent_70%)]" />
 
             <div className="absolute top-4 left-4 right-4">
-              <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
-                {[
-                  { label: tournament.status, color: getStatusColor(tournament.status).split(' ')[0] || 'text-white', icon: Shield },
-                  { label: tournament.format, color: 'text-purple-300', icon: Trophy },
-                  { label: tournament.platform === 'MOBILE' ? 'Mobile' : 'PC', color: 'text-cyan-300', icon: Smartphone },
-                  { label: tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad', color: 'text-green-300', icon: Gamepad2 },
-                ].map((item) => (
-                  <span
-                    key={item.label}
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl backdrop-blur-md bg-white/15 border border-white/30 shadow-lg hover:scale-110 hover:shadow-xl transition-all duration-200 ${item.color}`}
-                  >
-                    <item.icon className="w-3.5 h-3.5" />
-                    {item.label}
-                  </span>
-                ))}
-              </div>
+              <TournamentTags
+                items={[
+                  { label: tournament.status, color: tagColorMap.status[tournament.status as keyof typeof tagColorMap.status] || 'bg-zinc-500/20 text-zinc-400', icon: tagIcons.status },
+                  { label: tournament.format, color: tagColorMap.format[tournament.format as keyof typeof tagColorMap.format], icon: tagIcons.format },
+                  { label: tournament.platform === 'MOBILE' ? 'Mobile' : 'PC', color: tagColorMap.platform[tournament.platform as keyof typeof tagColorMap.platform], icon: tagIcons.platform },
+                  { label: tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad', color: tagColorMap.gameMode[tournament.gameMode as keyof typeof tagColorMap.gameMode], icon: tagIcons.gameMode },
+                ]}
+                className="justify-center sm:justify-start"
+              />
             </div>
 
             <div className="absolute bottom-6 left-6 right-6">
@@ -264,7 +258,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             {message && <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> {message}</div>}
             {registerError && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {registerError}</div>}
 
-            {isSuperAdmin && !isEnded && (
+            {tournament.status === 'COMPLETED' ? (
+              <div className="w-full py-3 rounded-xl text-sm font-bold text-white text-center bg-blue-500/20 border border-blue-500/30">
+                <CheckCircle className="w-4 h-4 inline mr-1" /> Tournament Completed
+              </div>
+            ) : isSuperAdmin && tournament.status !== 'CANCELLED' && (
               <button
                 onClick={handleEndTournament}
                 disabled={endingTournament}
