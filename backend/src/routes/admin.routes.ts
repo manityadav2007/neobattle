@@ -21,5 +21,6 @@ router.patch('/users/:id/verify-game-level', adminController.verifyUserGameLevel
 router.get('/revenue', adminController.getRevenueStats);
 router.get('/transactions', adminController.getTransactions);
 router.post('/wallet/adjust', adminController.adjustWallet);
+router.post('/wallet/adjust-by-uid', adminController.adjustWalletByUid);
 
 export default router;

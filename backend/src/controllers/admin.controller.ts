@@ -393,6 +393,63 @@ export async function getTransactions(req: AuthenticatedRequest, res: Response):
   }
 }
 
+export async function adjustWalletByUid(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { uid, amount, reason } = req.body;
+
+  if (!uid || amount === undefined || amount === null || amount === 0) {
+    res.status(400).json({ success: false, message: 'uid and non-zero amount are required' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { uid },
+    select: { id: true, username: true, uid: true },
+  });
+  if (!user) {
+    res.status(404).json({ success: false, message: `User with UID ${uid} not found` });
+    return;
+  }
+
+  const adjustAmount = Number(amount);
+  const isCredit = adjustAmount > 0;
+
+  try {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const wallet = await tx.wallet.findUnique({ where: { userId: user.id } });
+      if (!wallet) throw new Error('Wallet not found');
+
+      if (!isCredit && Number(wallet.balance) < Math.abs(adjustAmount)) {
+        throw new Error(`Insufficient balance. ${user.username} has ${formatCurrency(Number(wallet.balance))}`);
+      }
+
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: adjustAmount } },
+      });
+
+      await tx.transaction.create({
+        data: {
+          walletId: wallet.id,
+          userId: user.id,
+          type: isCredit ? TransactionType.DEPOSIT : TransactionType.WITHDRAWAL,
+          status: TransactionStatus.COMPLETED,
+          amount: new Decimal(Math.abs(adjustAmount)),
+          description: reason || `Admin ${isCredit ? 'credit' : 'debit'} adjustment (UID: ${uid})`,
+          metadata: { adjustedBy: req.user!.id, isAdminAdjustment: true, userUid: uid },
+        },
+      });
+    });
+
+    res.json({
+      success: true,
+      message: `₹${Math.abs(adjustAmount)} ${isCredit ? 'credited to' : 'debited from'} ${user.username} (${user.uid})`,
+    });
+  } catch (err: any) {
+    console.error('[Admin] adjustWalletByUid error:', err);
+    res.status(400).json({ success: false, message: err.message || 'Adjustment failed' });
+  }
+}
+
 export async function adjustWallet(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { userId, amount, reason } = req.body;
 
