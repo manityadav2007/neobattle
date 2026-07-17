@@ -467,6 +467,9 @@ export interface WinnerProof {
   screenshotUrl: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string;
+  createdAt: string;
+  tournament?: { id: string; title: string; entryFee: number; prizePool: number };
+  user?: { id: string; username: string; ign?: string; freeFireId?: string };
 }
 
 export const gameApi = {
@@ -521,6 +524,13 @@ export const winnerProofApi = {
   },
   review: async (id: string, status: 'APPROVED' | 'REJECTED', rejectionReason?: string) => {
     const res = await api.patch(`/winner-proof/${id}/review`, { status, rejectionReason });
+    return res.data;
+  },
+};
+
+export const adjustWalletApi = {
+  adjust: async (data: { userId: string; amount: number; reason?: string }) => {
+    const res = await api.post('/admin/wallet/adjust', data);
     return res.data;
   },
 };

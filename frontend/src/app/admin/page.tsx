@@ -136,11 +136,20 @@ export default function AdminPage() {
             <Link href="/admin/support" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-sm font-medium hover:bg-blue-500/30 transition-colors">
               <MessageSquareMore className="w-4 h-4" /> Support
             </Link>
+            <Link href="/admin/pending-results" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 text-sm font-medium hover:bg-yellow-500/30 transition-colors">
+              <Trophy className="w-4 h-4" /> Pending Results
+            </Link>
+            <Link href="/admin/withdrawals" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-sm font-medium hover:bg-blue-500/30 transition-colors">
+              <Banknote className="w-4 h-4" /> Withdrawals
+            </Link>
             <Link href="/admin/payments" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/20 text-green-400 text-sm font-medium hover:bg-green-500/30 transition-colors">
               <DollarSign className="w-4 h-4" /> UPI Payments
             </Link>
             <Link href="/admin/gift-cards" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-500/20 text-pink-400 text-sm font-medium hover:bg-pink-500/30 transition-colors">
               <Gift className="w-4 h-4" /> Gift Cards
+            </Link>
+            <Link href="/admin/wallet-adjust" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/20 text-purple-400 text-sm font-medium hover:bg-purple-500/30 transition-colors">
+              <Banknote className="w-4 h-4" /> Wallet Adjust
             </Link>
             <button onClick={loadData} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-zinc-300">
               <RefreshCw className="w-4 h-4" /> Refresh

@@ -1,9 +1,13 @@
 import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import { UserRole, TournamentStatus, TransactionType, TransactionStatus } from '@prisma/client';
+import { UserRole, TournamentStatus, TransactionType, TransactionStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
+
+function formatCurrency(n: number): string {
+  return `₹${n.toLocaleString('en-IN')}`;
+}
 
 export async function getDashboardStats(_req: AuthenticatedRequest, res: Response): Promise<void> {
   const [
@@ -386,6 +390,60 @@ export async function getTransactions(req: AuthenticatedRequest, res: Response):
   } catch (error) {
     console.error('[Admin] getTransactions error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch transactions' });
+  }
+}
+
+export async function adjustWallet(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { userId, amount, reason } = req.body;
+
+  if (!userId || amount === undefined || amount === null || amount === 0) {
+    res.status(400).json({ success: false, message: 'userId and non-zero amount are required' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true } });
+  if (!user) {
+    res.status(404).json({ success: false, message: 'User not found' });
+    return;
+  }
+
+  const adjustAmount = Number(amount);
+  const isCredit = adjustAmount > 0;
+
+  try {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const wallet = await tx.wallet.findUnique({ where: { userId } });
+      if (!wallet) throw new Error('Wallet not found');
+
+      if (!isCredit && Number(wallet.balance) < Math.abs(adjustAmount)) {
+        throw new Error(`Insufficient balance. User has ${formatCurrency(Number(wallet.balance))}`);
+      }
+
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: adjustAmount } },
+      });
+
+      await tx.transaction.create({
+        data: {
+          walletId: wallet.id,
+          userId,
+          type: isCredit ? TransactionType.DEPOSIT : TransactionType.WITHDRAWAL,
+          status: TransactionStatus.COMPLETED,
+          amount: new Decimal(Math.abs(adjustAmount)),
+          description: reason || `Admin ${isCredit ? 'credit' : 'debit'} adjustment`,
+          metadata: { adjustedBy: req.user!.id, isAdminAdjustment: true },
+        },
+      });
+    });
+
+    res.json({
+      success: true,
+      message: `₹${Math.abs(adjustAmount)} ${isCredit ? 'credited to' : 'debited from'} ${user.username}`,
+    });
+  } catch (err: any) {
+    console.error('[Admin] adjustWallet error:', err);
+    res.status(400).json({ success: false, message: err.message || 'Adjustment failed' });
   }
 }
 

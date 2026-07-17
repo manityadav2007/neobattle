@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { TournamentStatus, WinnerProofStatus, TransactionStatus, TransactionType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { gameProfileService } from '../services/gameProfile.service';
 
@@ -112,72 +113,58 @@ export async function reviewWinnerProof(req: AuthenticatedRequest, res: Response
 
     const winnerWallet = await prisma.wallet.findUnique({ where: { userId: proof.userId } });
     const hostWallet = await prisma.wallet.findUnique({ where: { userId: t.creatorId } });
+    const adminUser = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' }, orderBy: { createdAt: 'asc' } });
+    const adminWallet = adminUser ? await prisma.wallet.findUnique({ where: { userId: adminUser.id } }) : null;
 
     if (!winnerWallet) {
       res.status(404).json({ success: false, message: 'Winner wallet not found' });
       return;
     }
 
-    const transactions: any[] = [];
-
-    if (prizeAmount > 0 && winnerWallet) {
-      await prisma.wallet.update({
-        where: { id: winnerWallet.id },
-        data: { balance: { increment: prizeAmount } },
-      });
-      transactions.push({
-        walletId: winnerWallet.id,
-        userId: proof.userId,
-        type: TransactionType.PRIZE,
-        status: TransactionStatus.COMPLETED,
-        amount: new Decimal(prizeAmount),
-        description: `Prize from ${t.title}`,
-        reference: `PRIZE-${proofId.slice(0, 8)}`,
-      });
-    }
-
-    if (hostAmount > 0 && hostWallet) {
-      await prisma.wallet.update({
-        where: { id: hostWallet.id },
-        data: { balance: { increment: hostAmount } },
-      });
-      transactions.push({
-        walletId: hostWallet.id,
-        userId: t.creatorId,
-        type: TransactionType.PRIZE,
-        status: TransactionStatus.COMPLETED,
-        amount: new Decimal(hostAmount),
-        description: `Host commission from ${t.title}`,
-        reference: `HOST-COMM-${proofId.slice(0, 8)}`,
-      });
-    }
-
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'SUPER_ADMIN' },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (adminAmount > 0 && adminUser) {
-      const adminWallet = await prisma.wallet.findUnique({ where: { userId: adminUser.id } });
-      if (adminWallet) {
-        await prisma.wallet.update({
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (prizeAmount > 0) {
+        await tx.wallet.update({
+          where: { id: winnerWallet.id },
+          data: { balance: { increment: prizeAmount } },
+        });
+        await tx.transaction.create({
+          data: {
+            walletId: winnerWallet.id, userId: proof.userId,
+            type: TransactionType.PRIZE, status: TransactionStatus.COMPLETED,
+            amount: new Decimal(prizeAmount),
+            description: `Prize from ${t.title}`, reference: `PRIZE-${proofId.slice(0, 8)}`,
+          },
+        });
+      }
+      if (hostAmount > 0 && hostWallet) {
+        await tx.wallet.update({
+          where: { id: hostWallet.id },
+          data: { balance: { increment: hostAmount } },
+        });
+        await tx.transaction.create({
+          data: {
+            walletId: hostWallet.id, userId: t.creatorId,
+            type: TransactionType.PRIZE, status: TransactionStatus.COMPLETED,
+            amount: new Decimal(hostAmount),
+            description: `Host commission from ${t.title}`, reference: `HOST-COMM-${proofId.slice(0, 8)}`,
+          },
+        });
+      }
+      if (adminAmount > 0 && adminWallet) {
+        await tx.wallet.update({
           where: { id: adminWallet.id },
           data: { balance: { increment: adminAmount } },
         });
-        transactions.push({
-          walletId: adminWallet.id,
-          userId: adminUser.id,
-          type: TransactionType.PRIZE,
-          status: TransactionStatus.COMPLETED,
-          amount: new Decimal(adminAmount),
-          description: `Platform commission from ${t.title}`,
-          reference: `PLAT-COMM-${proofId.slice(0, 8)}`,
+        await tx.transaction.create({
+          data: {
+            walletId: adminWallet.id, userId: adminUser!.id,
+            type: TransactionType.PRIZE, status: TransactionStatus.COMPLETED,
+            amount: new Decimal(adminAmount),
+            description: `Platform commission from ${t.title}`, reference: `PLAT-COMM-${proofId.slice(0, 8)}`,
+          },
         });
       }
-    }
-
-    for (const tx of transactions) {
-      await prisma.transaction.create({ data: tx });
-    }
+    });
   }
 
   const updated = await prisma.winnerProof.update({
@@ -195,11 +182,13 @@ export async function reviewWinnerProof(req: AuthenticatedRequest, res: Response
     data: { status: status === WinnerProofStatus.APPROVED ? TournamentStatus.PAID : TournamentStatus.COMPLETED },
   });
 
+  const fmt = (n: number) => `₹${n.toFixed(2)}`;
+
   res.json({
     success: true,
     data: updated,
     message: status === WinnerProofStatus.APPROVED
-      ? `Payout approved. Prize ($${Number(proof.tournament.prizePool).toFixed(2)}) → Winner, Host commission ($${Number(proof.tournament.hostCommission).toFixed(2)}) → Host, Platform commission ($${Number(proof.tournament.platformCommission).toFixed(2)}) → Admin.`
+      ? `Payout approved. Prize (${fmt(Number(proof.tournament.prizePool))}) → Winner, Host commission (${fmt(Number(proof.tournament.hostCommission))}) → Host, Platform commission (${fmt(Number(proof.tournament.platformCommission))}) → Admin.`
       : 'Winner proof rejected.',
   });
 }
