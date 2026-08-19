@@ -177,9 +177,11 @@ export default function WalletPage() {
           <div className="flex justify-center mb-4">
             <div className="bg-white rounded-2xl border-2 border-zinc-700 shadow-xl p-3">
               <img
-                src="/my_qr.png"
+                src="/my_qr.jpg"
                 alt="UPI QR"
-                className="w-40 h-40 object-contain"
+                width={160}
+                height={160}
+                className="w-40 h-40 object-contain mx-auto"
               />
             </div>
           </div>

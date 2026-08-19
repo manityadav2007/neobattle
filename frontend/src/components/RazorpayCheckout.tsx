@@ -47,9 +47,11 @@ export default function UpiPayment({ amount, tournamentId, onSuccess }: UpiPayme
         <div className="flex justify-center">
           <div className="p-3 bg-white rounded-2xl border-2 border-zinc-200 shadow-xl">
             <img
-              src="/my_qr.png"
+              src="/my_qr.jpg"
               alt="UPI QR Code"
-              className="w-48 h-48 object-contain"
+              width={192}
+              height={192}
+              className="w-48 h-48 object-contain mx-auto"
             />
           </div>
         </div>
