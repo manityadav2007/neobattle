@@ -9,6 +9,26 @@ function formatCurrency(n: number): string {
   return `₹${n.toLocaleString('en-IN')}`;
 }
 
+function normalizeIdentifier(identifier: string): string {
+  return identifier.trim();
+}
+
+async function findUserByIdentifier(identifier: string) {
+  const key = normalizeIdentifier(identifier);
+  if (!key) return null;
+
+  return prisma.user.findFirst({
+    where: {
+      OR: [
+        { id: key },
+        { uid: key },
+        { email: key.toLowerCase() },
+      ],
+    },
+    select: { id: true, username: true, uid: true, email: true },
+  });
+}
+
 export async function getDashboardStats(_req: AuthenticatedRequest, res: Response): Promise<void> {
   const [
     totalUsers,
@@ -401,12 +421,9 @@ export async function adjustWalletByUid(req: AuthenticatedRequest, res: Response
     return;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { uid },
-    select: { id: true, username: true, uid: true },
-  });
+  const user = await findUserByIdentifier(uid);
   if (!user) {
-    res.status(404).json({ success: false, message: `User with UID ${uid} not found` });
+    res.status(404).json({ success: false, message: `User not found for identifier "${uid}"` });
     return;
   }
 
@@ -454,22 +471,23 @@ export async function adjustWallet(req: AuthenticatedRequest, res: Response): Pr
   const { userId, amount, reason } = req.body;
 
   if (!userId || amount === undefined || amount === null || amount === 0) {
-    res.status(400).json({ success: false, message: 'userId and non-zero amount are required' });
+    res.status(400).json({ success: false, message: 'userId (or uid / email) and non-zero amount are required' });
     return;
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true } });
+  const user = await findUserByIdentifier(userId);
   if (!user) {
-    res.status(404).json({ success: false, message: 'User not found' });
+    res.status(404).json({ success: false, message: `User not found for identifier "${userId}"` });
     return;
   }
 
   const adjustAmount = Number(amount);
   const isCredit = adjustAmount > 0;
+  const targetUserId = user.id;
 
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const wallet = await tx.wallet.findUnique({ where: { userId } });
+      const wallet = await tx.wallet.findUnique({ where: { userId: targetUserId } });
       if (!wallet) throw new Error('Wallet not found');
 
       if (!isCredit && Number(wallet.balance) < Math.abs(adjustAmount)) {
@@ -484,19 +502,19 @@ export async function adjustWallet(req: AuthenticatedRequest, res: Response): Pr
       await tx.transaction.create({
         data: {
           walletId: wallet.id,
-          userId,
+          userId: targetUserId,
           type: isCredit ? TransactionType.DEPOSIT : TransactionType.WITHDRAWAL,
           status: TransactionStatus.COMPLETED,
           amount: new Decimal(Math.abs(adjustAmount)),
           description: reason || `Admin ${isCredit ? 'credit' : 'debit'} adjustment`,
-          metadata: { adjustedBy: req.user!.id, isAdminAdjustment: true },
+          metadata: { adjustedBy: req.user!.id, isAdminAdjustment: true, userUid: user.uid },
         },
       });
     });
 
     res.json({
       success: true,
-      message: `₹${Math.abs(adjustAmount)} ${isCredit ? 'credited to' : 'debited from'} ${user.username}`,
+      message: `₹${Math.abs(adjustAmount)} ${isCredit ? 'credited to' : 'debited from'} ${user.username} (${user.uid})`,
     });
   } catch (err: any) {
     console.error('[Admin] adjustWallet error:', err);
