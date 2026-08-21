@@ -48,8 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (user) {
-      document.cookie = `userRole=${user.role}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `userEmail=${user.email}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `userRole=${user.role}; path=/; max-age=2592000; SameSite=Lax`;
+      document.cookie = `userEmail=${user.email}; path=/; max-age=2592000; SameSite=Lax`;
     } else {
       document.cookie = 'userRole=; path=/; max-age=0';
       document.cookie = 'userEmail=; path=/; max-age=0';

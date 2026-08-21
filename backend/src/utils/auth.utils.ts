@@ -6,9 +6,18 @@ import { UserRole } from '@prisma/client';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
-const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '15m') as any;
-const JWT_REFRESH_EXPIRES_IN = (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as any;
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as any;
+const JWT_REFRESH_EXPIRES_IN = (process.env.JWT_REFRESH_EXPIRES_IN || '30d') as any;
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+
+function parseDurationToMs(duration: string): number {
+  const match = /^(\d+)\s*(s|m|h|d)$/.exec(duration.trim());
+  if (!match) return 7 * 24 * 60 * 60 * 1000;
+  const num = parseInt(match[1], 10);
+  const unit = match[2];
+  const multipliers: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+  return num * multipliers[unit];
+}
 
 export interface TokenPair {
   accessToken: string;
@@ -32,8 +41,7 @@ export function generateAccessToken(user: { id: string; email: string; role: Use
 
 export async function generateRefreshToken(userId: string): Promise<string> {
   const token = uuidv4();
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  const expiresAt = new Date(Date.now() + parseDurationToMs(String(JWT_REFRESH_EXPIRES_IN)));
 
   await prisma.refreshToken.create({
     data: { token, userId, expiresAt },
