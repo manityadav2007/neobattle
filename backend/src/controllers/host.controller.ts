@@ -26,17 +26,56 @@ export async function getMyTournaments(req: AuthenticatedRequest, res: Response)
 
 export async function createTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
   const data = req.body;
+  const isFree = data.isFree === true;
 
-  const entryFeeNum = Number(data.entryFee);
-  const prizePoolNum = Number(data.prizePool);
+  const entryFeeNum = isFree ? 0 : Number(data.entryFee);
+  const prizePoolNum = isFree ? 0 : Number(data.prizePool);
   const maxPlayers = data.maxParticipants;
 
-  const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum);
-  if (!validation.valid) {
-    res.status(400).json({ success: false, message: validation.message, breakdown: validation.breakdown });
+  if (!isFree) {
+    const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum);
+    if (!validation.valid) {
+      res.status(400).json({ success: false, message: validation.message, breakdown: validation.breakdown });
+      return;
+    }
+
+    const lastTour = await prisma.tournament.findFirst({ orderBy: { uid: 'desc' } });
+    const lastTourNum = lastTour?.uid ? parseInt(lastTour.uid.replace('T-', '')) || 9000 : 9000;
+    const tourUid = `T-${lastTourNum + 1}`;
+
+    const tournament = await prisma.tournament.create({
+      data: {
+        uid: tourUid,
+        title: data.title,
+        description: data.description,
+        format: data.format as TournamentFormat,
+        platform: (data.platform as Platform) || 'MOBILE',
+        gameMode: (data.gameMode as GameMode) || 'FULL_MAP',
+        entryFee: new Decimal(entryFeeNum),
+        prizePool: new Decimal(prizePoolNum),
+        maxParticipants: data.maxParticipants,
+        mapName: data.mapName,
+        rules: data.rules,
+        status: TournamentStatus.REGISTRATION,
+        registrationStart: new Date(data.registrationStart),
+        registrationEnd: new Date(data.registrationEnd),
+        startTime: new Date(data.startTime),
+        creatorId: req.user!.id,
+        platformCommission: new Decimal(validation.breakdown.platformCommission),
+        hostCommission: new Decimal(validation.breakdown.hostCommission),
+        remainingPool: new Decimal(validation.breakdown.remainingPool),
+        prizeFirst: data.prizeFirst !== undefined ? new Decimal(data.prizeFirst) : new Decimal(0),
+        prizeSecond: data.prizeSecond !== undefined && data.prizeSecond !== null ? new Decimal(data.prizeSecond) : null,
+        prizeThird: data.prizeThird !== undefined && data.prizeThird !== null ? new Decimal(data.prizeThird) : null,
+      },
+      include: { creator: { select: { id: true, username: true } } },
+    });
+
+    res.status(201).json({ success: true, data: tournament, breakdown: validation.breakdown });
     return;
   }
 
+  // Free tournament — skip budget validation, zero out all commission fields
   const lastTour = await prisma.tournament.findFirst({ orderBy: { uid: 'desc' } });
   const lastTourNum = lastTour?.uid ? parseInt(lastTour.uid.replace('T-', '')) || 9000 : 9000;
   const tourUid = `T-${lastTourNum + 1}`;
@@ -49,26 +88,27 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       format: data.format as TournamentFormat,
       platform: (data.platform as Platform) || 'MOBILE',
       gameMode: (data.gameMode as GameMode) || 'FULL_MAP',
-      entryFee: new Decimal(data.entryFee),
-      prizePool: new Decimal(data.prizePool),
+      entryFee: new Decimal(0),
+      prizePool: new Decimal(0),
       maxParticipants: data.maxParticipants,
       mapName: data.mapName,
       rules: data.rules,
+      status: TournamentStatus.REGISTRATION,
       registrationStart: new Date(data.registrationStart),
       registrationEnd: new Date(data.registrationEnd),
       startTime: new Date(data.startTime),
       creatorId: req.user!.id,
-      platformCommission: new Decimal(validation.breakdown.platformCommission),
-      hostCommission: new Decimal(validation.breakdown.hostCommission),
-      remainingPool: new Decimal(validation.breakdown.remainingPool),
-      prizeFirst: new Decimal(data.prizeFirst ?? 0),
-      prizeSecond: data.prizeSecond !== undefined && data.prizeSecond !== null ? new Decimal(data.prizeSecond) : null,
-      prizeThird: data.prizeThird !== undefined && data.prizeThird !== null ? new Decimal(data.prizeThird) : null,
+      platformCommission: new Decimal(0),
+      hostCommission: new Decimal(0),
+      remainingPool: new Decimal(0),
+      prizeFirst: new Decimal(0),
+      prizeSecond: null,
+      prizeThird: null,
     },
     include: { creator: { select: { id: true, username: true } } },
   });
 
-  res.status(201).json({ success: true, data: tournament, breakdown: validation.breakdown });
+  res.status(201).json({ success: true, data: tournament });
 }
 
 export async function completeTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
