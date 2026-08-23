@@ -245,19 +245,19 @@ export default function EsportsPage() {
     setPlayers((prev) => prev.map((p, i) => i === index ? { ...p, loading: true, error: '', ign: '', level: 0 } : p));
 
     try {
-      const res = await gameApi.fetchProfile(uid);
-      const profile = res.data;
-      if (!profile) {
-        setPlayers((prev) => prev.map((p, i) => i === index ? { ...p, loading: false, error: 'Profile not found' } : p));
+      const res = await gameApi.lookupUid(uid);
+      const player = res.data;
+      if (!player) {
+        setPlayers((prev) => prev.map((p, i) => i === index ? { ...p, loading: false, error: 'Player UID not registered on Neobattle' } : p));
         return;
       }
-      if (profile.level < 60) {
+      if (player.level < 60) {
         setPlayers((prev) => prev.map((p, i) =>
-          i === index ? { ...p, loading: false, ign: profile.ign, level: profile.level, error: `Level ${profile.level} — Minimum 60 required` } : p
+          i === index ? { ...p, loading: false, ign: player.ign, level: player.level, error: `${player.username} — Level ${player.level}. Minimum 60 required for esports` } : p
         ));
       } else {
         setPlayers((prev) => prev.map((p, i) =>
-          i === index ? { ...p, loading: false, ign: profile.ign, level: profile.level, error: '' } : p
+          i === index ? { ...p, loading: false, ign: player.ign, level: player.level, error: '' } : p
         ));
       }
     } catch (err) {
@@ -517,7 +517,7 @@ export default function EsportsPage() {
                 {players.map((player, i) => (
                   <div key={i} className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
                     <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                      Player {i + 1} UID
+                      Player {i + 1} UID <span className="normal-case text-zinc-600">(must be a verified Neobattle account)</span>
                     </label>
                     <div className="flex gap-2">
                       <input

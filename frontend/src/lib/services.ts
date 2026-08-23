@@ -492,6 +492,10 @@ export const gameApi = {
     const res = await api.get<ApiResponse<GameProfile>>(`/game/profile/${uid}`);
     return res.data;
   },
+  lookupUid: async (uid: string) => {
+    const res = await api.get<ApiResponse<{ username: string; ign: string; level: number }>>(`/game/lookup/${uid}`);
+    return res.data;
+  },
 };
 
 export const hostApi = {

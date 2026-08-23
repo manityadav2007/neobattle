@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
-  Trophy, Users, MapPin, Clock, ArrowLeft, DollarSign,
+  Trophy, Users, MapPin, Clock, ArrowLeft, IndianRupee,
   CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -208,7 +208,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 ))}
               </div>
               {[
-                { icon: DollarSign, label: 'Entry Fee', value: entryFee === 0 ? 'FREE' : formatCurrency(entryFee), color: 'text-fire-400' },
+                { icon: IndianRupee, label: 'Entry Fee', value: entryFee === 0 ? 'FREE' : formatCurrency(entryFee), color: 'text-fire-400' },
                 { icon: Users, label: tournament.teamSize ? 'Team Size' : 'Participants', value: tournament.teamSize ? tournament.teamSize : `${entryCount}/${tournament.maxParticipants}`, color: 'text-blue-400' },
                 { icon: MapPin, label: 'Map', value: tournament.mapName || 'TBA', color: 'text-purple-400' },
                 { icon: Clock, label: 'Start Time', value: formatDate(tournament.startTime), color: 'text-yellow-400' },
