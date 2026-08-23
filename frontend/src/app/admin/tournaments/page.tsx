@@ -91,8 +91,11 @@ export default function AdminTournamentsPage() {
     ? ({ '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 }[form.teamSize] || 0)
     : form.maxParticipants;
 
+  // Manual/free mode: explicit toggle OR zero/empty entry fee — no budget validation, no wallet deduction
+  const effectiveFree = isFree || !form.entryFee || Number(form.entryFee) <= 0;
+
   useEffect(() => {
-    if (isFree || effectiveMaxParticipants <= 0) { setBreakdown(null); return; }
+    if (effectiveFree || effectiveMaxParticipants <= 0) { setBreakdown(null); return; }
     const bd = calculateCommission(Number(form.entryFee), effectiveMaxParticipants);
     setBreakdown(bd);
     if (bd.maxPrizePool > 0) {
@@ -100,7 +103,7 @@ export default function AdminTournamentsPage() {
     } else {
       setPrizes({ first: 0, second: 0, third: 0 });
     }
-  }, [form.entryFee, effectiveMaxParticipants, prizeCount, isFree]);
+  }, [form.entryFee, effectiveMaxParticipants, prizeCount, effectiveFree]);
 
   function distributePrizes(total: number, count: number) {
     if (count === 1) {
@@ -117,8 +120,8 @@ export default function AdminTournamentsPage() {
 
   const totalPrizes = prizes.first + (prizeCount >= 2 ? prizes.second : 0) + (prizeCount >= 3 ? prizes.third : 0);
   const maxPool = breakdown?.maxPrizePool || 0;
-  const isPrizesBalanced = !isFree && maxPool > 0 && Math.abs(totalPrizes - maxPool) < 0.01;
-  const prizeError = !isFree && maxPool > 0 && !isPrizesBalanced
+  const isPrizesBalanced = !effectiveFree && maxPool > 0 && Math.abs(totalPrizes - maxPool) < 0.01;
+  const prizeError = !effectiveFree && maxPool > 0 && !isPrizesBalanced
     ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPool)} (currently ${formatCurrency(totalPrizes)})`
     : '';
 
@@ -151,7 +154,7 @@ export default function AdminTournamentsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFree && !isPrizesBalanced) return;
+    if (!effectiveFree && !isPrizesBalanced) return;
     setCreateErr('');
     setCreating(true);
     try {
@@ -173,7 +176,7 @@ export default function AdminTournamentsPage() {
         registrationStart: new Date(form.registrationStart).toISOString(),
         registrationEnd: new Date(form.registrationEnd).toISOString(),
         startTime: new Date(form.startTime).toISOString(),
-        isFree,
+        isFree: effectiveFree,
       };
       if (isClashSquad) payload.teamSize = form.teamSize;
       await tournamentApi.create(payload);
@@ -182,7 +185,7 @@ export default function AdminTournamentsPage() {
       setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
       setPrizes({ first: 0, second: 0, third: 0 });
       setPrizeCount(3);
-      setSuccessMsg(isFree ? 'Free tournament created!' : 'Tournament created!');
+      setSuccessMsg(effectiveFree ? 'Free tournament created!' : 'Tournament created!');
       await loadData();
     } catch (err) {
       setCreateErr(getErrorMessage(err));
@@ -310,7 +313,7 @@ export default function AdminTournamentsPage() {
               </div>
               <div className={isFree ? 'opacity-30 pointer-events-none' : ''}>
                 <label className="text-xs text-zinc-400 mb-1 block">Entry Fee (₹)</label>
-                <input type="number" value={isFree ? 0 : form.entryFee} onChange={(e) => setForm({ ...form, entryFee: Number(e.target.value) })} placeholder="Enter entry fee" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} disabled={isFree} required />
+                <input type="number" value={isFree ? 0 : form.entryFee} onChange={(e) => { const v = Number(e.target.value); setForm({ ...form, entryFee: v }); if (v <= 0 && !isFree) setIsFree(true); }} placeholder="Enter entry fee" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} disabled={isFree} required />
               </div>
               {form.gameMode === 'CLASH_SQUAD' ? (
                 <div>
@@ -345,8 +348,8 @@ export default function AdminTournamentsPage() {
 
               <div className="sm:col-span-2">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-zinc-400 block">Prize Distribution{isFree ? ' (Manual)' : ''}</label>
-                    {!isFree && maxPool > 0 && (
+                    <label className="text-xs text-zinc-400 block">Prize Distribution{effectiveFree ? ' (Manual)' : ''}</label>
+                    {!effectiveFree && maxPool > 0 && (
                       <span className="text-xs text-zinc-500">
                         Max Prize Pool: <span className="text-yellow-400 font-semibold">{formatCurrency(maxPool)}</span>
                       </span>
@@ -456,9 +459,9 @@ export default function AdminTournamentsPage() {
                     </div>
                   </div>
 
-                  {isFree ? (
+                  {effectiveFree ? (
                     <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
-                      <span>No entry fees — winners are paid manually via &quot;Award Prize&quot;.</span>
+                      <span>No entry fees — winners are paid manually via &quot;Award Prize&quot;. No budget check applied.</span>
                       <span>Total: {formatCurrency(totalPrizes)}</span>
                     </div>
                   ) : maxPool > 0 ? (
@@ -492,7 +495,7 @@ export default function AdminTournamentsPage() {
               </div>
             </div>
 
-            {!isFree && breakdown && (
+            {!effectiveFree && breakdown && (
               <div className="p-4 rounded-xl bg-white/5 border border-white/10">
                 <p className="text-sm font-semibold text-white mb-3">Commission Breakdown</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
@@ -518,8 +521,8 @@ export default function AdminTournamentsPage() {
 
             {createErr && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {createErr}</div>}
 
-            <button type="submit" disabled={creating || (!isFree && !isPrizesBalanced)} className="btn-fire px-6 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50">
-              {creating ? 'Creating...' : isFree ? 'Create Free Tournament' : 'Create Tournament'}
+            <button type="submit" disabled={creating || (!effectiveFree && !isPrizesBalanced)} className="btn-fire px-6 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50">
+              {creating ? 'Creating...' : effectiveFree ? 'Create Free Tournament' : 'Create Tournament'}
             </button>
           </motion.form>
         )}

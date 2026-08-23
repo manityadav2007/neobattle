@@ -34,10 +34,12 @@ export function validatePrizePool(entryFee: number, maxPlayers: number, prizePoo
   const breakdown = calculateCommission(entryFee, maxPlayers);
 
   if (prizePool > breakdown.maxPrizePool) {
+    const fmtINR = (n: number) =>
+      `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     return {
       valid: false,
       breakdown,
-      message: `Insufficient funds! Prize pool ($${prizePool.toFixed(2)}) exceeds available budget ($${breakdown.maxPrizePool.toFixed(2)}). Max allowed: $${breakdown.maxPrizePool.toFixed(2)}`,
+      message: `Insufficient funds! Prize pool (${fmtINR(prizePool)}) exceeds available budget (${fmtINR(breakdown.maxPrizePool)}) collected from entry fees. Max allowed: ${fmtINR(breakdown.maxPrizePool)}`,
     };
   }
 

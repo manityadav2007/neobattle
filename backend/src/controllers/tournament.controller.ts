@@ -10,9 +10,14 @@ import { gameProfileService } from '../services/gameProfile.service';
 
 export async function createTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
   const data = req.body;
-  const isFree = data.isFree === true;
 
-  const entryFeeNum = isFree ? 0 : Number(data.entryFee);
+  const entryFeeValue = Number(data.entryFee);
+  const isFree =
+    data.isFree === true ||
+    !Number.isFinite(entryFeeValue) ||
+    entryFeeValue <= 0;
+
+  const entryFeeNum = isFree ? 0 : entryFeeValue;
   const maxPlayers = data.maxParticipants;
   const prizePoolNum = isFree ? 0 : Number(data.prizePool);
 
