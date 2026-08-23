@@ -2,9 +2,12 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+export const SESSION_EXPIRED_EVENT = 'auth:session-expired';
+export const TOKENS_CHANGED_EVENT = 'auth:tokens-changed';
+
 export const api = axios.create({
   baseURL: API_URL,
-  timeout: 15000,
+  timeout: 20000,
 });
 
 let isRefreshing = false;
@@ -22,6 +25,18 @@ function processQueue(error: unknown, token: string | null = null) {
     }
   });
   failedQueue = [];
+}
+
+function isNetworkError(err: unknown): boolean {
+  return !(err instanceof AxiosError && err.response);
+}
+
+function handleSessionExpired(): void {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
 }
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -65,7 +80,7 @@ api.interceptors.response.use(
         localStorage.setItem('accessToken', newAccessToken);
         localStorage.setItem('refreshToken', newRefreshToken);
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('auth:tokens-changed'));
+          window.dispatchEvent(new CustomEvent(TOKENS_CHANGED_EVENT));
         }
         processQueue(null, newAccessToken);
         if (originalRequest.headers) {
@@ -74,10 +89,8 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
+        if (!isNetworkError(refreshError)) {
+          handleSessionExpired();
         }
         return Promise.reject(refreshError);
       } finally {
@@ -119,7 +132,7 @@ export function setAuthTokens(accessToken: string, refreshToken: string): void {
   localStorage.setItem('accessToken', accessToken);
   localStorage.setItem('refreshToken', refreshToken);
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('auth:tokens-changed'));
+    window.dispatchEvent(new CustomEvent(TOKENS_CHANGED_EVENT));
   }
 }
 

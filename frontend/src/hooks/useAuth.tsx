@@ -1,8 +1,13 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import axios from 'axios';
 import { authApi, User } from '@/lib/services';
-import { clearAuthTokens, isAuthenticated } from '@/lib/api';
+import {
+  clearAuthTokens,
+  isAuthenticated,
+  SESSION_EXPIRED_EVENT,
+} from '@/lib/api';
 
 interface AuthContextType {
   user: User | null;
@@ -21,6 +26,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 2000;
+
+function isAuthError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 401;
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,15 +46,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+    setLoading(true);
     try {
-      setLoading(true);
       const res = await authApi.me();
       setUser(res.data || null);
       setError(null);
-    } catch {
-      setUser(null);
-      clearAuthTokens();
-      setError('Session expired');
+    } catch (err) {
+      if (isAuthError(err)) {
+        setUser(null);
+        clearAuthTokens();
+        setError('Session expired. Please log in again.');
+      } else {
+        let recovered = false;
+        for (let attempt = 0; attempt < MAX_RETRIES && !recovered; attempt++) {
+          await wait(RETRY_DELAY_MS);
+          try {
+            const res = await authApi.me();
+            setUser(res.data || null);
+            setError(null);
+            recovered = true;
+          } catch {
+            /* keep retrying */
+          }
+        }
+        if (!recovered) {
+          setError('Cannot reach the server. Your session is saved — press Retry once the connection returns.');
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -61,9 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await authApi.me();
       setUser(res.data || null);
-    } catch {
-      setUser(null);
-      clearAuthTokens();
+    } catch (err) {
+      if (isAuthError(err)) {
+        setUser(null);
+        clearAuthTokens();
+      }
     }
   }, []);
 
@@ -75,14 +109,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchUser();
       }
     };
+    const handleSessionExpired = () => {
+      setUser(null);
+      setLoading(false);
+    };
     window.addEventListener('auth:tokens-changed', handleTokensChanged);
-    return () => window.removeEventListener('auth:tokens-changed', handleTokensChanged);
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => {
+      window.removeEventListener('auth:tokens-changed', handleTokensChanged);
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
   }, [fetchUser]);
 
   const logout = async () => {
-    await authApi.logout();
-    setUser(null);
-    window.location.href = '/login';
+    try {
+      await authApi.logout();
+    } catch {
+      /* local logout must always succeed */
+    } finally {
+      setUser(null);
+      window.location.href = '/login';
+    }
   };
 
   const ownerEmail = 'ymanit330@gmail.com';
