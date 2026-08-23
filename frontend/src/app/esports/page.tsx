@@ -9,7 +9,7 @@ import {
   Upload, Loader2, X, Calendar, Crown, Ban, Clock, MapPin, Smartphone, Monitor, Gamepad2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { esportsApi, uploadApi, gameApi, type EsportsSeason, type EsportsTeam, formatDate } from '@/lib/services';
+import { esportsApi, uploadApi, gameApi, type EsportsSeason, type EsportsTeam, formatDate, formatCurrency } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 
 interface UidField {
@@ -81,6 +81,103 @@ function MatchScheduleCard({ season }: { season: EsportsSeason }) {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ComingSoonCard({ nextSeasonDate }: { nextSeasonDate?: string | null }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5 }}
+      className="relative overflow-hidden rounded-2xl border border-yellow-500/25 mb-8"
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black" />
+      <div className="absolute -top-24 -right-24 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute -bottom-32 -left-24 w-96 h-96 bg-fire-500/10 rounded-full blur-3xl" />
+
+      <div className="relative z-10 px-6 sm:px-12 py-14 text-center">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.25em] text-yellow-400 bg-yellow-500/10 border border-yellow-500/25 mb-8">
+          <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+          Coming Soon
+        </div>
+
+        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-yellow-500/25 to-orange-600/15 border border-yellow-500/30 flex items-center justify-center shadow-lg shadow-yellow-500/10">
+          <Trophy className="w-10 h-10 text-yellow-400" />
+        </div>
+
+        <h1 className="text-3xl sm:text-5xl font-display font-black text-white leading-tight mb-3">
+          Major Esports Tournaments
+          <span className="block mt-2 gradient-text">Coming Soon</span>
+        </h1>
+
+        <p className="text-zinc-400 max-w-xl mx-auto mb-8">
+          We&apos;re building the ultimate competitive arena — bigger prize pools, pro squads,
+          and live leaderboards. Stay tuned, champions are made here.
+        </p>
+
+        {nextSeasonDate && (
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-zinc-300 bg-white/5 border border-white/10 mb-8">
+            <Calendar className="w-4 h-4 text-yellow-400" />
+            Expected kickoff: <span className="text-white font-semibold">{formatDate(nextSeasonDate)}</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link href="/tournaments" className="btn-fire inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-transform hover:scale-[1.02]">
+            <Trophy className="w-4 h-4" />
+            Join Live Tournaments
+          </Link>
+          <Link href="/" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-zinc-300 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
+            Back to Home
+          </Link>
+        </div>
+
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-zinc-500">
+          {[
+            { icon: Crown, label: 'Pro Prize Pools' },
+            { icon: Shield, label: 'Level 60+ Verified Squads' },
+            { icon: Users, label: '4v4 Team Battles' },
+          ].map((f) => (
+            <span key={f.label} className="inline-flex items-center gap-1.5">
+              <f.icon className="w-3.5 h-3.5 text-yellow-500/70" />
+              {f.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function MiniTeamCard({ myTeam }: { myTeam: EsportsTeam | null }) {
+  if (!myTeam) return null;
+  return (
+    <div className="glass-card rounded-2xl p-6 mb-8 border border-green-500/20">
+      <div className="flex items-center gap-3 mb-4">
+        <CheckCircle className="w-5 h-5 text-green-400" />
+        <h2 className="text-lg font-bold text-white">Your Registered Team</h2>
+      </div>
+      <p className="text-white font-semibold mb-3">{myTeam.teamName}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { uid: myTeam.player1Uid, ign: myTeam.player1Ign },
+          { uid: myTeam.player2Uid, ign: myTeam.player2Ign },
+          { uid: myTeam.player3Uid, ign: myTeam.player3Ign },
+          { uid: myTeam.player4Uid, ign: myTeam.player4Ign },
+        ].map((p, i) => (
+          <div key={i} className="p-3 rounded-xl bg-white/5 border border-white/10">
+            <p className="text-xs text-zinc-500 font-mono">{p.uid}</p>
+            <p className="text-sm text-white font-medium">{p.ign}</p>
+          </div>
+        ))}
+      </div>
+      {myTeam.status === 'WINNER' && (
+        <div className="mt-4 flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 text-yellow-400 text-sm">
+          <Crown className="w-4 h-4" /> Champion Team!
+        </div>
+      )}
     </div>
   );
 }
@@ -234,6 +331,28 @@ export default function EsportsPage() {
 
   if (authLoading) return null;
 
+  const hasWinner = !!season?.winner;
+  const showComingSoon = !season || (seasonEnded && !hasWinner);
+
+  if (showComingSoon) {
+    return (
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <Link href="/" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Home
+          </Link>
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm mb-6">
+              <AlertCircle className="w-4 h-4" /> {error}
+            </div>
+          )}
+          <ComingSoonCard nextSeasonDate={season?.nextSeasonDate} />
+          <MiniTeamCard myTeam={myTeam} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -292,6 +411,43 @@ export default function EsportsPage() {
               </div>
             </div>
           </div>
+
+          {season && season.prizePool != null && Number(season.prizePool) > 0 && (
+            <div className="glass-card rounded-2xl p-6 mb-8 border border-yellow-500/25 relative overflow-hidden">
+              <div className="absolute -top-16 -right-16 w-48 h-48 bg-yellow-500/10 rounded-full blur-3xl" />
+              <div className="relative z-10">
+                <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-yellow-400" />
+                  Prize Pool
+                </h2>
+                <div className={`grid gap-4 ${season.prizeBreakdown ? 'sm:grid-cols-[auto_1fr] sm:items-center' : ''}`}>
+                  <div className="text-center sm:text-left">
+                    <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Total Rewards</p>
+                    <p className="text-4xl font-display font-black gradient-text">
+                      {formatCurrency(Number(season.prizePool))}
+                    </p>
+                  </div>
+                  {season.prizeBreakdown && (
+                    <div className="flex flex-wrap gap-2 sm:justify-end justify-center">
+                      {season.prizeBreakdown
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .map((line, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-zinc-200 bg-white/5 border border-white/10"
+                          >
+                            <Trophy className="w-3.5 h-3.5 text-yellow-500/80" />
+                            {line}
+                          </span>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {showSchedule && <MatchScheduleCard season={season} />}
 

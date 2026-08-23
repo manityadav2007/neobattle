@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
+import { Decimal } from '@prisma/client/runtime/library';
 import { gameProfileService } from '../services/gameProfile.service';
 
 function getSeasonIncludes() {
@@ -246,7 +247,7 @@ export async function removeBan(req: AuthenticatedRequest, res: Response): Promi
 }
 
 export async function updateSeasonConfig(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const { seasonNumber, registrationDeadline, registrationOpen, matchDate, matchMap, matchMode, nextSeasonDate } = req.body;
+  const { seasonNumber, registrationDeadline, registrationOpen, matchDate, matchMap, matchMode, nextSeasonDate, prizePool, prizeBreakdown } = req.body;
 
   const season = await prisma.esportsSeason.findFirst({
     orderBy: { seasonNumber: 'desc' },
@@ -267,6 +268,8 @@ export async function updateSeasonConfig(req: AuthenticatedRequest, res: Respons
       ...(matchMap !== undefined && { matchMap }),
       ...(matchMode !== undefined && { matchMode }),
       ...(nextSeasonDate !== undefined && { nextSeasonDate: nextSeasonDate ? new Date(nextSeasonDate) : null }),
+      ...(prizePool !== undefined && { prizePool: prizePool === null || prizePool === '' ? null : new Decimal(Number(prizePool)) }),
+      ...(prizeBreakdown !== undefined && { prizeBreakdown: prizeBreakdown || null }),
     },
     include: getSeasonIncludes(),
   });

@@ -26,6 +26,8 @@ export default function AdminEsportsPage() {
   const [matchDate, setMatchDate] = useState('');
   const [matchMap, setMatchMap] = useState('');
   const [matchMode, setMatchMode] = useState('');
+  const [prizePool, setPrizePool] = useState('');
+  const [prizeBreakdown, setPrizeBreakdown] = useState('');
   const [regOpen, setRegOpen] = useState(false);
   const [winnerTeamId, setWinnerTeamId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -46,6 +48,8 @@ export default function AdminEsportsPage() {
         setMatchDate(s.matchDate ? new Date(s.matchDate).toISOString().slice(0, 16) : '');
         setMatchMap(s.matchMap || '');
         setMatchMode(s.matchMode || '');
+        setPrizePool(s.prizePool != null ? String(s.prizePool) : '');
+        setPrizeBreakdown(s.prizeBreakdown || '');
         setNewSeasonNumber(String((s.seasonNumber || 0) + 1));
         setNextDate(s.nextSeasonDate ? new Date(s.nextSeasonDate).toISOString().slice(0, 16) : '');
       } else {
@@ -73,6 +77,8 @@ export default function AdminEsportsPage() {
         matchMap: matchMap || null,
         matchMode: matchMode || null,
         ...(nextDate ? { nextSeasonDate: new Date(nextDate).toISOString() } : { nextSeasonDate: null }),
+        prizePool: prizePool !== '' ? Number(prizePool) : null,
+        prizeBreakdown: prizeBreakdown || null,
       });
       setActionMsg(res.message || 'Season config updated');
       await loadData();
@@ -247,6 +253,38 @@ export default function AdminEsportsPage() {
                             <option value="Full Map">Full Map</option>
                             <option value="Clash Squad">Clash Squad</option>
                           </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-white/5 pt-5">
+                      <h3 className="text-md font-bold text-white mb-4 flex items-center gap-2">
+                        <Crown className="w-5 h-5 text-yellow-400" />
+                        Prize Money
+                      </h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-zinc-300 mb-2">Total Prize Pool (₹)</label>
+                          <input
+                            type="number"
+                            value={prizePool}
+                            onChange={(e) => setPrizePool(e.target.value)}
+                            placeholder="e.g. 5000"
+                            min="0"
+                            className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:border-yellow-500/50 focus:outline-none"
+                          />
+                          <p className="text-xs text-zinc-500 mt-1">Shown prominently on the public Esports page. Leave empty to hide.</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-zinc-300 mb-2">Prize Breakdown / Distribution</label>
+                          <textarea
+                            value={prizeBreakdown}
+                            onChange={(e) => setPrizeBreakdown(e.target.value)}
+                            placeholder={'1st Place: ₹2500\n2nd Place: ₹1500\n3rd Place: ₹1000'}
+                            rows={4}
+                            className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:border-yellow-500/50 focus:outline-none resize-none"
+                          />
+                          <p className="text-xs text-zinc-500 mt-1">One rank per line. Each line is displayed as a reward row on the public page.</p>
                         </div>
                       </div>
                     </div>

@@ -41,10 +41,19 @@ export function useWallet() {
     }
   };
 
-  const withdraw = async (amount: number) => {
+  const withdraw = async (
+    amount: number,
+    payout: {
+      payoutMethod: 'UPI' | 'BANK_TRANSFER';
+      upiId?: string;
+      bankAccountNumber?: string;
+      bankIfsc?: string;
+      accountHolderName?: string;
+    }
+  ) => {
     setActionLoading(true);
     try {
-      await walletApi.withdraw(amount);
+      await walletApi.withdraw(amount, payout);
       await fetchWallet();
       return true;
     } catch (err) {

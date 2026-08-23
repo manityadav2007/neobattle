@@ -160,8 +160,17 @@ export const walletApi = {
     const res = await api.post('/wallet/deposit', { amount });
     return res.data;
   },
-  withdraw: async (amount: number) => {
-    const res = await api.post('/wallet/withdraw', { amount });
+  withdraw: async (
+    amount: number,
+    payout: {
+      payoutMethod: 'UPI' | 'BANK_TRANSFER';
+      upiId?: string;
+      bankAccountNumber?: string;
+      bankIfsc?: string;
+      accountHolderName?: string;
+    }
+  ) => {
+    const res = await api.post('/wallet/withdraw', { amount, ...payout });
     return res.data;
   },
   transactions: async (page = 1) => {
@@ -568,6 +577,8 @@ export interface EsportsSeason {
   matchMap: string | null;
   matchMode: string | null;
   nextSeasonDate: string | null;
+  prizePool?: number | string | null;
+  prizeBreakdown?: string | null;
   winnerTeamId: string | null;
   createdAt: string;
   teams: EsportsTeam[];
@@ -632,7 +643,7 @@ export const esportsApi = {
     const res = await api.delete(`/esports/bans/${id}`);
     return res.data;
   },
-  updateSeasonConfig: async (data: { seasonNumber?: number; registrationDeadline?: string | null; registrationOpen?: boolean; matchDate?: string | null; matchMap?: string | null; matchMode?: string | null; nextSeasonDate?: string | null }) => {
+  updateSeasonConfig: async (data: { seasonNumber?: number; registrationDeadline?: string | null; registrationOpen?: boolean; matchDate?: string | null; matchMap?: string | null; matchMode?: string | null; nextSeasonDate?: string | null; prizePool?: number | string | null; prizeBreakdown?: string | null }) => {
     const res = await api.patch('/esports/season/config', data);
     return res.data;
   },

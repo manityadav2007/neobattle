@@ -498,6 +498,8 @@ model EsportsSeason {
   matchMap           String?
   matchMode          String?
   nextSeasonDate     DateTime?
+  prizePool          Decimal? @db.Decimal(12, 2)
+  prizeBreakdown     String?
   winnerTeamId       String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

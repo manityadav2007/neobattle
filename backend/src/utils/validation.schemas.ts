@@ -82,6 +82,11 @@ export const walletDepositSchema = z.object({
 
 export const walletWithdrawSchema = z.object({
   amount: z.number().positive(),
+  payoutMethod: z.enum(['UPI', 'BANK_TRANSFER']),
+  upiId: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  bankIfsc: z.string().optional(),
+  accountHolderName: z.string().optional(),
 });
 
 export const verificationSubmitSchema = z.object({

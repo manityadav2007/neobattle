@@ -86,8 +86,46 @@ export async function deposit(req: AuthenticatedRequest, res: Response): Promise
 }
 
 export async function withdraw(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const { amount } = req.body;
+  const { amount, payoutMethod, upiId, bankAccountNumber, bankIfsc, accountHolderName } = req.body;
   const userId = req.user!.id;
+
+  if (!amount || Number(amount) <= 0) {
+    res.status(400).json({ success: false, message: 'Valid amount is required' });
+    return;
+  }
+
+  if (!['UPI', 'BANK_TRANSFER'].includes(payoutMethod)) {
+    res.status(400).json({ success: false, message: 'payoutMethod must be UPI or BANK_TRANSFER' });
+    return;
+  }
+
+  let payoutDetails: Record<string, string>;
+  let payoutLabel: string;
+
+  if (payoutMethod === 'UPI') {
+    if (!upiId || !/^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(upiId.trim())) {
+      res.status(400).json({ success: false, message: 'A valid UPI ID is required (e.g. name@bank)' });
+      return;
+    }
+    payoutDetails = { method: 'UPI', upiId: upiId.trim() };
+    payoutLabel = `UPI: ${upiId.trim()}`;
+  } else {
+    if (!bankAccountNumber || bankAccountNumber.trim().length < 8) {
+      res.status(400).json({ success: false, message: 'A valid bank account number is required' });
+      return;
+    }
+    if (!bankIfsc || !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(bankIfsc.trim())) {
+      res.status(400).json({ success: false, message: 'A valid IFSC code is required (e.g. SBIN0001234)' });
+      return;
+    }
+    payoutDetails = {
+      method: 'BANK_TRANSFER',
+      bankAccountNumber: bankAccountNumber.trim(),
+      bankIfsc: bankIfsc.trim().toUpperCase(),
+      ...(accountHolderName && { accountHolderName: accountHolderName.trim() }),
+    };
+    payoutLabel = `A/C ••${bankAccountNumber.trim().slice(-4)} (${bankIfsc.trim().toUpperCase()})`;
+  }
 
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   if (!wallet) {
@@ -95,44 +133,32 @@ export async function withdraw(req: AuthenticatedRequest, res: Response): Promis
     return;
   }
 
-  if (Number(wallet.balance) < amount) {
+  if (Number(wallet.balance) < Number(amount)) {
     res.status(400).json({ success: false, message: 'Insufficient balance' });
-    return;
-  }
-
-  const payment = await paymentGateway.processWithdrawal({
-    amount,
-    userId,
-      description: `Wallet withdrawal of ₹${amount}`,
-  });
-
-  if (!payment.success) {
-    res.status(400).json({ success: false, message: payment.message });
     return;
   }
 
   const [updatedWallet, transaction] = await prisma.$transaction([
     prisma.wallet.update({
       where: { id: wallet.id },
-      data: { balance: { decrement: amount } },
+      data: { balance: { decrement: Number(amount) } },
     }),
     prisma.transaction.create({
       data: {
         walletId: wallet.id,
         userId,
         type: TransactionType.WITHDRAWAL,
-        status: TransactionStatus.COMPLETED,
-        amount: new Decimal(amount),
-        description: 'Wallet withdrawal',
-        reference: payment.reference,
-        metadata: { transactionId: payment.transactionId },
+        status: TransactionStatus.PENDING,
+        amount: new Decimal(Number(amount)),
+        description: `Withdrawal request to ${payoutLabel} — pending admin approval`,
+        metadata: { payout: payoutDetails, isAdminReviewRequired: true },
       },
     }),
   ]);
 
   res.json({
     success: true,
-    message: payment.message,
+    message: 'Withdrawal request submitted! Funds are held until the admin processes your payout.',
     data: {
       balance: Number(updatedWallet.balance),
       transaction: { ...transaction, amount: Number(transaction.amount) },
