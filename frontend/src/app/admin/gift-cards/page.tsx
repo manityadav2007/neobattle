@@ -20,7 +20,7 @@ export default function AdminGiftCardsPage() {
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', value: '', priceInCoins: '', stockCount: '0' });
+  const [form, setForm] = useState({ name: '', value: '', priceInCoins: '' });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -75,12 +75,11 @@ export default function AdminGiftCardsPage() {
         name: form.name,
         value: Number(form.value),
         priceInCoins: Number(form.priceInCoins),
-        stockCount: Number(form.stockCount) || 0,
         imageUrl,
       });
       setActionMsg('Gift card created!');
       setShowForm(false);
-      setForm({ name: '', value: '', priceInCoins: '', stockCount: '0' });
+      setForm({ name: '', value: '', priceInCoins: '' });
       setImageFile(null);
       setImagePreview(null);
       await loadData();
@@ -145,10 +144,6 @@ export default function AdminGiftCardsPage() {
                 <label className="block text-sm text-zinc-400 mb-1">Price in Coins (₹)</label>
                 <input type="number" value={form.priceInCoins} onChange={(e) => setForm({ ...form, priceInCoins: e.target.value })} className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:border-yellow-500/50 focus:outline-none" placeholder="e.g. 500" />
               </div>
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Stock Count</label>
-                <input type="number" value={form.stockCount} onChange={(e) => setForm({ ...form, stockCount: e.target.value })} className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:border-yellow-500/50 focus:outline-none" placeholder="e.g. 10" />
-              </div>
             </div>
             <div className="mb-4">
               <label className="block text-sm text-zinc-400 mb-1">Card Image</label>
@@ -185,7 +180,7 @@ export default function AdminGiftCardsPage() {
                       {card.imageUrl && <img src={card.imageUrl} alt={card.name} className="w-10 h-10 rounded object-contain bg-white/5" />}
                       <div>
                         <p className="text-sm font-medium text-white">{card.name}</p>
-                        <p className="text-xs text-zinc-500">₹{card.value} | Cost: {formatCurrency(card.priceInCoins)} | Stock: {card.stockCount}</p>
+                        <p className="text-xs text-zinc-500">₹{card.value} | Cost: {formatCurrency(card.priceInCoins)}</p>
                       </div>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${card.isActive ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>
@@ -198,7 +193,7 @@ export default function AdminGiftCardsPage() {
           </div>
 
           <div className="glass-card rounded-2xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Pending Redemptions ({redemptions.filter((r) => r.status === 'PENDING').length})</h2>
+            <h2 className="text-lg font-bold text-white mb-4">Redemptions ({redemptions.filter((r) => r.status === 'PENDING').length} pending)</h2>
             {loadingData ? (
               <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 text-zinc-500 animate-spin" /></div>
             ) : redemptions.length === 0 ? (
@@ -208,20 +203,21 @@ export default function AdminGiftCardsPage() {
                 {redemptions.map((r) => (
                   <div key={r.id} className="p-3 rounded-xl bg-white/3 border border-white/5">
                     <div className="flex justify-between items-start mb-2">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-white">{r.user.username}</p>
-                        <p className="text-xs text-zinc-500">{r.giftCard.name} — ₹{r.giftCard.value}</p>
+                        <p className="text-xs text-zinc-500 truncate">{r.giftCard.name} — ₹{r.giftCard.value} · Paid {formatCurrency(Number(r.giftCard.priceInCoins ?? 0))}</p>
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
                         r.status === 'PENDING' ? 'text-yellow-400 bg-yellow-400/10' :
                         r.status === 'APPROVED' ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'
                       }`}>{r.status}</span>
                     </div>
                     {r.status === 'PENDING' && (
-                      <div className="flex gap-2 mt-2">
-                        <button onClick={async () => { try { await giftCardApi.updateRedemption(r.id, 'APPROVED'); setActionMsg('Approved'); await loadData(); } catch (err) { setError(getErrorMessage(err)); } }} className="flex-1 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20">Approve</button>
-                        <button onClick={async () => { try { await giftCardApi.updateRedemption(r.id, 'REJECTED'); setActionMsg('Rejected'); await loadData(); } catch (err) { setError(getErrorMessage(err)); } }} className="flex-1 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20">Reject</button>
-                      </div>
+                      <PendingRedemptionActions
+                        redemptionId={r.id}
+                        onDone={async (message) => { setActionMsg(message); await loadData(); }}
+                        onError={(m) => setError(m)}
+                      />
                     )}
                   </div>
                 ))}
@@ -230,6 +226,73 @@ export default function AdminGiftCardsPage() {
           </div>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+function PendingRedemptionActions({
+  redemptionId,
+  onDone,
+  onError,
+}: {
+  redemptionId: string;
+  onDone: (message: string) => void | Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const handleApprove = async () => {
+    if (!code.trim()) return;
+    setBusy(true);
+    try {
+      await giftCardApi.updateRedemption(redemptionId, 'APPROVED', code.trim());
+      await onDone('Code assigned — user can now view it in My Redemptions');
+    } catch (err) {
+      onError(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!confirm('Reject this request? The user will be refunded and stock restored.')) return;
+    setBusy(true);
+    try {
+      await giftCardApi.updateRedemption(redemptionId, 'REJECTED');
+      await onDone('Rejected — wallet refunded and stock restored');
+    } catch (err) {
+      onError(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row gap-2 mt-2">
+      <input
+        type="text"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        placeholder="Paste actual redeem code..."
+        className="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white text-xs font-mono placeholder:text-zinc-600 focus:border-green-500/50 outline-none"
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={handleApprove}
+          disabled={busy || !code.trim()}
+          className="flex-1 py-1.5 px-3 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20 disabled:opacity-40 whitespace-nowrap"
+        >
+          {busy ? 'Saving...' : 'Approve & Send'}
+        </button>
+        <button
+          onClick={handleReject}
+          disabled={busy}
+          className="py-1.5 px-3 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 disabled:opacity-40 whitespace-nowrap"
+        >
+          Reject
+        </button>
+      </div>
     </div>
   );
 }

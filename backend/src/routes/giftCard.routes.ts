@@ -10,6 +10,7 @@ router.get('/all', authenticate, adminCheck, giftCardController.listAllGiftCards
 router.post('/create', authenticate, adminCheck, giftCardController.createGiftCard);
 router.patch('/:id', authenticate, adminCheck, giftCardController.updateGiftCard);
 router.post('/redeem', authenticate, giftCardController.redeemGiftCard);
+router.get('/redemptions/mine', authenticate, giftCardController.listMyRedemptions);
 router.get('/redemptions', authenticate, adminCheck, giftCardController.listRedemptions);
 router.patch('/redemptions/:id', authenticate, adminCheck, giftCardController.updateRedemptionStatus);
 

@@ -397,7 +397,6 @@ export interface GiftCard {
   value: number;
   imageUrl: string | null;
   priceInCoins: number;
-  stockCount: number;
   isActive: boolean;
   createdAt: string;
 }
@@ -407,9 +406,12 @@ export interface GiftCardRedemption {
   userId: string;
   giftCardId: string;
   status: string;
+  code?: string | null;
+  reviewedAt?: string | null;
   createdAt: string;
+  amountPaid?: number;
   user: { id: string; username: string; email: string };
-  giftCard: { name: string; value: number };
+  giftCard: { name: string; value: number; priceInCoins?: number; imageUrl?: string | null };
 }
 
 export const giftCardApi = {
@@ -421,7 +423,7 @@ export const giftCardApi = {
     const res = await api.get('/gift-cards/all');
     return res.data;
   },
-  create: async (data: { name: string; value: number; imageUrl?: string; priceInCoins: number; stockCount: number }) => {
+  create: async (data: { name: string; value: number; imageUrl?: string; priceInCoins: number }) => {
     const res = await api.post('/gift-cards/create', data);
     return res.data;
   },
@@ -437,8 +439,12 @@ export const giftCardApi = {
     const res = await api.get('/gift-cards/redemptions');
     return res.data;
   },
-  updateRedemption: async (id: string, status: string) => {
-    const res = await api.patch(`/gift-cards/redemptions/${id}`, { status });
+  myRedemptions: async () => {
+    const res = await api.get('/gift-cards/redemptions/mine');
+    return res.data;
+  },
+  updateRedemption: async (id: string, status: string, code?: string) => {
+    const res = await api.patch(`/gift-cards/redemptions/${id}`, { status, code });
     return res.data;
   },
 };

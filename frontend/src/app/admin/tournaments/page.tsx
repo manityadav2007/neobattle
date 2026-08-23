@@ -330,11 +330,10 @@ export default function AdminTournamentsPage() {
                 <input type="number" value={form.requiredLevel} onChange={(e) => setForm({ ...form, requiredLevel: Number(e.target.value) })} placeholder="Enter min game level" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} />
               </div>
 
-              {!isFree && (
-                <div className="sm:col-span-2">
+              <div className="sm:col-span-2">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-zinc-400 block">Prize Distribution</label>
-                    {maxPool > 0 && (
+                    <label className="text-xs text-zinc-400 block">Prize Distribution{isFree ? ' (Manual)' : ''}</label>
+                    {!isFree && maxPool > 0 && (
                       <span className="text-xs text-zinc-500">
                         Max Prize Pool: <span className="text-yellow-400 font-semibold">{formatCurrency(maxPool)}</span>
                       </span>
@@ -444,7 +443,12 @@ export default function AdminTournamentsPage() {
                     </div>
                   </div>
 
-                  {maxPool > 0 && (
+                  {isFree ? (
+                    <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+                      <span>No entry fees — winners are paid manually via &quot;Award Prize&quot;.</span>
+                      <span>Total: {formatCurrency(totalPrizes)}</span>
+                    </div>
+                  ) : maxPool > 0 ? (
                     <div className={`mt-2 flex items-center justify-between text-xs ${isPrizesBalanced ? 'text-green-400' : 'text-red-400'}`}>
                       <span className="flex items-center gap-1">
                         {isPrizesBalanced ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
@@ -454,9 +458,8 @@ export default function AdminTournamentsPage() {
                         Total: {formatCurrency(totalPrizes)} / {formatCurrency(maxPool)}
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
-              )}
 
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Registration Start</label>
@@ -545,7 +548,7 @@ export default function AdminTournamentsPage() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <span className="flex items-center gap-1 text-zinc-400"><DollarSign className="w-3 h-3 text-green-400" /> {isFreeTournament ? 'FREE' : formatCurrency(prizePool)}</span>
+                      <span className="flex items-center gap-1 text-zinc-400"><DollarSign className="w-3 h-3 text-green-400" /> {isFreeTournament && prizePool === 0 ? 'FREE' : formatCurrency(prizePool)}</span>
                       <span className="flex items-center gap-1 text-zinc-400"><Users className="w-3 h-3 text-blue-400" /> {entryCount}/{t.maxParticipants}</span>
                       <span className="flex items-center gap-1 text-zinc-400"><MapPin className="w-3 h-3 text-fire-400" /> {t.mapName || 'TBA'}</span>
                       <span className="flex items-center gap-1 text-zinc-400"><Clock className="w-3 h-3 text-yellow-400" /> {formatDate(t.startTime)}</span>

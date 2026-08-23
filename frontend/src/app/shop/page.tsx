@@ -1,85 +1,71 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Wallet, Copy, CheckCircle, AlertCircle, Loader2, X, ArrowRight, Landmark } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import {
+  Wallet, Copy, Check, CheckCircle, AlertCircle, Loader2, Clock, XCircle,
+  ArrowRight, Landmark, RefreshCw, Gift,
+} from 'lucide-react';
 import { SiGoogleplay } from 'react-icons/si';
 import { useAuth } from '@/hooks/useAuth';
-import { api } from '@/lib/api';
-import { formatCurrency } from '@/lib/services';
+import { formatCurrency, giftCardApi, type GiftCard, type GiftCardRedemption } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
-
-interface WithdrawMethod {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ElementType;
-  color: string;
-  bgClass: string;
-}
-
-const methods: WithdrawMethod[] = [
-  {
-    id: 'GOOGLE_PLAY',
-    name: 'Google Play Redeem Code',
-    description: 'Withdraw your winnings as a Google Play gift code',
-    icon: SiGoogleplay,
-    color: 'text-green-400',
-    bgClass: 'bg-green-500/10 border-green-500/20',
-  },
-];
 
 export default function ShopPage() {
   const { user, loading, refreshUser } = useAuth();
-  const [showModal, setShowModal] = useState(false);
-  const [amount, setAmount] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
+  const [cards, setCards] = useState<GiftCard[]>([]);
+  const [redemptions, setRedemptions] = useState<GiftCardRedemption[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [buyingId, setBuyingId] = useState<string | null>(null);
   const [err, setErr] = useState('');
-  const [result, setResult] = useState<{ code: string; amount: number } | null>(null);
+  const [msg, setMsg] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const balance = user?.wallet?.balance || 0;
 
-  useEffect(() => {
-    if (user) {
-      setAmount(Number(balance));
-    }
-  }, [user, balance]);
-
-  useEffect(() => {
-    if (!loading && !user) {
-      setShowModal(false);
-    }
-  }, [loading, user]);
-
-  const openModal = () => {
-    setAmount(Number(balance));
-    setErr('');
-    setResult(null);
-    setShowModal(true);
-  };
-
-  const handleWithdraw = async () => {
-    if (amount <= 0 || amount > balance) {
-      setErr('Invalid amount');
-      return;
-    }
-    setSubmitting(true);
-    setErr('');
+  const loadData = useCallback(async () => {
+    if (!user) return;
+    setLoadingData(true);
     try {
-      const res = await api.post('/store/withdraw', { amount });
-      setResult(res.data.data);
-    } catch (err) {
-      setErr(getErrorMessage(err));
+      const [cardsRes, mineRes] = await Promise.all([
+        giftCardApi.list(),
+        giftCardApi.myRedemptions(),
+      ]);
+      setCards(cardsRes.data || []);
+      setRedemptions(mineRes.data || []);
+    } catch (e) {
+      setErr(getErrorMessage(e));
     } finally {
-      setSubmitting(false);
+      setLoadingData(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!loading && user) loadData();
+  }, [loading, user, loadData]);
+
+  const handleBuy = async (card: GiftCard) => {
+    if (!confirm(`Redeem ${formatCurrency(card.priceInCoins)} from your wallet for a ${card.name} worth ₹${card.value}? The code will be delivered after admin approval.`)) return;
+    setBuyingId(card.id);
+    setErr('');
+    setMsg('');
+    try {
+      const res = await giftCardApi.redeem(card.id);
+      setMsg(res.message || 'Request submitted — awaiting admin approval.');
+      await loadData();
+      refreshUser();
+    } catch (e) {
+      setErr(getErrorMessage(e));
+    } finally {
+      setBuyingId(null);
     }
   };
 
-  const handleClose = () => {
-    setShowModal(false);
-    setResult(null);
-    setErr('');
-    refreshUser();
+  const copyCode = async (r: GiftCardRedemption) => {
+    if (!r.code) return;
+    await navigator.clipboard.writeText(r.code);
+    setCopiedId(r.id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   if (loading) {
@@ -90,18 +76,34 @@ export default function ShopPage() {
     );
   }
 
+  const statusBadge = (s: string) =>
+    s === 'PENDING' ? 'text-yellow-400 bg-yellow-500/10' :
+    s === 'APPROVED' ? 'text-green-400 bg-green-500/10' :
+    'text-red-400 bg-red-500/10';
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <div className="mb-10">
           <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
             <Landmark className="w-8 h-8 text-fire-400" />
-            Withdraw
+            Redeem Shop
           </h1>
-          <p className="text-zinc-400 mt-2">Cash out your winnings to gift codes</p>
+          <p className="text-zinc-400 mt-2">Spend your winnings on gift card redeem codes</p>
         </div>
 
-        <div className="glass-card rounded-2xl p-6 mb-8">
+        {msg && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 text-green-400 text-sm mb-6">
+            <CheckCircle className="w-4 h-4 shrink-0" /> {msg}
+          </div>
+        )}
+        {err && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 text-red-400 text-sm mb-6">
+            <AlertCircle className="w-4 h-4 shrink-0" /> {err}
+          </div>
+        )}
+
+        <div className="glass-card rounded-2xl p-6 mb-8 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-xl bg-yellow-500/20 flex items-center justify-center">
               <Wallet className="w-7 h-7 text-yellow-400" />
@@ -111,148 +113,129 @@ export default function ShopPage() {
               <p className="text-3xl font-black gradient-text">{formatCurrency(balance)}</p>
             </div>
           </div>
+          <button onClick={loadData} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-300">
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </button>
         </div>
 
-        <h2 className="text-lg font-bold text-white mb-4">Withdrawal Methods</h2>
+        <h2 className="text-lg font-bold text-white mb-4">Available Gift Cards</h2>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {methods.map((method) => (
-            <button
-              key={method.id}
-              onClick={openModal}
-              className="glass-card rounded-2xl p-6 text-left transition-all hover:fire-glow group"
-            >
-              <div className={`w-14 h-14 rounded-xl ${method.bgClass} flex items-center justify-center mb-4`}>
-                <method.icon className={`w-7 h-7 ${method.color}`} />
+        {!user ? (
+          <div className="glass-card rounded-2xl p-12 text-center mb-10">
+            <p className="text-zinc-400">Please <a href="/login" className="text-fire-400 hover:underline">login</a> to purchase redeem codes</p>
+          </div>
+        ) : loadingData ? (
+          <div className="py-12 flex justify-center mb-10"><Loader2 className="w-7 h-7 text-fire-400 animate-spin" /></div>
+        ) : cards.length === 0 ? (
+          <div className="glass-card rounded-2xl p-10 text-center mb-10">
+            <SiGoogleplay className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+            <p className="text-zinc-500 text-sm">No gift cards available right now. Check back soon!</p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+            {cards.map((card) => (
+              <div key={card.id} className="glass-card rounded-2xl p-5 flex flex-col group">
+                <div className="flex items-start justify-between mb-4">
+                  <div className={`w-14 h-14 rounded-xl ${card.imageUrl ? 'bg-white p-1.5' : 'bg-green-500/10 border border-green-500/20'} flex items-center justify-center`}>
+                    {card.imageUrl ? (
+                      <img src={card.imageUrl} alt={card.name} className="w-full h-full object-contain" />
+                    ) : (
+                      <SiGoogleplay className="w-7 h-7 text-green-400" />
+                    )}
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 font-semibold">
+                    ₹{card.value} value
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white">{card.name}</h3>
+                <p className="text-sm text-zinc-500 mt-0.5">Face value ₹{card.value}</p>
+                <div className="mt-auto pt-4">
+                  <button
+                    onClick={() => handleBuy(card)}
+                    disabled={buyingId === card.id || Number(balance) < Number(card.priceInCoins)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-500/15 text-green-400 text-sm font-bold hover:bg-green-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {buyingId === card.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
+                    {Number(balance) < Number(card.priceInCoins)
+                      ? `Need ${formatCurrency(card.priceInCoins)}`
+                      : `Redeem for ${formatCurrency(card.priceInCoins)}`}
+                  </button>
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-white mb-1">{method.name}</h3>
-              <p className="text-sm text-zinc-400">{method.description}</p>
-              <div className="mt-4 flex items-center gap-1 text-sm text-fire-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                Withdraw now <ArrowRight className="w-3.5 h-3.5" />
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {!user && (
-          <div className="glass-card rounded-2xl p-12 text-center mt-8">
-            <p className="text-zinc-400">Please <a href="/login" className="text-fire-400 hover:underline">login</a> to withdraw your winnings</p>
+            ))}
           </div>
         )}
-      </motion.div>
 
-      <AnimatePresence>
-        {showModal && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
-            <motion.div
-              className="relative w-full max-w-md glass-card rounded-2xl p-6 z-10"
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <SiGoogleplay className="w-5 h-5 text-green-400" />
-                  Google Play Redeem
-                </h2>
-                <button onClick={handleClose} className="p-1 rounded-lg hover:bg-white/10 text-zinc-400 transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {result ? (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
-                    <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-3" />
-                    <p className="text-green-400 font-bold text-lg mb-1">Withdrawal Successful!</p>
-                    <p className="text-sm text-zinc-400">{formatCurrency(result.amount)} withdrawn</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-zinc-400 mb-2">Your Google Play redeem code:</p>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 p-3 rounded-lg bg-black/30 text-white font-mono text-sm text-center tracking-widest select-all">{result.code}</code>
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard.writeText(result.code)}
-                        className="p-3 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 transition-colors"
-                        title="Copy code"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <button onClick={handleClose} className="w-full px-4 py-2.5 rounded-lg bg-white/5 text-white text-sm font-medium hover:bg-white/10 transition-colors">
-                    Done
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-xl bg-white/5">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-zinc-400">Current Balance</span>
-                      <span className="text-white font-bold">{formatCurrency(balance)}</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-zinc-400 mb-1.5 block">Amount to Redeem</label>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => { setAmount(Number(e.target.value)); setErr(''); }}
-                      placeholder="Enter amount"
-                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white text-lg font-bold focus:border-green-500/50 focus:outline-none"
-                      min={1}
-                      max={balance}
-                    />
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => setAmount(Number(balance))}
-                        className="text-[11px] px-2 py-1 rounded bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-                      >
-                        Max
-                      </button>
-                      {[500, 1000, 2000].map((v) => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setAmount(v <= balance ? v : Number(balance))}
-                          className="text-[11px] px-2 py-1 rounded bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-                        >
-                          ₹{v}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {err && (
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
-                      <AlertCircle className="w-4 h-4 shrink-0" /> {err}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleWithdraw}
-                    disabled={submitting || amount <= 0 || amount > balance}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-400 transition-colors disabled:opacity-50"
-                  >
-                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <SiGoogleplay className="w-4 h-4" />}
-                    {submitting ? 'Processing...' : `Redeem ₹${amount.toLocaleString('en-IN')}`}
-                  </button>
-                </div>
+        {user && (
+          <>
+            <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              My Redemptions
+              {redemptions.filter((r) => r.status === 'PENDING').length > 0 && (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">
+                  {redemptions.filter((r) => r.status === 'PENDING').length} pending
+                </span>
               )}
-            </motion.div>
-          </motion.div>
+            </h2>
+
+            {loadingData ? (
+              <div className="py-12 flex justify-center"><Loader2 className="w-7 h-7 text-fire-400 animate-spin" /></div>
+            ) : redemptions.length === 0 ? (
+              <div className="glass-card rounded-2xl p-10 text-center">
+                <Gift className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                <p className="text-zinc-500 text-sm">No redemptions yet. Purchase a gift card above to get started.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {redemptions.map((r) => (
+                  <div key={r.id} className="glass-card rounded-2xl p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-white">{r.giftCard.name}</p>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusBadge(r.status)}`}>{r.status}</span>
+                        </div>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                          ₹{r.giftCard.value} value · Paid {formatCurrency(r.amountPaid ?? 0)} · {new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+
+                      {r.status === 'PENDING' && (
+                        <span className="flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
+                          <Clock className="w-3.5 h-3.5 text-yellow-400" /> Awaiting admin approval
+                        </span>
+                      )}
+                      {r.status === 'REJECTED' && (
+                        <span className="flex items-center gap-1.5 text-xs text-red-400 shrink-0">
+                          <XCircle className="w-3.5 h-3.5" /> Refunded to wallet
+                        </span>
+                      )}
+                      {r.status === 'APPROVED' && r.code && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <code className="px-3 py-2 rounded-lg bg-black/30 border border-green-500/20 text-green-300 font-mono text-sm tracking-wider select-all">
+                            {r.code}
+                          </code>
+                          <button
+                            onClick={() => copyCode(r)}
+                            className="p-2.5 rounded-lg bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
+                            title="Copy code"
+                          >
+                            {copiedId === r.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-8 glass-card rounded-2xl p-4 flex items-center gap-3 text-sm text-zinc-400">
+              <ArrowRight className="w-4 h-4 text-fire-400 shrink-0" />
+              Codes are assigned manually by admins after verification — usually within 24 hours.
+            </div>
+          </>
         )}
-      </AnimatePresence>
+      </motion.div>
     </div>
   );
 }
