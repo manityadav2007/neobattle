@@ -6,9 +6,6 @@ import { ArrowLeft } from 'lucide-react';
 export default function FairPlayPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <Link href="/" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-8 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Home
-      </Link>
       <h1 className="text-4xl font-display font-bold text-white mb-6">Fair Play Policy</h1>
       <div className="prose prose-invert max-w-none space-y-4 text-zinc-300">
         <p>NEOBATTLE is committed to maintaining a fair and competitive environment for all players.</p>

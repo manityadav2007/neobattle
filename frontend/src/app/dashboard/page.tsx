@@ -182,16 +182,18 @@ export default function DashboardPage() {
             </h1>
             <p className="text-zinc-400 mt-1">Your command center for NEOBATTLE</p>
           </div>
-          <div className="flex items-center gap-3">
-            {!user.isVerified && (
-              <Link
-                href="/dashboard/verify"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/10 text-yellow-400 text-sm font-medium border border-yellow-500/20"
-              >
-                <AlertCircle className="w-4 h-4" />
-                Verify your Free Fire ID
-              </Link>
-            )}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Link
+              href="/dashboard/verify"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                user.isVerified
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
+                  : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+              }`}
+            >
+              {user.isVerified ? <RefreshCw className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+              {user.isVerified ? 'Update Free Fire ID / Level' : 'Verify your Free Fire ID'}
+            </Link>
           </div>
         </div>
 
@@ -266,6 +268,7 @@ export default function DashboardPage() {
                   verificationScreenshotUrl: user.verificationScreenshotUrl,
                   isVerified: user.isVerified,
                 },
+                ['Verified Level', user.isVerified ? String(user.gameLevel ?? 0) : '—'],
                 ['Role', user.role],
               ].map((item: any) => {
                 if (item.editable) {

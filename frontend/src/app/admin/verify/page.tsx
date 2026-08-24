@@ -32,7 +32,7 @@ export default function AdminVerifyPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [gameLevels, setGameLevels] = useState<Record<string, string>>({});
-  const [approveMode, setApproveMode] = useState<Record<string, 'direct' | 'with-level'>>({});
+  const [levelInputOpen, setLevelInputOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
@@ -55,39 +55,22 @@ export default function AdminVerifyPage() {
     if (isSuperAdmin) loadData();
   }, [isSuperAdmin]);
 
-  const handleApproveDirect = async (id: string) => {
-    setProcessing(id);
-    setError('');
-    setActionMsg('');
-    try {
-      const v = verifications.find((x) => x.id === id);
-      await adminApi.reviewVerification(id, 'APPROVED');
-      if (v) {
-        await adminApi.verifyUserGameLevel(v.user.id, 0);
-      }
-      setActionMsg('Verification approved (gameLevel=0)');
-      setVerifications((prev) => prev.filter((x) => x.id !== id));
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setProcessing(null);
+  const handleApprove = async (id: string) => {
+    const raw = (gameLevels[id] ?? '').trim();
+    const level = Number(raw);
+    if (raw === '' || !Number.isFinite(level) || level < 0) {
+      setError("Enter the player's current Level to approve");
+      return;
     }
-  };
-
-  const handleApproveWithLevel = async (id: string) => {
-    const level = parseInt(gameLevels[id] || '0', 10);
-    if (isNaN(level) || level < 0) return;
     setProcessing(id);
     setError('');
     setActionMsg('');
     try {
-      const v = verifications.find((x) => x.id === id);
-      await adminApi.reviewVerification(id, 'APPROVED');
-      if (v) {
-        await adminApi.verifyUserGameLevel(v.user.id, level);
-      }
-      setActionMsg(`Verification approved with game level ${level}`);
+      const res = await adminApi.reviewVerification(id, 'APPROVED', undefined, Math.round(level));
+      setActionMsg(res.message || `Approved — verified with Level ${Math.round(level)}`);
       setVerifications((prev) => prev.filter((x) => x.id !== id));
+      setGameLevels((prev) => ({ ...prev, [id]: '' }));
+      setLevelInputOpen((prev) => ({ ...prev, [id]: false }));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -118,9 +101,6 @@ export default function AdminVerifyPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Link href="/admin" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Admin Panel
-        </Link>
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
@@ -211,45 +191,53 @@ export default function AdminVerifyPage() {
                             </button>
                           </div>
                         </div>
-                      ) : (
+                      ) : levelInputOpen[v.id] ? (
                         <div className="space-y-2">
-                          {approveMode[v.id] === 'with-level' ? (
-                            <div className="flex gap-2 items-center">
-                              <input
-                                type="number"
-                                min="0"
-                                value={gameLevels[v.id] || ''}
-                                onChange={(e) => setGameLevels((prev) => ({ ...prev, [v.id]: e.target.value }))}
-                                placeholder="Game level"
-                                className="w-20 px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm text-center"
-                              />
-                              <button
-                                onClick={() => handleApproveWithLevel(v.id)}
-                                disabled={processing === v.id || !gameLevels[v.id]}
-                                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20 disabled:opacity-50"
-                              >
-                                {processing === v.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                                Approve Lvl {gameLevels[v.id] || '?'}
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => setApproveMode((prev) => ({ ...prev, [v.id]: 'with-level' }))}
-                                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20"
-                              >
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => { setSelectedId(v.id); setRejectReason(''); }}
-                                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                                Reject
-                              </button>
-                            </div>
-                          )}
+                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                            Player&apos;s current Level (required)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={gameLevels[v.id] || ''}
+                            onChange={(e) => setGameLevels((prev) => ({ ...prev, [v.id]: e.target.value }))}
+                            placeholder="e.g. 65"
+                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm text-center focus:border-green-500/50 focus:outline-none"
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleApprove(v.id)}
+                              disabled={processing === v.id || (gameLevels[v.id] ?? '').trim() === ''}
+                              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20 disabled:opacity-50"
+                            >
+                              {processing === v.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                              Confirm Approval {gameLevels[v.id] ? `— Lvl ${gameLevels[v.id]}` : ''}
+                            </button>
+                            <button
+                              onClick={() => setLevelInputOpen((prev) => ({ ...prev, [v.id]: false }))}
+                              className="px-3 py-1.5 rounded-lg bg-white/5 text-zinc-400 text-xs hover:bg-white/10"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setLevelInputOpen((prev) => ({ ...prev, [v.id]: true }))}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => { setSelectedId(v.id); setRejectReason(''); }}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            Reject
+                          </button>
                         </div>
                       )}
                     </div>

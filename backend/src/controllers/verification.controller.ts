@@ -74,11 +74,17 @@ export async function listPendingVerifications(req: AuthenticatedRequest, res: R
 }
 
 export async function reviewVerification(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const { status, rejectionReason } = req.body;
+  const { status, rejectionReason, gameLevel } = req.body;
   const requestId = req.params.id;
 
   if (status === 'REJECTED' && !rejectionReason) {
     res.status(400).json({ success: false, message: 'Rejection reason is required' });
+    return;
+  }
+
+  const gameLevelNum = Number(gameLevel);
+  if (status === 'APPROVED' && (!Number.isFinite(gameLevelNum) || gameLevelNum < 0)) {
+    res.status(400).json({ success: false, message: "Player's current Level is required to approve (enter it in the approval form)" });
     return;
   }
 
@@ -110,12 +116,16 @@ export async function reviewVerification(req: AuthenticatedRequest, res: Respons
     if (status === 'APPROVED') {
       await tx.user.update({
         where: { id: verification.userId },
-        data: { isVerified: true },
+        data: { isVerified: true, gameLevel: Math.round(gameLevelNum) },
       });
     }
 
     return req_updated;
   });
 
-  res.json({ success: true, data: updated });
+  res.json({
+    success: true,
+    data: updated,
+    message: status === 'APPROVED' ? `Approved — verified with Level ${Math.round(gameLevelNum)}` : 'Rejected',
+  });
 }

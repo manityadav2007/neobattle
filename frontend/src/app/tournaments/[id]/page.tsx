@@ -156,9 +156,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Link href="/tournaments" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Tournaments
-        </Link>
 
         <div className="glass-card rounded-2xl overflow-hidden fire-glow">
           <div className="relative h-48 overflow-hidden">

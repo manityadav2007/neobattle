@@ -26,6 +26,7 @@ export default function VerifyPage() {
   const [verifStatus, setVerifStatus] = useState<VerifyStatus>('none');
   const [isLoading, setIsLoading] = useState(true);
   const [fetchErr, setFetchErr] = useState('');
+  const [reverifyOpen, setReverifyOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -112,14 +113,19 @@ export default function VerifyPage() {
 
   const latestRequest = user.verificationScreenshotUrl;
 
-  const showForm = verifStatus === 'none' || verifStatus === 'rejected';
+  const isReverifying = verifStatus === 'verified' && reverifyOpen;
+  const showForm = verifStatus === 'none' || verifStatus === 'rejected' || isReverifying;
+
+  const openReverification = () => {
+    if (!freeFireId) setFreeFireId(user.freeFireId || '');
+    setReverifyOpen(true);
+    setSuccess('');
+    setError('');
+  };
 
   return (
     <div className="max-w-xl mx-auto px-4 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Link href="/dashboard" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-        </Link>
 
         <div className="text-center mb-8">
           <Shield className="w-10 h-10 text-fire-400 mx-auto mb-4" />
@@ -149,6 +155,21 @@ export default function VerifyPage() {
               <p className="text-zinc-400 text-sm">
                 Free Fire ID: <span className="text-fire-400 font-mono">{user.freeFireId}</span>
               </p>
+            )}
+            {user.gameLevel > 0 && (
+              <p className="text-zinc-400 text-sm mt-1">
+                Verified Level: <span className="text-white font-semibold">{user.gameLevel}</span>
+              </p>
+            )}
+            {!isReverifying && (
+              <button
+                type="button"
+                onClick={openReverification}
+                className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-fire-500/15 text-fire-400 text-sm font-semibold hover:bg-fire-500/25 transition-colors"
+              >
+                <Shield className="w-4 h-4" />
+                Request Re-verification (Update UID / Level)
+              </button>
             )}
           </div>
         )}
@@ -181,6 +202,12 @@ export default function VerifyPage() {
 
         {showForm && (
           <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-8 space-y-5">
+            {isReverifying && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 text-blue-400 text-sm">
+                <Shield className="w-4 h-4 shrink-0" />
+                Submitting a new request will pause your verified status until the admin re-approves your updated details.
+              </div>
+            )}
             {error && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
                 <AlertCircle className="w-4 h-4" /> {error}
@@ -261,7 +288,7 @@ export default function VerifyPage() {
                   <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
                 </span>
               ) : (
-                'Submit Verification'
+                isReverifying ? 'Submit Re-verification' : 'Submit Verification'
               )}
             </button>
           </form>

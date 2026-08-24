@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Users, Trophy, AlertCircle, CheckCircle, XCircle,
   Activity, RefreshCw, DollarSign, Banknote, Gift, Ban, ShoppingBag,
-  MessageSquareMore, Eye, Smartphone, Wallet,
+  MessageSquareMore, Eye, Smartphone, Wallet, Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { adminApi, winnerProofApi, WinnerProof, DepositRequest, RedeemRequest, AdminStats, formatCurrency } from '@/lib/services';
@@ -109,9 +109,6 @@ export default function AdminPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Link href="/dashboard" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Dashboard
-        </Link>
         <div className="mb-10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
@@ -227,14 +224,14 @@ export default function AdminPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleReview(v.id, 'APPROVED')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20">
-                        <CheckCircle className="w-3.5 h-3.5" /> Approve
-                      </button>
-                      <button onClick={() => handleReview(v.id, 'REJECTED')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20">
-                        <XCircle className="w-3.5 h-3.5" /> Reject
-                      </button>
-                    </div>
+                    <VerificationApproveActions
+                      requestId={v.id}
+                      onDone={(msg) => { setActionMsg(msg); loadData(); }}
+                      onError={setError}
+                    />
+                    <button onClick={() => handleReview(v.id, 'REJECTED')} className="mt-2 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20">
+                      <XCircle className="w-3.5 h-3.5" /> Reject
+                    </button>
                   </div>
                 ))}
               </div>
@@ -359,6 +356,81 @@ export default function AdminPage() {
           </>
         )}
       </motion.div>
+    </div>
+  );
+}
+
+function VerificationApproveActions({
+  requestId,
+  onDone,
+  onError,
+}: {
+  requestId: string;
+  onDone: (message: string) => void;
+  onError: (message: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [level, setLevel] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const confirm = async () => {
+    const num = Number(level.trim());
+    if (level.trim() === '' || !Number.isFinite(num) || num < 0) {
+      onError("Enter the player's current Level to approve");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await adminApi.reviewVerification(requestId, 'APPROVED', undefined, Math.round(num));
+      onDone(res.message || `Approved — verified with Level ${Math.round(num)}`);
+    } catch (err) {
+      onError(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20"
+      >
+        <CheckCircle className="w-3.5 h-3.5" /> Approve
+      </button>
+    );
+  }
+
+  return (
+    <div className="w-full space-y-2">
+      <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+        Player&apos;s current Level (required)
+      </label>
+      <div className="flex gap-2">
+        <input
+          type="number"
+          min="0"
+          value={level}
+          onChange={(e) => setLevel(e.target.value)}
+          placeholder="e.g. 65"
+          autoFocus
+          className="w-24 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm text-center focus:border-green-500/50 focus:outline-none"
+        />
+        <button
+          onClick={confirm}
+          disabled={busy || level.trim() === ''}
+          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20 disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+          Confirm {level ? `— Lvl ${level}` : ''}
+        </button>
+        <button
+          onClick={() => { setOpen(false); setLevel(''); }}
+          className="px-3 py-1.5 rounded-lg bg-white/5 text-zinc-400 text-xs hover:bg-white/10"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

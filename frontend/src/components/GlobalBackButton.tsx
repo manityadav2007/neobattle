@@ -6,17 +6,20 @@ import BackButton from './BackButton';
 function getParentPath(pathname: string): { href: string; label: string } | null {
   if (pathname === '/') return null;
 
-  // Admin sub-pages → back to /admin → back to /
+  // Admin home → player dashboard
+  if (pathname === '/admin') return { href: '/dashboard', label: 'Dashboard' };
+
+  // Admin sub-pages → back to /admin
   if (pathname.startsWith('/admin/')) return { href: '/admin', label: 'Admin Panel' };
 
-  // Tournament detail → back to tournament list → back to /
+  // Tournament detail → back to tournament list
   if (pathname.startsWith('/tournaments/')) return { href: '/tournaments', label: 'Back to Tournaments' };
 
-  // Wallet sub-pages → back to /wallet → back to /
+  // Wallet sub-pages → back to /wallet
   if (pathname.startsWith('/wallet/')) return { href: '/wallet', label: 'Wallet' };
 
-  // Dashboard sub-pages → back to /
-  if (pathname.startsWith('/dashboard/')) return { href: '/', label: 'Home' };
+  // Dashboard verification page → back to profile dashboard
+  if (pathname.startsWith('/dashboard/')) return { href: '/dashboard', label: 'Back to Dashboard' };
 
   // Everything else → back to /
   return { href: '/', label: 'Home' };

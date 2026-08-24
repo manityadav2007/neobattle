@@ -56,9 +56,6 @@ export default function WithdrawalHistoryPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Link href="/wallet" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Wallet
-        </Link>
 
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">

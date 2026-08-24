@@ -338,9 +338,6 @@ export default function EsportsPage() {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <Link href="/" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Home
-          </Link>
           {error && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm mb-6">
               <AlertCircle className="w-4 h-4" /> {error}
@@ -356,9 +353,6 @@ export default function EsportsPage() {
   return (
     <div className="min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <Link href="/" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Home
-        </Link>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <div className="glass-card rounded-2xl p-8 mb-8 border border-yellow-500/20 relative overflow-hidden">

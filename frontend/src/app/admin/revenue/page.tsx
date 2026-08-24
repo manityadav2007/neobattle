@@ -48,9 +48,6 @@ export default function AdminRevenuePage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <Link href="/admin" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Admin Panel
-      </Link>
       <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3 mb-8">
         <DollarSign className="w-8 h-8 text-yellow-400" />
         Revenue Overview

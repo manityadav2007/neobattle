@@ -342,8 +342,8 @@ export const adminApi = {
     const res = await api.get('/verification/pending');
     return res.data;
   },
-  reviewVerification: async (id: string, status: 'APPROVED' | 'REJECTED', rejectionReason?: string) => {
-    const res = await api.patch(`/verification/${id}/review`, { status, rejectionReason });
+  reviewVerification: async (id: string, status: 'APPROVED' | 'REJECTED', rejectionReason?: string, gameLevel?: number) => {
+    const res = await api.patch(`/verification/${id}/review`, { status, rejectionReason, ...(status === 'APPROVED' ? { gameLevel } : {}) });
     return res.data;
   },
   pendingDeposits: async () => {
