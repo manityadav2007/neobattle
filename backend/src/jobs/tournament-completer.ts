@@ -28,14 +28,14 @@ export function startTournamentCompleter(): void {
     }
   });
 
-  cron.schedule('*/30 * * * *', async () => {
+  cron.schedule('*/15 * * * *', async () => {
     try {
       const now = new Date();
 
       const staleActive = await prisma.tournament.findMany({
         where: {
           status: 'ACTIVE',
-          startTime: { lte: new Date(now.getTime() - 4 * 60 * 60 * 1000) },
+          startTime: { lte: new Date(now.getTime() - 60 * 60 * 1000) },
         },
         select: { id: true, title: true },
       });
@@ -48,7 +48,7 @@ export function startTournamentCompleter(): void {
         data: { status: 'COMPLETED', endTime: now },
       });
 
-      console.log(`[Cron] Auto-completed ${staleActive.length} stale ACTIVE tournaments (4h+ past startTime): ${staleActive.map((t) => t.title).join(', ')}`);
+      console.log(`[Cron] Auto-ended ${staleActive.length} tournaments (1h+ past startTime): ${staleActive.map((t) => t.title).join(', ')}`);
     } catch (err) {
       console.error('[Cron] Stale tournament completer error:', err);
     }

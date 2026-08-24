@@ -12,7 +12,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
 import TournamentTags, { tagColorMap, tagIcons } from '@/components/TournamentTags';
-import { tournamentApi, gameApi, userApi, formatCurrency, formatDate, getMapTheme, type UserStats } from '@/lib/services';
+import { tournamentApi, gameApi, userApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, type UserStats } from '@/lib/services';
 import UpiPayment from '@/components/RazorpayCheckout';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
@@ -133,7 +133,8 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const isSquad = tournament.format === 'SQUAD';
   const allIgnsFetched = isSquad ? squadIgns.every((i) => i !== null) : true;
   const mapTheme = getMapTheme(tournament.mapName);
-  const isEnded = tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED';
+  const isEnded = tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED' || tournament.status === 'PAID';
+  const effectiveStatus = getEffectiveStatus(tournament);
 
   console.log('[TournamentView] status:', tournament.status, 'isRegistered:', tournament.isRegistered, 'isEnded:', isEnded, 'entryFee:', entryFee, 'user:', user?.id);
 
@@ -168,7 +169,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             <div className="absolute top-4 left-4 right-4 z-10">
               <TournamentTags
                 items={[
-                  { label: tournament.status, color: tagColorMap.status[tournament.status as keyof typeof tagColorMap.status] || 'bg-zinc-500/20 text-zinc-400', icon: tagIcons.status },
+                  { label: effectiveStatus, color: getStatusColor(effectiveStatus), icon: tagIcons.status },
                   { label: tournament.format, color: tagColorMap.format[tournament.format as keyof typeof tagColorMap.format], icon: tagIcons.format },
                   { label: tournament.platform === 'MOBILE' ? 'Mobile' : 'PC', color: tagColorMap.platform[tournament.platform as keyof typeof tagColorMap.platform], icon: tagIcons.platform },
                   { label: tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad', color: tagColorMap.gameMode[tournament.gameMode as keyof typeof tagColorMap.gameMode], icon: tagIcons.gameMode },
@@ -255,7 +256,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             {message && <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> {message}</div>}
             {registerError && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {registerError}</div>}
 
-            {tournament.status === 'COMPLETED' ? (
+                {isEnded ? (
               <div className="w-full py-3 rounded-xl text-sm font-bold text-white text-center bg-blue-500/20 border border-blue-500/30">
                 <CheckCircle className="w-4 h-4 inline mr-1" /> Tournament Completed
               </div>

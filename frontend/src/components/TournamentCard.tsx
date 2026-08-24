@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import {
   Trophy, Users, Clock, ArrowRight, MapPin, Smartphone, Monitor, Gamepad2, Timer,
 } from 'lucide-react';
-import { Tournament, formatCurrency, getStatusColor, formatTag, getMapTheme, getCountdown } from '@/lib/services';
+import { Tournament, formatCurrency, getStatusColor, getEffectiveStatus, isTournamentEnded, formatTag, getMapTheme, getCountdown } from '@/lib/services';
 
 interface TournamentCardProps {
   tournament: Tournament;
@@ -28,8 +28,10 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
   const prizeThird = tournament.prizeThird != null ? (typeof tournament.prizeThird === 'string' ? parseFloat(tournament.prizeThird) : tournament.prizeThird) : null;
   const hasBreakdown = prizeFirst != null && prizeFirst > 0;
   const theme = getMapTheme(tournament.mapName);
-  const countdown = getCountdown(tournament.startTime);
-  const isUrgent = spotsLeft <= 5;
+  const effectiveStatus = getEffectiveStatus(tournament);
+  const ended = isTournamentEnded(tournament);
+  const countdown = ended ? 'Ended' : effectiveStatus === 'Playing' ? 'Playing now' : getCountdown(tournament.startTime);
+  const isUrgent = spotsLeft <= 5 && !ended;
 
   return (
     <motion.div
@@ -54,8 +56,8 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
       {/* Top Bar — Status + Format + Platform */}
       <div className="relative z-10 flex items-center justify-between p-4 pb-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusColor(tournament.status)}`}>
-            {tournament.status}
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusColor(effectiveStatus)} ${effectiveStatus === 'Playing' ? 'animate-pulse' : ''}`}>
+            {effectiveStatus}
           </span>
           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
             {tournament.format}
@@ -123,8 +125,10 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
             )}
           </div>
           <div className="flex items-center gap-1.5">
-            <Timer className="w-3.5 h-3.5 text-yellow-400" />
-            <span className={countdown === 'Started' ? 'text-green-400' : ''}>{countdown}</span>
+            <Timer className={`w-3.5 h-3.5 ${ended ? 'text-zinc-500' : 'text-yellow-400'}`} />
+            <span className={countdown === 'Started' ? 'text-green-400' : ended ? 'text-zinc-500' : effectiveStatus === 'Playing' ? 'text-amber-300 font-semibold' : ''}>
+              {countdown}
+            </span>
           </div>
         </div>
       </div>

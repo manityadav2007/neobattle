@@ -99,6 +99,13 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
 
   const where = {
     ...(status ? { status } : { status: { not: TournamentStatus.COMPLETED } }),
+    // Strictly exclude effectively-ended tournaments (ACTIVE >1h past startTime) from live/default listings
+    ...(!status && {
+      OR: [
+        { status: { not: TournamentStatus.ACTIVE } },
+        { startTime: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
+      ],
+    }),
     ...(format && { format }),
     ...(platform && { platform }),
     ...(gameMode && { gameMode }),

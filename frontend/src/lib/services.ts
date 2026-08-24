@@ -758,6 +758,9 @@ export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     REGISTRATION: 'text-green-400 bg-green-400/10',
     ACTIVE: 'text-fire-400 bg-fire-400/10',
+    LIVE: 'text-fire-400 bg-fire-400/10',
+    PLAYING: 'text-amber-300 bg-amber-400/10',
+    ENDED: 'text-blue-400 bg-blue-400/10',
     COMPLETED: 'text-blue-400 bg-blue-400/10',
     CANCELLED: 'text-red-400 bg-red-400/10',
     DRAFT: 'text-zinc-400 bg-zinc-400/10',
@@ -765,4 +768,33 @@ export function getStatusColor(status: string): string {
     PAID: 'text-purple-400 bg-purple-400/10',
   };
   return colors[status] || 'text-zinc-400 bg-zinc-400/10';
+}
+
+/** Grace window after startTime during which a started tournament is still 'Playing' */
+export const TOURNAMENT_PLAY_GRACE_MS = 60 * 60 * 1000;
+
+/**
+ * Display status derived from DB status + start time:
+ * - ACTIVE before startTime        → 'Live'
+ * - ACTIVE within 1h after start   → 'Playing'
+ * - ACTIVE >1h past / terminal     → 'Ended'
+ */
+export function getEffectiveStatus(t: { status: string; startTime?: string | Date | null }): string {
+  if (t.status === 'COMPLETED' || t.status === 'PAID') return 'Ended';
+  if (t.status === 'CANCELLED') return 'Cancelled';
+  if (t.status === 'PENDING_PAYOUT') return 'Awaiting Payout';
+
+  if (t.status === 'ACTIVE' && t.startTime) {
+    const start = new Date(t.startTime).getTime();
+    const now = Date.now();
+    if (now < start) return 'Live';
+    if (now < start + TOURNAMENT_PLAY_GRACE_MS) return 'Playing';
+    return 'Ended';
+  }
+
+  return t.status;
+}
+
+export function isTournamentEnded(t: { status: string; startTime?: string | Date | null }): boolean {
+  return getEffectiveStatus(t) === 'Ended';
 }
