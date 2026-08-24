@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Users, Trophy, AlertCircle, CheckCircle, XCircle,
   Activity, RefreshCw, DollarSign, Banknote, Gift, Ban, ShoppingBag,
-  MessageSquareMore, Eye, Smartphone,
+  MessageSquareMore, Eye, Smartphone, Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { adminApi, winnerProofApi, WinnerProof, DepositRequest, RedeemRequest, AdminStats, formatCurrency } from '@/lib/services';
@@ -112,48 +112,47 @@ export default function AdminPage() {
         <Link href="/dashboard" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Dashboard
         </Link>
-        <div className="flex items-center justify-between mb-10">
-          <div>
-            <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
-              <Shield className="w-8 h-8 text-fire-400" />
-              Admin Panel
-            </h1>
-            <p className="text-zinc-400 mt-1">Platform management & revenue dashboard</p>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <Link href="/admin/esports" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 text-sm font-medium hover:bg-yellow-500/30 transition-colors">
-              <Trophy className="w-4 h-4" /> Esports Config
-            </Link>
-            <Link href="/admin/esports-bans" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/30 transition-colors">
-              <Ban className="w-4 h-4" /> Ban List
-            </Link>
-            <Link href="/admin/users" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-fire-500/20 text-fire-400 text-sm font-medium hover:bg-fire-500/30 transition-colors">
-              <Users className="w-4 h-4" /> User Management
-            </Link>
-            <Link href="/admin/store" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/20 text-green-400 text-sm font-medium hover:bg-green-500/30 transition-colors">
-              <ShoppingBag className="w-4 h-4" /> Store Manager
-            </Link>
-            <Link href="/admin/support" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-sm font-medium hover:bg-blue-500/30 transition-colors">
-              <MessageSquareMore className="w-4 h-4" /> Support
-            </Link>
-            <Link href="/admin/pending-results" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 text-sm font-medium hover:bg-yellow-500/30 transition-colors">
-              <Trophy className="w-4 h-4" /> Pending Results
-            </Link>
-            <Link href="/admin/withdrawals" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-sm font-medium hover:bg-blue-500/30 transition-colors">
-              <Banknote className="w-4 h-4" /> Withdrawals
-            </Link>
-            <Link href="/admin/payments" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/20 text-green-400 text-sm font-medium hover:bg-green-500/30 transition-colors">
-              <DollarSign className="w-4 h-4" /> UPI Payments
-            </Link>
-            <Link href="/admin/gift-cards" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-500/20 text-pink-400 text-sm font-medium hover:bg-pink-500/30 transition-colors">
-              <Gift className="w-4 h-4" /> Gift Cards
-            </Link>
-            <Link href="/admin/wallet-adjust" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/20 text-purple-400 text-sm font-medium hover:bg-purple-500/30 transition-colors">
-              <Banknote className="w-4 h-4" /> Wallet Adjust
-            </Link>
-            <button onClick={loadData} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-zinc-300">
+        <div className="mb-10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
+                <Shield className="w-8 h-8 text-fire-400" />
+                Admin Panel
+              </h1>
+              <p className="text-zinc-400 mt-1">Platform management &amp; revenue dashboard</p>
+            </div>
+            <button onClick={loadData} className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-zinc-300 shrink-0">
               <RefreshCw className="w-4 h-4" /> Refresh
             </button>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            {[
+              { href: '/admin/esports', label: 'Esports Config', desc: 'Seasons & prize pools', icon: Trophy, tone: 'bg-yellow-500/15 text-yellow-400' },
+              { href: '/admin/esports-bans', label: 'Ban List', desc: 'Banned players', icon: Ban, tone: 'bg-red-500/15 text-red-400' },
+              { href: '/admin/users', label: 'User Management', desc: 'Roles, levels & bans', icon: Users, tone: 'bg-fire-500/15 text-fire-400' },
+              { href: '/admin/store', label: 'Store Manager', desc: 'Shop items & pricing', icon: ShoppingBag, tone: 'bg-green-500/15 text-green-400' },
+              { href: '/admin/support', label: 'Support', desc: 'User tickets', icon: MessageSquareMore, tone: 'bg-blue-500/15 text-blue-400' },
+              { href: '/admin/pending-results', label: 'Pending Results', desc: 'Approve winner payouts', icon: Trophy, tone: 'bg-amber-500/15 text-amber-400' },
+              { href: '/admin/withdrawals', label: 'Withdrawals', desc: 'Redeem & refund requests', icon: Banknote, tone: 'bg-sky-500/15 text-sky-400' },
+              { href: '/admin/payments', label: 'UPI Payments', desc: 'Deposit approvals', icon: DollarSign, tone: 'bg-green-500/15 text-green-400' },
+              { href: '/admin/gift-cards', label: 'Gift Cards', desc: 'Catalog & fulfillment', icon: Gift, tone: 'bg-pink-500/15 text-pink-400' },
+              { href: '/admin/wallet-adjust', label: 'Wallet Adjust', desc: 'Manual balance edits', icon: Wallet, tone: 'bg-purple-500/15 text-purple-400' },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="glass-card rounded-xl p-4 flex flex-col items-start gap-3 transition-all hover:border-fire-500/30 hover:bg-white/[0.05] group"
+              >
+                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}>
+                  <item.icon className="w-5 h-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-white leading-tight">{item.label}</span>
+                  <span className="block text-[11px] text-zinc-500 mt-1">{item.desc}</span>
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
 

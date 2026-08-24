@@ -84,17 +84,18 @@ export default function Navbar() {
             )}
           </div>
 
-          <div className="hidden md:flex items-center gap-3">
+          {/* Right cluster — notification bell + auth actions, visible on all screen sizes */}
+          <div className="flex items-center gap-1 sm:gap-3">
             {loading ? (
               <div className="w-24 h-8 bg-white/5 rounded-lg animate-pulse" />
             ) : user ? (
               <>
                 <NotificationBell />
-                  <Link
-                    href="/dashboard"
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-fire-500/20 hover:text-fire-400 transition-colors"
-                  >
-                    <Avatar src={resolveAssetUrl(user.avatarUrl)} alt={user.displayName || user.username} size={28} />
+                <Link
+                  href="/dashboard"
+                  className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-fire-500/20 hover:text-fire-400 transition-colors"
+                >
+                  <Avatar src={resolveAssetUrl(user.avatarUrl)} alt={user.displayName || user.username} size={28} />
                   {isSuperAdmin ? (
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-fire-500/15 text-fire-300 text-xs font-bold uppercase tracking-wider">
                       <Shield className="w-3 h-3" /> Super Admin
@@ -106,10 +107,9 @@ export default function Navbar() {
                     <span className="text-xs text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">✓</span>
                   )}
                 </Link>
-
               </>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2">
                 <Link href="/login" className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white transition-colors">
                   Login
                 </Link>
@@ -118,15 +118,15 @@ export default function Navbar() {
                 </Link>
               </div>
             )}
-          </div>
 
-          <button
-            className="md:hidden p-2 text-zinc-400"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Toggle menu"
-          >
-            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+            <button
+              className="md:hidden p-2 -mr-1 text-zinc-400 hover:text-white transition-colors"
+              onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label="Toggle menu"
+            >
+              {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -157,6 +157,17 @@ export default function Navbar() {
                 <User className="w-5 h-5 text-fire-400" />
                 My Profile
               </Link>
+
+              {isHost && (
+                <Link
+                  href="/host-dashboard"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
+                >
+                  <Shield className="w-5 h-5 text-fire-400" />
+                  My Tournaments
+                </Link>
+              )}
 
               {(user.role === 'ADMIN' || isSuperAdmin) && (
                 <Link

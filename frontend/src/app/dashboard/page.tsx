@@ -38,12 +38,6 @@ export default function DashboardPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (!loading && user?.role === 'HOST') {
-      router.push('/host-dashboard');
-    }
-  }, [user, loading, router]);
-
-  useEffect(() => {
     if (user) {
       teamApi.my().then((res) => setMyTeam(res.data || null)).catch(() => {});
       userApi.stats().then((res) => setUserStats(res.data || null)).catch(() => {});
