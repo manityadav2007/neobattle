@@ -37,7 +37,7 @@ function InstagramIcon(props: SVGProps<SVGSVGElement>) {
 
 const socialLinks = [
   {
-    href: 'https://discord.com',
+    href: 'https://discord.gg/34bwpEx68',
     label: 'Discord',
     icon: DiscordIcon,
     className: 'text-indigo-300 hover:bg-indigo-500/12 hover:text-indigo-200',
