@@ -162,10 +162,10 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             {mapTheme.image && (
               <Image src={mapTheme.image} alt={mapTheme.label} fill className="object-cover" priority />
             )}
-            <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, rgba(59,130,246,0.35), rgba(249,115,22,0.2), rgba(10,10,15,0.7))` }} />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(249,115,22,0.15),transparent_70%)]" />
+            {/* Dark readability scrim — keeps badges/title high-contrast over any map art */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30" />
 
-            <div className="absolute top-4 left-4 right-4">
+            <div className="absolute top-4 left-4 right-4 z-10">
               <TournamentTags
                 items={[
                   { label: tournament.status, color: tagColorMap.status[tournament.status as keyof typeof tagColorMap.status] || 'bg-zinc-500/20 text-zinc-400', icon: tagIcons.status },
@@ -177,17 +177,17 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               />
             </div>
 
-            <div className="absolute bottom-6 left-6 right-6">
-              <h1 className="text-3xl font-display font-black text-white drop-shadow-lg">{tournament.title}</h1>
-              <div className="flex items-center gap-4 mt-2 text-xs text-zinc-300">
+            <div className="absolute bottom-6 left-6 right-6 z-10">
+              <h1 className="text-3xl font-display font-black text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">{tournament.title}</h1>
+              <div className="flex items-center gap-4 mt-2 text-xs text-white/90">
                 <button
                   onClick={() => navigator.clipboard.writeText(tournament.uid)}
-                  className="flex items-center gap-1 hover:text-fire-400 transition-colors font-mono drop-shadow"
+                  className="flex items-center gap-1 hover:text-fire-400 transition-colors font-mono drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
                   title="Copy UID"
                 >
                   {tournament.uid} <Copy className="w-3 h-3" />
                 </button>
-                <span>Host: <span className="text-zinc-200">{tournament.creator?.username || tournament.creatorId}</span></span>
+                <span className="drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">Host: <span className="text-white font-medium">{tournament.creator?.username || tournament.creatorId}</span></span>
               </div>
             </div>
           </div>
