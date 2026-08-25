@@ -118,9 +118,13 @@ export default function AdminTournamentsPage() {
     }
   }
 
-  const totalPrizes = prizes.first + (prizeCount >= 2 ? prizes.second : 0) + (prizeCount >= 3 ? prizes.third : 0);
-  const maxPool = breakdown?.maxPrizePool || 0;
-  const isPrizesBalanced = !effectiveFree && maxPool > 0 && Math.abs(totalPrizes - maxPool) < 0.01;
+  // Normalize to 2 decimal places before comparing — prevents float mismatches like 21 vs 21.00
+  const round2 = (n: number) => parseFloat(Number(n).toFixed(2));
+  const totalPrizes = round2(
+    prizes.first + (prizeCount >= 2 ? prizes.second : 0) + (prizeCount >= 3 ? prizes.third : 0)
+  );
+  const maxPool = round2(breakdown?.maxPrizePool || 0);
+  const isPrizesBalanced = !effectiveFree && maxPool > 0 && totalPrizes === maxPool;
   const prizeError = !effectiveFree && maxPool > 0 && !isPrizesBalanced
     ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPool)} (currently ${formatCurrency(totalPrizes)})`
     : '';
@@ -169,9 +173,9 @@ export default function AdminTournamentsPage() {
         gameMode: form.gameMode,
         entryFee: isFree ? 0 : Number(form.entryFee),
         prizePool: prizePoolTotal,
-        prizeFirst: prizes.first,
-        prizeSecond: prizeCount >= 2 ? prizes.second : null,
-        prizeThird: prizeCount >= 3 ? prizes.third : null,
+        prizeFirst: round2(prizes.first),
+        prizeSecond: prizeCount >= 2 ? round2(prizes.second) : null,
+        prizeThird: prizeCount >= 3 ? round2(prizes.third) : null,
         maxParticipants: isClashSquad ? teamSizeMap[form.teamSize] || 2 : Number(form.maxParticipants),
         registrationStart: new Date(form.registrationStart).toISOString(),
         registrationEnd: new Date(form.registrationEnd).toISOString(),
