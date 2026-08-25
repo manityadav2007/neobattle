@@ -87,10 +87,14 @@ export default function HostDashboardPage() {
     if (effectiveMaxParticipants > 0) {
       const bd = calculateCommission(form.entryFee, effectiveMaxParticipants);
       setBreakdown(bd);
-      if (bd.maxPrizePool > 0) {
-        distributePrizes(bd.maxPrizePool, prizeCount);
-      } else {
-        setPrizes({ first: 0, second: 0, third: 0 });
+      const target = parseFloat(bd.maxPrizePool.toFixed(2));
+      // Never overwrite clean inputs the host has already balanced —
+      // only auto-fill when the current distribution is empty or mismatched.
+      const currentTotal = parseFloat(
+        (prizes.first + (prizeCount >= 2 ? prizes.second : 0) + (prizeCount >= 3 ? prizes.third : 0)).toFixed(2)
+      );
+      if (target > 0 && currentTotal !== target) {
+        distributePrizes(target, prizeCount);
       }
     } else {
       setBreakdown(null);
@@ -98,8 +102,10 @@ export default function HostDashboardPage() {
   }, [form.entryFee, effectiveMaxParticipants, prizeCount]);
 
   function distributePrizes(total: number, count: number) {
+    const exact = parseFloat(total.toFixed(2));
     if (count === 1) {
-      setPrizes({ first: total, second: 0, third: 0 });
+      // Single winner: strictly 100% of the pool — exact integer/2dp value, no splits or multipliers
+      setPrizes({ first: exact, second: 0, third: 0 });
     } else if (count === 2) {
       const first = Math.round(total * 0.7 * 100) / 100;
       setPrizes({ first, second: Math.round((total - first) * 100) / 100, third: 0 });
