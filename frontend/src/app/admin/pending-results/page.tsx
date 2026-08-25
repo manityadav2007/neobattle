@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft, Trophy, AlertCircle, CheckCircle, XCircle, Loader2, Eye, RefreshCw, Users, X,
+  Trophy, AlertCircle, CheckCircle, XCircle, Loader2, Eye, RefreshCw, Users, X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { resultApi, formatCurrency, formatDate, type ResultSubmission } from '@/lib/services';
@@ -93,10 +92,6 @@ export default function AdminPendingResultsPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Link href="/admin" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Admin Panel
-        </Link>
-
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
