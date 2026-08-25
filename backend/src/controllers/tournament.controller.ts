@@ -456,8 +456,20 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
     return;
   }
 
-  if (tournament.status === TournamentStatus.COMPLETED || tournament.status === TournamentStatus.CANCELLED) {
+  const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'SUPER_ADMIN';
+  const isCreator = tournament.creatorId === req.user!.id;
+  if (!isAdmin && !isCreator) {
+    res.status(403).json({ success: false, message: 'Only the tournament host or an admin can end this tournament' });
+    return;
+  }
+
+  if (tournament.status === TournamentStatus.COMPLETED || tournament.status === TournamentStatus.CANCELLED || tournament.status === TournamentStatus.PAID) {
     res.status(400).json({ success: false, message: `Tournament is already ${tournament.status.toLowerCase()}` });
+    return;
+  }
+
+  if (new Date(tournament.startTime).getTime() > Date.now()) {
+    res.status(400).json({ success: false, message: 'Tournament has not started yet — it can only be ended after its start time' });
     return;
   }
 

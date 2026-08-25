@@ -20,7 +20,7 @@ import LeagueBadge from '@/components/LeagueBadge';
 export default function TournamentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isAdmin } = useAuth();
   const { tournament, loading, error } = useTournament(id);
   const [registering, setRegistering] = useState(false);
   const [message, setMessage] = useState('');
@@ -135,6 +135,8 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const mapTheme = getMapTheme(tournament.mapName);
   const isEnded = tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED' || tournament.status === 'PAID';
   const effectiveStatus = getEffectiveStatus(tournament);
+  const startTimeReached = new Date(tournament.startTime).getTime() <= Date.now();
+  const canEndTournament = !isEnded && startTimeReached && (isSuperAdmin || isAdmin || user?.id === tournament.creatorId);
 
   console.log('[TournamentView] status:', tournament.status, 'isRegistered:', tournament.isRegistered, 'isEnded:', isEnded, 'entryFee:', entryFee, 'user:', user?.id);
 
@@ -260,7 +262,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               <div className="w-full py-3 rounded-xl text-sm font-bold text-white text-center bg-blue-500/20 border border-blue-500/30">
                 <CheckCircle className="w-4 h-4 inline mr-1" /> Tournament Completed
               </div>
-            ) : isSuperAdmin && tournament.status !== 'CANCELLED' && (
+            ) : canEndTournament && tournament.status !== 'CANCELLED' && (
               <button
                 onClick={handleEndTournament}
                 disabled={endingTournament}
