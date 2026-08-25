@@ -7,8 +7,15 @@ import { Trophy, Filter, Plus, Shield, Smartphone, Monitor, Gamepad2 } from 'luc
 import TournamentCard from '@/components/TournamentCard';
 import { useTournaments } from '@/hooks/useTournaments';
 import { useAuth } from '@/hooks/useAuth';
+import { isTournamentEnded } from '@/lib/services';
 
 const statusFilters = ['', 'REGISTRATION', 'ACTIVE', 'COMPLETED'];
+const statusLabels: Record<string, string> = {
+  '': 'All',
+  REGISTRATION: 'Open Registrations',
+  ACTIVE: 'Live & Playing',
+  COMPLETED: 'Completed History',
+};
 const formatFilters = ['', 'SOLO', 'DUO', 'SQUAD'];
 const platformFilters = ['', 'MOBILE', 'PC'];
 const gameModeFilters = ['', 'FULL_MAP', 'CLASH_SQUAD'];
@@ -21,12 +28,19 @@ export default function TournamentsPage() {
   const { user, isSuperAdmin, isHost } = useAuth();
   const canCreate = user && (isSuperAdmin || isHost);
   const hasFilters = status || format || platform || gameMode;
-  const { tournaments, loading, error, refetch } = useTournaments({
+  const { tournaments: fetchedTournaments, loading, error, refetch } = useTournaments({
     status: status || undefined,
     format: format || undefined,
     platform: platform || undefined,
     gameMode: gameMode || undefined,
   });
+
+  // Ended / completed / >1h-past-start tournaments never appear in the active tabs —
+  // they live exclusively under the 'Completed History' tab.
+  const tournaments =
+    status === 'COMPLETED'
+      ? fetchedTournaments
+      : fetchedTournaments.filter((t) => !isTournamentEnded(t));
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -68,7 +82,7 @@ export default function TournamentsPage() {
                   status === s ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-zinc-400 hover:text-white'
                 }`}
               >
-                {s || 'All'}
+                {statusLabels[s] || s || 'All'}
               </button>
             ))}
           </div>
