@@ -15,6 +15,7 @@ router.patch('/promote-user/:id', adminController.promoteUser);
 router.patch('/demote-user/:id', adminController.demoteUser);
 router.patch('/users/:id/toggle-active', adminController.toggleUserActive);
 router.post('/tournaments/:id/release-prizes', ownerOnly, adminController.releaseTournamentPrizes);
+router.post('/tournaments/:id/distribute-prizes', adminController.distributeTournamentPrizes);
 router.post('/tournaments/:id/refund', ownerOnly, adminController.refundTournament);
 router.post('/award-prize', adminController.awardPrize);
 router.patch('/users/:id/verify-game-level', adminController.verifyUserGameLevel);

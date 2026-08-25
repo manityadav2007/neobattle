@@ -537,3 +537,139 @@ export async function getSystemHealth(_req: AuthenticatedRequest, res: Response)
     res.status(503).json({ success: false, data: { database: 'unhealthy' } });
   }
 }
+
+export async function distributeTournamentPrizes(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: req.params.id },
+    include: {
+      entries: {
+        include: { user: { select: { id: true, username: true } } },
+      },
+    },
+  });
+
+  if (!tournament) {
+    res.status(404).json({ success: false, message: 'Tournament not found' });
+    return;
+  }
+
+  if (tournament.status === TournamentStatus.PAID) {
+    res.status(400).json({ success: false, message: 'Prizes for this tournament have already been distributed' });
+    return;
+  }
+
+  if (tournament.status !== TournamentStatus.COMPLETED) {
+    res.status(400).json({ success: false, message: 'Mark the tournament completed before distributing prizes' });
+    return;
+  }
+
+  const shares = [
+    { placement: 1, amount: Number(tournament.prizeFirst) || 0, label: '1st Place' },
+    { placement: 2, amount: Number(tournament.prizeSecond) || 0, label: '2nd Place' },
+    { placement: 3, amount: Number(tournament.prizeThird) || 0, label: '3rd Place' },
+  ].filter((s) => s.amount > 0);
+
+  const winners = shares.map((s) => ({
+    ...s,
+    entry: tournament.entries.find((e) => e.placement === s.placement && e.userId != null),
+  }));
+
+  const missing = winners.filter((w) => !w.entry);
+  if (missing.length > 0) {
+    res.status(400).json({
+      success: false,
+      message: `No verified winner recorded for: ${missing.map((m) => m.label).join(', ')}. Set player placements before distributing.`,
+    });
+    return;
+  }
+
+  const hostAmount = Number(tournament.hostCommission) || 0;
+  const platformAmount = Number(tournament.platformCommission) || 0;
+
+  const adminUser = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' }, orderBy: { createdAt: 'asc' } });
+  const adminWallet = adminUser ? await prisma.wallet.findUnique({ where: { userId: adminUser.id } }) : null;
+  const hostWallet = await prisma.wallet.findUnique({ where: { userId: tournament.creatorId } });
+
+  const totalPrize = winners.reduce((sum, w) => sum + w.amount, 0);
+
+  try {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Winner payouts
+      for (const w of winners) {
+        const wallet = await tx.wallet.findUnique({ where: { userId: w.entry!.userId! } });
+        if (!wallet) throw new Error(`Wallet missing for ${w.entry!.user?.username ?? 'winner'} (${w.label})`);
+
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: { balance: { increment: w.amount } },
+        });
+        await tx.transaction.create({
+          data: {
+            walletId: wallet.id,
+            userId: w.entry!.userId!,
+            type: TransactionType.PRIZE,
+            status: TransactionStatus.COMPLETED,
+            amount: new Decimal(w.amount),
+            description: `${w.label} prize — ${tournament.title}`,
+            reference: `DIST-${tournament.id.slice(0, 8)}-P${w.placement}`,
+          },
+        });
+      }
+
+      // Host commission
+      if (hostAmount > 0 && hostWallet) {
+        await tx.wallet.update({
+          where: { id: hostWallet.id },
+          data: { balance: { increment: hostAmount } },
+        });
+        await tx.transaction.create({
+          data: {
+            walletId: hostWallet.id,
+            userId: tournament.creatorId,
+            type: TransactionType.PRIZE,
+            status: TransactionStatus.COMPLETED,
+            amount: new Decimal(hostAmount),
+            description: `Host commission — ${tournament.title}`,
+            reference: `DIST-${tournament.id.slice(0, 8)}-HOST`,
+          },
+        });
+      }
+
+      // Platform revenue
+      if (platformAmount > 0 && adminWallet && adminUser) {
+        await tx.wallet.update({
+          where: { id: adminWallet.id },
+          data: { balance: { increment: platformAmount } },
+        });
+        await tx.transaction.create({
+          data: {
+            walletId: adminWallet.id,
+            userId: adminUser.id,
+            type: TransactionType.PRIZE,
+            status: TransactionStatus.COMPLETED,
+            amount: new Decimal(platformAmount),
+            description: `Platform commission — ${tournament.title}`,
+            reference: `DIST-${tournament.id.slice(0, 8)}-PLAT`,
+          },
+        });
+      }
+
+      await tx.tournament.update({
+        where: { id: tournament.id },
+        data: { status: TournamentStatus.PAID },
+      });
+    });
+
+    const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+    res.json({
+      success: true,
+      message:
+        `Distributed ${fmt(totalPrize)} to ${winners.length} winner(s)` +
+        (hostAmount > 0 ? ` + ${fmt(hostAmount)} host commission` : '') +
+        (platformAmount > 0 ? ` (+${fmt(platformAmount)} platform revenue). Tournament marked as PAID.` : '. Tournament marked as PAID.'),
+    });
+  } catch (err: any) {
+    console.error('[Admin] distributeTournamentPrizes error:', err);
+    res.status(400).json({ success: false, message: err.message || 'Distribution failed — no changes were saved' });
+  }
+}

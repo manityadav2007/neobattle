@@ -378,6 +378,10 @@ export const adminApi = {
     const res = await api.post('/admin/award-prize', data);
     return res.data;
   },
+  distributePrizes: async (tournamentId: string) => {
+    const res = await api.post(`/admin/tournaments/${tournamentId}/distribute-prizes`);
+    return res.data;
+  },
   verifyUserGameLevel: async (userId: string, gameLevel: number) => {
     const res = await api.patch(`/admin/users/${userId}/verify-game-level`, { gameLevel });
     return res.data;

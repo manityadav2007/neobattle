@@ -12,7 +12,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
 import TournamentTags, { tagColorMap, tagIcons } from '@/components/TournamentTags';
-import { tournamentApi, gameApi, userApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, type UserStats } from '@/lib/services';
+import { tournamentApi, gameApi, userApi, adminApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, type UserStats } from '@/lib/services';
 import UpiPayment from '@/components/RazorpayCheckout';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
@@ -32,7 +32,31 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [fetchingIgn, setFetchingIgn] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [endingTournament, setEndingTournament] = useState(false);
+  const [distributing, setDistributing] = useState(false);
   const [showUpiModal, setShowUpiModal] = useState(false);
+
+  const handleDistributePrizes = async () => {
+    if (!tournament) return;
+    const lines = [
+      firstPlace > 0 && `1st: ${formatCurrency(firstPlace)}`,
+      secondPlace > 0 && `2nd: ${formatCurrency(secondPlace)}`,
+      thirdPlace > 0 && `3rd: ${formatCurrency(thirdPlace)}`,
+      Number(tournament.hostCommission) > 0 && `Host commission: ${formatCurrency(Number(tournament.hostCommission))}`,
+    ].filter(Boolean);
+    if (!confirm(`Approve & distribute prizes for "${tournament.title}"?\n\n${lines.join('\n')}\n\nThis credits winners' and the host's wallets instantly and cannot be undone.`)) return;
+    setDistributing(true);
+    setRegisterError('');
+    setMessage('');
+    try {
+      const res = await adminApi.distributePrizes(tournament.id);
+      setMessage(res.message || 'Prizes distributed!');
+      window.location.reload();
+    } catch (err) {
+      setRegisterError(getErrorMessage(err));
+    } finally {
+      setDistributing(false);
+    }
+  };
 
   const handleEndTournament = async () => {
     if (!confirm('Mark this tournament as COMPLETED? This cannot be undone.')) return;
@@ -273,6 +297,17 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </button>
             )}
 
+            {isSuperAdmin && tournament.status === 'COMPLETED' && (
+              <button
+                onClick={handleDistributePrizes}
+                disabled={distributing}
+                className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 transition-all disabled:opacity-50"
+              >
+                {distributing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {distributing ? 'Distributing...' : 'Approve & Distribute Prizes'}
+              </button>
+            )}
+
             {tournament.isRegistered ? (
               <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-green-500/10">
                 <div className="flex items-center gap-2 text-green-400 font-semibold">
@@ -338,7 +373,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   onClick={() => setShowUpiModal(true)}
                   className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 transition-all"
                 >
-                  <Smartphone className="w-4 h-4" /> Pay ₹{entryFee} via UPI
+                  <Smartphone className="w-4 h-4" /> Pay ₹{entryFee} (top-up)
                 </button>
               </div>
             ) : entryFee > 0 ? (
@@ -358,7 +393,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   onClick={() => setShowUpiModal(true)}
                   className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 transition-all"
                 >
-                  <Smartphone className="w-4 h-4" /> Pay via UPI
+                  <Smartphone className="w-4 h-4" /> Pay
                 </button>
               </div>
             ) : (
@@ -382,7 +417,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowUpiModal(false)}>
           <div className="bg-zinc-900 rounded-2xl p-6 max-w-md w-full mx-4 border border-white/10 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Smartphone className="w-5 h-5 text-green-400" /> Pay via UPI
+              <Smartphone className="w-5 h-5 text-green-400" /> Pay Entry Fee
             </h3>
             <UpiPayment amount={entryFee} tournamentId={id} onSuccess={() => { setShowUpiModal(false); setMessage('Payment submitted! Admin will verify shortly.'); }} />
           </div>
