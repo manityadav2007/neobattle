@@ -21,6 +21,7 @@ import warningRoutes from './warning.routes';
 import supportRoutes from './support.routes';
 import uploadRoutes from './upload.routes';
 import giftCardRoutes from './giftCard.routes';
+import resultRoutes from './result.routes';
 import * as statsController from '../controllers/stats.controller';
 
 const router = Router();
@@ -51,5 +52,6 @@ router.use('/warnings', warningRoutes);
 router.use('/support', supportRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/gift-cards', giftCardRoutes);
+router.use('/results', resultRoutes);
 
 export default router;

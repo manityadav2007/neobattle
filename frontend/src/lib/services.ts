@@ -558,6 +558,49 @@ export const adjustWalletApi = {
   },
 };
 
+export interface ResultSubmission {
+  id: string;
+  tournamentId: string;
+  hostId: string;
+  firstUid: string;
+  secondUid: string | null;
+  thirdUid: string | null;
+  screenshotUrl: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  tournament?: {
+    id: string; uid: string; title: string; status: string;
+    prizePool: number;
+    prizeFirst: number; prizeSecond: number | null; prizeThird: number | null;
+    platformCommission: number; hostCommission: number;
+    creator: { id: string; username: string };
+    entries: Array<{ user: { id: string; username: string; ign: string | null; freeFireId: string | null } | null }>;
+  };
+  host?: { id: string; username: string; email: string };
+  participants?: Array<{ uid: string | null; username: string | null; ign: string | null }>;
+}
+
+export const resultApi = {
+  submit: async (tournamentId: string, data: { firstUid: string; secondUid?: string; thirdUid?: string; screenshotUrl: string }) => {
+    const res = await api.post(`/results/tournament/${tournamentId}/submit`, data);
+    return res.data;
+  },
+  mine: async () => {
+    const res = await api.get('/results/mine');
+    return res.data;
+  },
+  pending: async () => {
+    const res = await api.get('/results/pending');
+    return res.data;
+  },
+  review: async (id: string, action: 'APPROVE' | 'REJECT', rejectionReason?: string) => {
+    const res = await api.patch(`/results/${id}/review`, { action, rejectionReason });
+    return res.data;
+  },
+};
+
 export const depositApi = {
   request: async (data: { amount: number; screenshotUrl: string }) => {
     const res = await api.post('/deposits/request', data);

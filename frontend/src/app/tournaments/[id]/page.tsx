@@ -12,7 +12,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
 import TournamentTags, { tagColorMap, tagIcons } from '@/components/TournamentTags';
-import { tournamentApi, gameApi, userApi, adminApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, type UserStats } from '@/lib/services';
+import { tournamentApi, gameApi, userApi, adminApi, uploadApi, resultApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, type UserStats, type ResultSubmission } from '@/lib/services';
 import UpiPayment from '@/components/RazorpayCheckout';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
@@ -34,6 +34,61 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [endingTournament, setEndingTournament] = useState(false);
   const [distributing, setDistributing] = useState(false);
   const [showUpiModal, setShowUpiModal] = useState(false);
+
+  // Host result submission
+  const [mySubmission, setMySubmission] = useState<ResultSubmission | null>(null);
+  const [resUids, setResUids] = useState({ first: '', second: '', third: '' });
+  const [resFile, setResFile] = useState<File | null>(null);
+  const [submittingResult, setSubmittingResult] = useState(false);
+
+  useEffect(() => {
+    if (!user || !tournament || user.id !== tournament.creatorId) return;
+    resultApi.mine()
+      .then((res) => {
+        const mine = (res.data || []).find((s: ResultSubmission) => s.tournamentId === tournament.id);
+        setMySubmission(mine || null);
+      })
+      .catch(() => {});
+  }, [user, tournament]);
+
+  const handleResultScreenshot = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setResFile(e.target.files?.[0] || null);
+  };
+
+  const handleSubmitResult = async () => {
+    if (!tournament) return;
+    if (!resUids.first.trim()) { setRegisterError('1st place UID is required'); return; }
+    if (!resFile && !mySubmission?.screenshotUrl) { setRegisterError('Upload the winning proof screenshot'); return; }
+    setSubmittingResult(true);
+    setRegisterError('');
+    try {
+      let screenshotUrl = mySubmission?.screenshotUrl || '';
+      if (resFile) {
+        const up = await uploadApi.verificationScreenshot(resFile);
+        screenshotUrl = up.data.screenshotUrl;
+      }
+      await resultApi.submit(tournament.id, {
+        firstUid: resUids.first.trim(),
+        secondUid: resUids.second.trim() || undefined,
+        thirdUid: resUids.third.trim() || undefined,
+        screenshotUrl,
+      });
+      setMessage('Results submitted! Awaiting admin approval & payout.');
+      window.location.reload();
+    } catch (err) {
+      setRegisterError(getErrorMessage(err));
+    } finally {
+      setSubmittingResult(false);
+    }
+  };
+
+  const isHostCreator = user?.id === tournament?.creatorId;
+  const canSubmitResults =
+    isHostCreator &&
+    tournament != null &&
+    (tournament.status === 'COMPLETED' || tournament.status === 'ACTIVE') &&
+    mySubmission?.status !== 'PENDING' &&
+    mySubmission?.status !== 'APPROVED';
 
   const handleDistributePrizes = async () => {
     if (!tournament) return;
@@ -306,6 +361,63 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 {distributing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                 {distributing ? 'Distributing...' : 'Approve & Distribute Prizes'}
               </button>
+            )}
+
+            {/* Host result submission */}
+            {isHostCreator && mySubmission?.status === 'PENDING' && (
+              <div className="w-full p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/25 text-sm text-yellow-300 flex items-center gap-2">
+                <Clock className="w-4 h-4 shrink-0" /> Results submitted — awaiting admin approval &amp; payout.
+              </div>
+            )}
+            {isHostCreator && mySubmission?.status === 'APPROVED' && (
+              <div className="w-full p-4 rounded-xl bg-green-500/10 border border-green-500/25 text-sm text-green-300 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 shrink-0" /> Results approved — prizes have been distributed.
+              </div>
+            )}
+            {isHostCreator && mySubmission?.status === 'REJECTED' && (
+              <div className="w-full p-4 rounded-xl bg-red-500/10 border border-red-500/25 text-sm text-red-300 mb-1">
+                <AlertCircle className="w-4 h-4 inline mr-1" />
+                Results rejected{mySubmission.rejectionReason ? `: ${mySubmission.rejectionReason}` : ''} — edit below and resubmit.
+              </div>
+            )}
+            {canSubmitResults && (
+              <div className="p-5 rounded-xl bg-white/5 border border-white/10 space-y-4">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-yellow-400" /> Submit Tournament Results
+                </h3>
+                <p className="text-xs text-zinc-500">Enter the Free Fire UIDs of your winners. Each UID must belong to a registered Neobattle participant.</p>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {([['1st Place', 'first', '🥇'], ['2nd Place (optional)', 'second', '🥈'], ['3rd Place (optional)', 'third', '🥉']] as const).map(([label, key, medal]) => (
+                    <div key={key}>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">{medal} {label}</label>
+                      <input
+                        type="text"
+                        value={resUids[key]}
+                        onChange={(e) => setResUids((prev) => ({ ...prev, [key]: e.target.value }))}
+                        placeholder="Winner UID"
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Winning Proof Screenshot</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleResultScreenshot}
+                    className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-fire-500/20 file:text-fire-400 file:text-xs file:font-semibold hover:file:bg-fire-500/30"
+                  />
+                </div>
+                <button
+                  onClick={handleSubmitResult}
+                  disabled={submittingResult || !resUids.first.trim() || (!resFile && !mySubmission?.screenshotUrl)}
+                  className="btn-fire w-full py-3 rounded-xl font-semibold text-white disabled:opacity-50"
+                >
+                  {submittingResult ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <CheckCircle className="w-4 h-4 inline mr-2" />}
+                  {submittingResult ? 'Submitting...' : 'Submit Results for Review'}
+                </button>
+              </div>
             )}
 
             {tournament.isRegistered ? (
