@@ -122,7 +122,11 @@ export default function HostDashboardPage() {
     prizes.first + (prizeCount >= 2 ? prizes.second : 0) + (prizeCount >= 3 ? prizes.third : 0)
   );
   const maxPool = round2(breakdown?.maxPrizePool || 0);
-  const isPrizesBalanced = maxPool > 0 && totalPrizes === maxPool;
+  // Float-safe check: explicit Number() casts + cent-level tolerance so matching totals
+  // immediately clear the error and enable Create Tournament.
+  const isPrizesBalanced =
+    maxPool > 0 &&
+    Math.abs(Number(totalPrizes) - Number(maxPool)) < 0.01;
   const prizeError = maxPool > 0 && !isPrizesBalanced
     ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPool)} (currently ${formatCurrency(totalPrizes)})`
     : '';
