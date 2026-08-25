@@ -217,6 +217,10 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const startTimeReached = new Date(tournament.startTime).getTime() <= Date.now();
   const canEndTournament = !isEnded && startTimeReached && (isSuperAdmin || isAdmin || user?.id === tournament.creatorId);
 
+  // Absolute priority: finished tournaments never show registration/payment/top-up triggers,
+  // regardless of balance, level, or registration state.
+  const isCompletedState = isEnded || effectiveStatus === 'Ended';
+
   console.log('[TournamentView] status:', tournament.status, 'isRegistered:', tournament.isRegistered, 'isEnded:', isEnded, 'entryFee:', entryFee, 'user:', user?.id);
 
   const rawFirst = tournament.prizeFirst != null ? Number(tournament.prizeFirst) : 0;
@@ -420,7 +424,13 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </div>
             )}
 
-            {tournament.isRegistered ? (
+            {isCompletedState ? (
+              <div className="w-full p-4 rounded-xl bg-blue-500/10 border border-blue-500/25 text-center text-sm text-blue-300">
+                <CheckCircle className="w-4 h-4 inline mr-1" />
+                This tournament has ended
+                {tournament.status === 'PAID' ? ' and prizes have been distributed' : ''}. Registration is closed.
+              </div>
+            ) : tournament.isRegistered ? (
               <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-green-500/10">
                 <div className="flex items-center gap-2 text-green-400 font-semibold">
                   <CheckCircle className="w-5 h-5" /> You are registered for this tournament
