@@ -126,9 +126,10 @@ export default function HostDashboardPage() {
       const prizePoolTotal = totalPrizes;
       const isClashSquad = form.gameMode === 'CLASH_SQUAD';
       const teamSizeMap: Record<string, number> = { '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 };
+      const clashFormatMap: Record<string, string> = { '1v1': 'SOLO', '2v2': 'DUO', '4v4': 'SQUAD', '6v6': 'SQUAD' };
       const data: any = {
         ...form,
-        format: form.format,
+        format: isClashSquad ? (clashFormatMap[form.teamSize] || 'SQUAD') : form.format,
         platform: form.platform,
         gameMode: form.gameMode,
         entryFee: Number(form.entryFee),
@@ -224,14 +225,6 @@ export default function HostDashboardPage() {
                 <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Enter tournament title" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" required />
               </div>
               <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Format</label>
-                <select value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm">
-                  <option value="SOLO" className="bg-gray-800 text-white">Solo</option>
-                  <option value="DUO" className="bg-gray-800 text-white">Duo</option>
-                  <option value="SQUAD" className="bg-gray-800 text-white">Squad</option>
-                </select>
-              </div>
-              <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Platform</label>
                 <select value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm">
                   <option value="MOBILE" className="bg-gray-800 text-white">Mobile</option>
@@ -240,7 +233,18 @@ export default function HostDashboardPage() {
               </div>
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Game Mode</label>
-                <select value={form.gameMode} onChange={(e) => setForm({ ...form, gameMode: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm">
+                <select
+                  value={form.gameMode}
+                  onChange={(e) => {
+                    const gm = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      gameMode: gm,
+                      teamSize: gm === 'CLASH_SQUAD' && !f.teamSize ? '4v4' : f.teamSize,
+                    }));
+                  }}
+                  className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm"
+                >
                   <option value="FULL_MAP" className="bg-gray-800 text-white">Full Map</option>
                   <option value="CLASH_SQUAD" className="bg-gray-800 text-white">Clash Squad</option>
                 </select>
@@ -261,20 +265,29 @@ export default function HostDashboardPage() {
               </div>
               {form.gameMode === 'CLASH_SQUAD' ? (
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">Team Size</label>
+                  <label className="text-xs text-zinc-400 mb-1 block">Squad Size <span className="text-zinc-600">(Clash Squad)</span></label>
                   <select value={form.teamSize} onChange={(e) => setForm({ ...form, teamSize: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm" required>
-                    <option value="" disabled className="bg-gray-800 text-zinc-400">Select Team Size</option>
-                    <option value="1v1" className="bg-gray-800 text-white">1v1</option>
-                    <option value="2v2" className="bg-gray-800 text-white">2v2</option>
-                    <option value="4v4" className="bg-gray-800 text-white">4v4</option>
-                    <option value="6v6" className="bg-gray-800 text-white">6v6</option>
+                    <option value="1v1" className="bg-gray-800 text-white">1v1 (2 players)</option>
+                    <option value="2v2" className="bg-gray-800 text-white">2v2 (4 players)</option>
+                    <option value="4v4" className="bg-gray-800 text-white">4v4 (8 players)</option>
+                    <option value="6v6" className="bg-gray-800 text-white">6v6 (12 players)</option>
                   </select>
                 </div>
               ) : (
-                <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">Max Participants</label>
-                  <input type="number" value={form.maxParticipants} onChange={(e) => setForm({ ...form, maxParticipants: Number(e.target.value) })} placeholder="Enter max players" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={2} required />
-                </div>
+                <>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">Format</label>
+                    <select value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm" required>
+                      <option value="SOLO" className="bg-gray-800 text-white">Solo</option>
+                      <option value="DUO" className="bg-gray-800 text-white">Duo</option>
+                      <option value="SQUAD" className="bg-gray-800 text-white">Squad</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">Max Participants</label>
+                    <input type="number" value={form.maxParticipants} onChange={(e) => setForm({ ...form, maxParticipants: Number(e.target.value) })} placeholder="Enter max players" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={2} required />
+                  </div>
+                </>
               )}
               <div className="sm:col-span-2">
                 <div className="flex items-center justify-between mb-2">
