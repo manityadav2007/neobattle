@@ -7,6 +7,7 @@ import { escrowService } from '../services/escrow.service';
 import { cacheGet, cacheSet, cacheDel, cacheDelPattern } from '../config/redis';
 import { validatePrizePool } from '../services/commission.service';
 import { gameProfileService } from '../services/gameProfile.service';
+import { syncTournamentStatuses } from '../utils/tournamentStatus';
 
 export async function createTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
   const data = req.body;
@@ -89,6 +90,9 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
 }
 
 export async function listTournaments(req: AuthenticatedRequest, res: Response): Promise<void> {
+  // Lazily persist time-based transitions (ACTIVE >1h past start → COMPLETED) before querying
+  await syncTournamentStatuses();
+
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 20;
   const status = req.query.status as TournamentStatus | undefined;
@@ -97,13 +101,21 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
   const gameMode = req.query.gameMode as GameMode | undefined;
   const skip = (page - 1) * limit;
 
+  const now = new Date();
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
   const where = {
-    ...(status ? { status } : { status: { not: TournamentStatus.COMPLETED } }),
-    // Strictly exclude effectively-ended tournaments (ACTIVE >1h past startTime) from live/default listings
+    // Default (live/open listings): hide anything terminal or expired
+    ...(status
+      ? status === TournamentStatus.REGISTRATION
+        ? { status, startTime: { gt: now } }
+        : { status }
+      : { status: { notIn: [TournamentStatus.COMPLETED, TournamentStatus.CANCELLED, TournamentStatus.PAID] as TournamentStatus[] } }),
+    // Belt-and-braces: never surface ACTIVE tournaments past the 1h play window in open/live lists
     ...(!status && {
       OR: [
         { status: { not: TournamentStatus.ACTIVE } },
-        { startTime: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
+        { startTime: { gte: oneHourAgo } },
       ],
     }),
     ...(format && { format }),
@@ -147,6 +159,8 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
 }
 
 export async function getTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
+  await syncTournamentStatuses();
+
   const tournament = await prisma.tournament.findUnique({
     where: { id: req.params.id },
     include: {

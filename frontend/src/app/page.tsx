@@ -10,7 +10,7 @@ import LeaderboardSnapshot from '@/components/LeaderboardSnapshot';
 import LogoAsset from '@/components/LogoAsset';
 import { useTournaments } from '@/hooks/useTournaments';
 import { useAuth } from '@/hooks/useAuth';
-import { statsApi } from '@/lib/services';
+import { statsApi, isTournamentEnded } from '@/lib/services';
 
 const features = [
   { icon: Trophy, title: 'Elite Tournaments', desc: 'Solo, Duo & Squad formats with real prize pools' },
@@ -21,7 +21,8 @@ const features = [
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
-  const { tournaments, loading } = useTournaments({ status: 'REGISTRATION' });
+  const { tournaments: allTournaments, loading } = useTournaments({ status: 'REGISTRATION' });
+const tournaments = allTournaments.filter((t) => !isTournamentEnded(t));
   const [platformStats, setPlatformStats] = useState({ totalUsers: 0, totalTournaments: 0, totalPrizePool: 0 });
 
   useEffect(() => {
