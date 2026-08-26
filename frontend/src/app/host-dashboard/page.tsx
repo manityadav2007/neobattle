@@ -94,19 +94,21 @@ export default function HostDashboardPage() {
 
   // Normalize to 2 decimal places before comparing — prevents float mismatches like 21 vs 21.00
   const round2 = (n: number | string) => Math.round((Number(n) || 0) * 100) / 100;
-  const totalPrizes = round2(
+  const totalDistribution = round2(
     Number(prizes.first || 0) +
     (prizeCount >= 2 ? Number(prizes.second || 0) : 0) +
     (prizeCount >= 3 ? Number(prizes.third || 0) : 0)
   );
-  const maxPool = round2(breakdown?.maxPrizePool || 0);
-  // Float-safe check: explicit Number() casts + cent-level tolerance so matching totals
+  const maxPrizePool = round2(breakdown?.maxPrizePool || 0);
+  const totalPrizes = totalDistribution;
+  const maxPool = maxPrizePool;
+  // Universal float-safe check: explicit Number() casts + cent-level tolerance so matching totals
   // immediately clear the error and enable Create Tournament.
   const isPrizesBalanced =
-    Number(maxPool) > 0 &&
-    Math.abs(Number(totalPrizes) - Number(maxPool)) < 0.01;
-  const prizeError = maxPool > 0 && !isPrizesBalanced
-    ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPool)} (currently ${formatCurrency(totalPrizes)})`
+    Number(maxPrizePool) > 0 &&
+    (Number(totalDistribution) === Number(maxPrizePool) || Math.abs(Number(totalDistribution) - Number(maxPrizePool)) < 0.01);
+  const prizeError = maxPrizePool > 0 && !isPrizesBalanced
+    ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPrizePool)} (currently ${formatCurrency(totalDistribution)})`
     : '';
 
   const handleCreate = async (e: React.FormEvent) => {
