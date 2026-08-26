@@ -109,7 +109,7 @@ export default function HostDashboardPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isPrizesBalanced) return;
+    if (maxPool > 0 && !isPrizesBalanced) return;
     setCreateErr('');
     setCreating(true);
     try {
@@ -441,7 +441,7 @@ export default function HostDashboardPage() {
 
             {createErr && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {createErr}</div>}
 
-            <button type="submit" disabled={creating || (breakdown ? !isPrizesBalanced : true)} className="btn-fire px-6 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50">
+            <button type="submit" disabled={creating || (maxPool > 0 && !isPrizesBalanced)} className="btn-fire px-6 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50">
               {creating ? 'Creating...' : 'Create Tournament'}
             </button>
           </motion.form>
