@@ -93,15 +93,17 @@ export default function HostDashboardPage() {
   }, [form.entryFee, effectiveMaxParticipants]);
 
   // Normalize to 2 decimal places before comparing — prevents float mismatches like 21 vs 21.00
-  const round2 = (n: number) => parseFloat(Number(n).toFixed(2));
+  const round2 = (n: number | string) => Math.round((Number(n) || 0) * 100) / 100;
   const totalPrizes = round2(
-    prizes.first + (prizeCount >= 2 ? prizes.second : 0) + (prizeCount >= 3 ? prizes.third : 0)
+    Number(prizes.first || 0) +
+    (prizeCount >= 2 ? Number(prizes.second || 0) : 0) +
+    (prizeCount >= 3 ? Number(prizes.third || 0) : 0)
   );
   const maxPool = round2(breakdown?.maxPrizePool || 0);
   // Float-safe check: explicit Number() casts + cent-level tolerance so matching totals
   // immediately clear the error and enable Create Tournament.
   const isPrizesBalanced =
-    maxPool > 0 &&
+    Number(maxPool) > 0 &&
     Math.abs(Number(totalPrizes) - Number(maxPool)) < 0.01;
   const prizeError = maxPool > 0 && !isPrizesBalanced
     ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPool)} (currently ${formatCurrency(totalPrizes)})`
@@ -251,7 +253,19 @@ export default function HostDashboardPage() {
               </div>
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Entry Fee (₹)</label>
-                <input type="number" value={form.entryFee} onChange={(e) => setForm({ ...form, entryFee: Number(e.target.value) })} placeholder="Enter entry fee" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={0} required />
+                <input
+                  type="number"
+                  value={form.entryFee === 0 ? '' : form.entryFee}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                    const v = raw === '' ? 0 : Number(raw);
+                    setForm({ ...form, entryFee: isNaN(v) ? 0 : v });
+                  }}
+                  placeholder="0"
+                  className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
+                  min={0}
+                  required
+                />
               </div>
               {form.gameMode === 'CLASH_SQUAD' ? (
                 <div>
@@ -275,7 +289,19 @@ export default function HostDashboardPage() {
                   </div>
                   <div>
                     <label className="text-xs text-zinc-400 mb-1 block">Max Participants</label>
-                    <input type="number" value={form.maxParticipants} onChange={(e) => setForm({ ...form, maxParticipants: Number(e.target.value) })} placeholder="Enter max players" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" min={2} required />
+                    <input
+                      type="number"
+                      value={form.maxParticipants === 0 ? '' : form.maxParticipants}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                        const v = raw === '' ? 0 : Number(raw);
+                        setForm({ ...form, maxParticipants: isNaN(v) ? 0 : v });
+                      }}
+                      placeholder="0"
+                      className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
+                      min={2}
+                      required
+                    />
                   </div>
                 </>
               )}
@@ -295,9 +321,13 @@ export default function HostDashboardPage() {
                       <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">1st Place</label>
                       <input
                         type="number"
-                        value={prizes.first}
-                        onChange={(e) => setPrizes({ ...prizes, first: Number(e.target.value) })}
-                        placeholder="1st place prize"
+                        value={prizes.first === 0 ? '' : prizes.first}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                          const num = raw === '' ? 0 : Number(raw);
+                          setPrizes((prev) => ({ ...prev, first: isNaN(num) ? 0 : num }));
+                        }}
+                        placeholder="0"
                         className="input-field w-full px-3 py-2 rounded-lg bg-fire-500/10 border border-fire-500/30 text-fire-400 text-sm font-bold"
                         min={0}
                         required
@@ -316,7 +346,7 @@ export default function HostDashboardPage() {
                           type="button"
                           onClick={() => {
                             if (prizeCount >= 2) {
-                              setPrizes({ ...prizes, first: parseFloat((prizes.first + prizes.second).toFixed(2)), second: 0 });
+                              setPrizes((prev) => ({ ...prev, first: parseFloat((Number(prev.first) + Number(prev.second)).toFixed(2)), second: 0 }));
                               setPrizeCount(1);
                             } else {
                               setPrizeCount(2);
@@ -331,9 +361,13 @@ export default function HostDashboardPage() {
                       {prizeCount >= 2 ? (
                         <input
                           type="number"
-                          value={prizes.second}
-                          onChange={(e) => setPrizes({ ...prizes, second: Number(e.target.value) })}
-                          placeholder="2nd place prize"
+                          value={prizes.second === 0 ? '' : prizes.second}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                            const num = raw === '' ? 0 : Number(raw);
+                            setPrizes((prev) => ({ ...prev, second: isNaN(num) ? 0 : num }));
+                          }}
+                          placeholder="0"
                           className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
                           min={0}
                         />
@@ -354,7 +388,7 @@ export default function HostDashboardPage() {
                           type="button"
                           onClick={() => {
                             if (prizeCount >= 3) {
-                              setPrizes({ ...prizes, first: parseFloat((prizes.first + prizes.third).toFixed(2)), second: prizeCount >= 2 ? prizes.second : 0, third: 0 });
+                              setPrizes((prev) => ({ ...prev, first: parseFloat((Number(prev.first) + Number(prev.third)).toFixed(2)), second: prizeCount >= 2 ? Number(prev.second) : 0, third: 0 }));
                               setPrizeCount(2);
                             } else if (prizeCount === 2) {
                               setPrizeCount(3);
@@ -369,9 +403,13 @@ export default function HostDashboardPage() {
                       {prizeCount >= 3 ? (
                         <input
                           type="number"
-                          value={prizes.third}
-                          onChange={(e) => setPrizes({ ...prizes, third: Number(e.target.value) })}
-                          placeholder="3rd place prize"
+                          value={prizes.third === 0 ? '' : prizes.third}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                            const num = raw === '' ? 0 : Number(raw);
+                            setPrizes((prev) => ({ ...prev, third: isNaN(num) ? 0 : num }));
+                          }}
+                          placeholder="0"
                           className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
                           min={0}
                         />
