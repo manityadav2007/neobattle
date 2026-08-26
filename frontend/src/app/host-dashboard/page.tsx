@@ -101,18 +101,45 @@ export default function HostDashboardPage() {
     }
   }, [form.entryFee, effectiveMaxParticipants, prizeCount]);
 
+  /**
+   * Largest-remainder split that keeps every share a clean integer whenever the
+   * pool itself is an integer (falls back to paise precision otherwise), while
+   * always summing mathematically to the exact Max Prize Pool.
+   */
+  function apportionByWeights(total: number, weights: number[]): number[] {
+    const normalized = parseFloat(total.toFixed(2));
+    const isWholeRupees = Number.isInteger(normalized);
+    const scale = isWholeRupees ? 1 : 100;
+    const scaledTotal = Math.round(normalized * scale);
+
+    const raw = weights.map((w) => scaledTotal * w);
+    const base = raw.map((v) => Math.floor(v));
+    let leftover = scaledTotal - base.reduce((a, b) => a + b, 0);
+
+    const order = raw
+      .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+      .sort((a, b) => b.frac - a.frac || a.i - b.i);
+
+    let k = 0;
+    while (leftover > 0) {
+      base[order[k % order.length].i] += 1;
+      leftover -= 1;
+      k += 1;
+    }
+    return base.map((v) => parseFloat((v / scale).toFixed(2)));
+  }
+
   function distributePrizes(total: number, count: number) {
     const exact = parseFloat(total.toFixed(2));
     if (count === 1) {
-      // Single winner: strictly 100% of the pool — exact integer/2dp value, no splits or multipliers
+      // Single winner: strictly 100% of the pool — exact integer value, no splits or multipliers
       setPrizes({ first: exact, second: 0, third: 0 });
     } else if (count === 2) {
-      const first = Math.round(total * 0.7 * 100) / 100;
-      setPrizes({ first, second: Math.round((total - first) * 100) / 100, third: 0 });
+      const [first, second] = apportionByWeights(exact, [0.7, 0.3]);
+      setPrizes({ first, second, third: 0 });
     } else {
-      const first = Math.round(total * 0.5 * 100) / 100;
-      const second = Math.round(total * 0.3 * 100) / 100;
-      setPrizes({ first, second, third: Math.round((total - first - second) * 100) / 100 });
+      const [first, second, third] = apportionByWeights(exact, [0.5, 0.3, 0.2]);
+      setPrizes({ first, second, third });
     }
   }
 
