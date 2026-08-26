@@ -100,24 +100,21 @@ export default function AdminTournamentsPage() {
     setBreakdown(calculateCommission(Number(form.entryFee), effectiveMaxParticipants));
   }, [form.entryFee, effectiveMaxParticipants, effectiveFree]);
 
-  // Normalize to 2 decimal places before comparing — prevents float mismatches like 21 vs 21.00
-  const round2 = (n: number | string) => Math.round((Number(n) || 0) * 100) / 100;
-  const totalDistribution = round2(
-    Number(prizes.first || 0) +
-    (prizeCount >= 2 ? Number(prizes.second || 0) : 0) +
-    (prizeCount >= 3 ? Number(prizes.third || 0) : 0)
-  );
-  const maxPrizePool = round2(breakdown?.maxPrizePool || 0);
-  const totalPrizes = totalDistribution;
+  // Clean & Direct Prize Calculation and Validation
+  const prize1Num = Number(prizes.first) || 0;
+  const prize2Num = prizeCount >= 2 ? (Number(prizes.second) || 0) : 0;
+  const prize3Num = prizeCount >= 3 ? (Number(prizes.third) || 0) : 0;
+
+  const totalDistribution = Math.round((prize1Num + prize2Num + prize3Num) * 100) / 100;
+  const maxPrizePool = Math.round((Number(breakdown?.maxPrizePool) || 0) * 100) / 100;
   const maxPool = maxPrizePool;
-  // Universal float-safe check: explicit Number() casts + cent-level tolerance so matching totals
-  // immediately clear the error and enable Create Tournament.
-  const isPrizesBalanced =
-    !effectiveFree &&
-    Number(maxPrizePool) > 0 &&
-    (Number(totalDistribution) === Number(maxPrizePool) || Math.abs(Number(totalDistribution) - Number(maxPrizePool)) < 0.01);
-  const prizeError = maxPrizePool > 0 && !isPrizesBalanced
-    ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPrizePool)} (currently ${formatCurrency(totalDistribution)})`
+  const totalPrizes = totalDistribution;
+
+  // Seedha clean numeric check (Chahe Clash Squad ho ya Full Map)
+  const isPrizesBalanced = maxPool === 0 || totalDistribution === maxPool || Math.abs(totalDistribution - maxPool) < 0.01;
+
+  const prizeError = (maxPool > 0 && !isPrizesBalanced)
+    ? `Prize distribution must equal the Max Prize Pool: ₹${maxPool} (currently ₹${totalDistribution})`
     : '';
 
   const toggleExpand = (id: string, tournament: Tournament) => {
