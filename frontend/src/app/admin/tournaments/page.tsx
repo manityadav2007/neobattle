@@ -116,7 +116,7 @@ export default function AdminTournamentsPage() {
     !effectiveFree &&
     Number(maxPrizePool) > 0 &&
     (Number(totalDistribution) === Number(maxPrizePool) || Math.abs(Number(totalDistribution) - Number(maxPrizePool)) < 0.01);
-  const prizeError = !effectiveFree && maxPrizePool > 0 && !isPrizesBalanced
+  const prizeError = maxPrizePool > 0 && !isPrizesBalanced
     ? `Prize distribution must equal the Max Prize Pool: ${formatCurrency(maxPrizePool)} (currently ${formatCurrency(totalDistribution)})`
     : '';
 
