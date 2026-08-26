@@ -85,8 +85,8 @@ export default function HostDashboardPage() {
 
   // Max Prize Pool is display/validation only — prize fields are 100% manual
   useEffect(() => {
-    if (effectiveMaxParticipants > 0) {
-      setBreakdown(calculateCommission(form.entryFee, effectiveMaxParticipants));
+    if (Number(effectiveMaxParticipants) > 0 && Number(form.entryFee) > 0) {
+      setBreakdown(calculateCommission(Number(form.entryFee), Number(effectiveMaxParticipants)));
     } else {
       setBreakdown(null);
     }
@@ -230,7 +230,7 @@ export default function HostDashboardPage() {
                     setForm((f) => ({
                       ...f,
                       gameMode: gm,
-                      teamSize: gm === 'CLASH_SQUAD' && !f.teamSize ? '4v4' : f.teamSize,
+                      teamSize: gm === 'CLASH_SQUAD' ? (f.teamSize || '4v4') : f.teamSize,
                     }));
                   }}
                   className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm"

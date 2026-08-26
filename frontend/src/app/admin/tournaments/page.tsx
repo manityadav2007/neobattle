@@ -280,7 +280,7 @@ export default function AdminTournamentsPage() {
                     setForm((f) => ({
                       ...f,
                       gameMode: gm,
-                      teamSize: gm === 'CLASH_SQUAD' && !f.teamSize ? '4v4' : f.teamSize,
+                      teamSize: gm === 'CLASH_SQUAD' ? (f.teamSize || '4v4') : f.teamSize,
                     }));
                   }}
                   className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm"
