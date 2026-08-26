@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -34,6 +34,8 @@ export default function AdminTournamentsPage() {
   const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
   const [prizes, setPrizes] = useState({ first: 0, second: 0, third: 0 });
   const [prizeCount, setPrizeCount] = useState(3);
+  const prizesTouchedRef = useRef(false);
+  const markPrizesTouched = () => { prizesTouchedRef.current = true; };
   const [breakdown, setBreakdown] = useState<CommissionBreakdown | null>(null);
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
@@ -99,57 +101,16 @@ export default function AdminTournamentsPage() {
     const bd = calculateCommission(Number(form.entryFee), effectiveMaxParticipants);
     setBreakdown(bd);
     const target = parseFloat(bd.maxPrizePool.toFixed(2));
-    // Never overwrite clean inputs the admin has already balanced —
-    // only auto-fill when the current distribution is empty or mismatched.
-    const currentTotal = parseFloat(
-      (prizes.first + (prizeCount >= 2 ? prizes.second : 0) + (prizeCount >= 3 ? prizes.third : 0)).toFixed(2)
-    );
-    if (target > 0 && currentTotal !== target) {
-      distributePrizes(target, prizeCount);
+    // Clean initial state: entire pool defaults to 1st Place (100%) unless the
+    // admin has explicitly customized values — mode/squad changes never force splits.
+    if (!prizesTouchedRef.current) {
+      if (target > 0) {
+        setPrizes({ first: target, second: 0, third: 0 });
+      } else {
+        setPrizes({ first: 0, second: 0, third: 0 });
+      }
     }
   }, [form.entryFee, effectiveMaxParticipants, prizeCount, effectiveFree]);
-
-  /**
-   * Largest-remainder split that keeps every share a clean integer whenever the
-   * pool itself is an integer (falls back to paise precision otherwise), while
-   * always summing mathematically to the exact Max Prize Pool.
-   */
-  function apportionByWeights(total: number, weights: number[]): number[] {
-    const normalized = parseFloat(total.toFixed(2));
-    const isWholeRupees = Number.isInteger(normalized);
-    const scale = isWholeRupees ? 1 : 100;
-    const scaledTotal = Math.round(normalized * scale);
-
-    const raw = weights.map((w) => scaledTotal * w);
-    const base = raw.map((v) => Math.floor(v));
-    let leftover = scaledTotal - base.reduce((a, b) => a + b, 0);
-
-    const order = raw
-      .map((v, i) => ({ i, frac: v - Math.floor(v) }))
-      .sort((a, b) => b.frac - a.frac || a.i - b.i);
-
-    let k = 0;
-    while (leftover > 0) {
-      base[order[k % order.length].i] += 1;
-      leftover -= 1;
-      k += 1;
-    }
-    return base.map((v) => parseFloat((v / scale).toFixed(2)));
-  }
-
-  function distributePrizes(total: number, count: number) {
-    const exact = parseFloat(total.toFixed(2));
-    if (count === 1) {
-      // Single winner: strictly 100% of the pool — exact integer value, no splits or multipliers
-      setPrizes({ first: exact, second: 0, third: 0 });
-    } else if (count === 2) {
-      const [first, second] = apportionByWeights(exact, [0.7, 0.3]);
-      setPrizes({ first, second, third: 0 });
-    } else {
-      const [first, second, third] = apportionByWeights(exact, [0.5, 0.3, 0.2]);
-      setPrizes({ first, second, third });
-    }
-  }
 
   // Normalize to 2 decimal places before comparing — prevents float mismatches like 21 vs 21.00
   const round2 = (n: number) => parseFloat(Number(n).toFixed(2));
@@ -227,6 +188,7 @@ export default function AdminTournamentsPage() {
       setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
       setPrizes({ first: 0, second: 0, third: 0 });
       setPrizeCount(3);
+      prizesTouchedRef.current = false;
       setSuccessMsg(effectiveFree ? 'Free tournament created!' : 'Tournament created!');
       await loadData();
     } catch (err) {
@@ -402,7 +364,7 @@ export default function AdminTournamentsPage() {
                         <input
                           type="number"
                           value={prizes.first}
-                          onChange={(e) => setPrizes({ ...prizes, first: Number(e.target.value) })}
+                          onChange={(e) => { markPrizesTouched(); setPrizes({ ...prizes, first: Number(e.target.value) }); }}
                           placeholder="1st place prize"
                           className="input-field w-full px-3 py-2 rounded-lg bg-fire-500/10 border border-fire-500/30 text-fire-400 text-sm font-bold"
                           min={0}
@@ -420,17 +382,16 @@ export default function AdminTournamentsPage() {
                           <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">2nd Place</label>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (prizeCount >= 2) {
-                                setPrizes({ ...prizes, first: prizes.first + prizes.second, second: 0 });
-                                setPrizeCount(1);
-                              } else {
-                                setPrizeCount(2);
-                                const total = maxPool || prizes.first;
-                                const first = Math.round(total * 0.7 * 100) / 100;
-                                setPrizes({ first, second: Math.round((total - first) * 100) / 100, third: 0 });
-                              }
-                            }}
+                          onClick={() => {
+                            if (prizeCount >= 2) {
+                              setPrizes({ ...prizes, first: parseFloat((prizes.first + prizes.second).toFixed(2)), second: 0 });
+                              setPrizeCount(1);
+                              markPrizesTouched();
+                            } else {
+                              setPrizeCount(2);
+                              markPrizesTouched();
+                            }
+                          }}
                             className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
                           >
                             {prizeCount >= 2 ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-zinc-600" />}
@@ -441,7 +402,7 @@ export default function AdminTournamentsPage() {
                           <input
                             type="number"
                             value={prizes.second}
-                            onChange={(e) => setPrizes({ ...prizes, second: Number(e.target.value) })}
+                            onChange={(e) => { markPrizesTouched(); setPrizes({ ...prizes, second: Number(e.target.value) }); }}
                             placeholder="2nd place prize"
                             className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
                             min={0}
@@ -461,18 +422,16 @@ export default function AdminTournamentsPage() {
                           <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">3rd Place</label>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (prizeCount >= 3) {
-                                setPrizes({ ...prizes, first: prizes.first + prizes.third, second: prizeCount >= 2 ? prizes.second : 0, third: 0 });
-                                setPrizeCount(2);
-                              } else if (prizeCount === 2) {
-                                setPrizeCount(3);
-                                const first = Math.round(prizes.first * 0.6 * 100) / 100;
-                                const second = Math.round(prizes.second * 0.6 * 100) / 100;
-                                const total = prizes.first + prizes.second;
-                                setPrizes({ first: Math.round(total * 0.5 * 100) / 100, second: Math.round(total * 0.3 * 100) / 100, third: Math.round(total * 0.2 * 100) / 100 });
-                              }
-                            }}
+                          onClick={() => {
+                            if (prizeCount >= 3) {
+                              setPrizes({ ...prizes, first: parseFloat((prizes.first + prizes.third).toFixed(2)), second: prizeCount >= 2 ? prizes.second : 0, third: 0 });
+                              setPrizeCount(2);
+                              markPrizesTouched();
+                            } else if (prizeCount === 2) {
+                              setPrizeCount(3);
+                              markPrizesTouched();
+                            }
+                          }}
                             className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
                           >
                             {prizeCount >= 3 ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-zinc-600" />}
@@ -483,7 +442,7 @@ export default function AdminTournamentsPage() {
                           <input
                             type="number"
                             value={prizes.third}
-                            onChange={(e) => setPrizes({ ...prizes, third: Number(e.target.value) })}
+                            onChange={(e) => { markPrizesTouched(); setPrizes({ ...prizes, third: Number(e.target.value) }); }}
                             placeholder="3rd place prize"
                             className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
                             min={0}
