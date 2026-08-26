@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -34,8 +34,6 @@ export default function AdminTournamentsPage() {
   const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
   const [prizes, setPrizes] = useState({ first: 0, second: 0, third: 0 });
   const [prizeCount, setPrizeCount] = useState(3);
-  const prizesTouchedRef = useRef(false);
-  const markPrizesTouched = () => { prizesTouchedRef.current = true; };
   const [breakdown, setBreakdown] = useState<CommissionBreakdown | null>(null);
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
@@ -96,21 +94,11 @@ export default function AdminTournamentsPage() {
   // Manual/free mode: explicit toggle OR zero/empty entry fee — no budget validation, no wallet deduction
   const effectiveFree = isFree || !form.entryFee || Number(form.entryFee) <= 0;
 
+  // Max Prize Pool is display/validation only — prize fields are 100% manual
   useEffect(() => {
     if (effectiveFree || effectiveMaxParticipants <= 0) { setBreakdown(null); return; }
-    const bd = calculateCommission(Number(form.entryFee), effectiveMaxParticipants);
-    setBreakdown(bd);
-    const target = parseFloat(bd.maxPrizePool.toFixed(2));
-    // Clean initial state: entire pool defaults to 1st Place (100%) unless the
-    // admin has explicitly customized values — mode/squad changes never force splits.
-    if (!prizesTouchedRef.current) {
-      if (target > 0) {
-        setPrizes({ first: target, second: 0, third: 0 });
-      } else {
-        setPrizes({ first: 0, second: 0, third: 0 });
-      }
-    }
-  }, [form.entryFee, effectiveMaxParticipants, prizeCount, effectiveFree]);
+    setBreakdown(calculateCommission(Number(form.entryFee), effectiveMaxParticipants));
+  }, [form.entryFee, effectiveMaxParticipants, effectiveFree]);
 
   // Normalize to 2 decimal places before comparing — prevents float mismatches like 21 vs 21.00
   const round2 = (n: number) => parseFloat(Number(n).toFixed(2));
@@ -188,7 +176,6 @@ export default function AdminTournamentsPage() {
       setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
       setPrizes({ first: 0, second: 0, third: 0 });
       setPrizeCount(3);
-      prizesTouchedRef.current = false;
       setSuccessMsg(effectiveFree ? 'Free tournament created!' : 'Tournament created!');
       await loadData();
     } catch (err) {
@@ -364,7 +351,7 @@ export default function AdminTournamentsPage() {
                         <input
                           type="number"
                           value={prizes.first}
-                          onChange={(e) => { markPrizesTouched(); setPrizes({ ...prizes, first: Number(e.target.value) }); }}
+                          onChange={(e) => setPrizes({ ...prizes, first: Number(e.target.value) })}
                           placeholder="1st place prize"
                           className="input-field w-full px-3 py-2 rounded-lg bg-fire-500/10 border border-fire-500/30 text-fire-400 text-sm font-bold"
                           min={0}
@@ -386,10 +373,8 @@ export default function AdminTournamentsPage() {
                             if (prizeCount >= 2) {
                               setPrizes({ ...prizes, first: parseFloat((prizes.first + prizes.second).toFixed(2)), second: 0 });
                               setPrizeCount(1);
-                              markPrizesTouched();
                             } else {
                               setPrizeCount(2);
-                              markPrizesTouched();
                             }
                           }}
                             className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -402,7 +387,7 @@ export default function AdminTournamentsPage() {
                           <input
                             type="number"
                             value={prizes.second}
-                            onChange={(e) => { markPrizesTouched(); setPrizes({ ...prizes, second: Number(e.target.value) }); }}
+                            onChange={(e) => setPrizes({ ...prizes, second: Number(e.target.value) })}
                             placeholder="2nd place prize"
                             className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
                             min={0}
@@ -426,10 +411,8 @@ export default function AdminTournamentsPage() {
                             if (prizeCount >= 3) {
                               setPrizes({ ...prizes, first: parseFloat((prizes.first + prizes.third).toFixed(2)), second: prizeCount >= 2 ? prizes.second : 0, third: 0 });
                               setPrizeCount(2);
-                              markPrizesTouched();
                             } else if (prizeCount === 2) {
                               setPrizeCount(3);
-                              markPrizesTouched();
                             }
                           }}
                             className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -442,7 +425,7 @@ export default function AdminTournamentsPage() {
                           <input
                             type="number"
                             value={prizes.third}
-                            onChange={(e) => { markPrizesTouched(); setPrizes({ ...prizes, third: Number(e.target.value) }); }}
+                            onChange={(e) => setPrizes({ ...prizes, third: Number(e.target.value) })}
                             placeholder="3rd place prize"
                             className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
                             min={0}
