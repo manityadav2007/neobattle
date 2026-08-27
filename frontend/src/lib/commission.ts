@@ -14,6 +14,7 @@ export function calculateCommission(entryFee: number, maxPlayers: number): Commi
   const totalCollection = entryFee * maxPlayers;
   const platformCommission = Math.round(totalCollection * PLATFORM_RATE * 100) / 100;
   const hostCommission = Math.round(totalCollection * HOST_RATE * 100) / 100;
+  const remainingPool = Math.round(totalCollection * REMAINING_RATE * 100) / 100;
   const maxPrizePool = Math.round(remainingPool);
   return { totalCollection, platformCommission, hostCommission, remainingPool, maxPrizePool };
 }

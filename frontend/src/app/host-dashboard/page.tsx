@@ -97,16 +97,15 @@ export default function HostDashboardPage() {
   const prize2Num = prizeCount >= 2 ? (Number(prizes.second) || 0) : 0;
   const prize3Num = prizeCount >= 3 ? (Number(prizes.third) || 0) : 0;
 
-  const totalDistribution = Math.round((prize1Num + prize2Num + prize3Num) * 100) / 100;
-  const maxPrizePool = Math.round((Number(breakdown?.maxPrizePool) || 0) * 100) / 100;
+  const totalDistribution = prize1Num + prize2Num + prize3Num;
+  const maxPrizePool = Math.round(Number(breakdown?.maxPrizePool) || 0);
   const maxPool = maxPrizePool;
   const totalPrizes = totalDistribution;
 
-  // Seedha clean numeric check (Chahe Clash Squad ho ya Full Map)
-  const isPrizesBalanced = maxPool === 0 || totalDistribution === maxPool || Math.abs(totalDistribution - maxPool) < 0.01;
+  const isPrizesBalanced = Number(totalDistribution) === Number(maxPrizePool);
 
-  const prizeError = (maxPool > 0 && !isPrizesBalanced)
-    ? `Prize distribution must equal the Max Prize Pool: ₹${maxPool} (currently ₹${totalDistribution})`
+  const prizeError = (maxPrizePool > 0 && !isPrizesBalanced)
+    ? `Prize distribution must equal the Max Prize Pool: ₹${maxPrizePool} (currently ₹${totalDistribution})`
     : '';
 
   const handleCreate = async (e: React.FormEvent) => {
