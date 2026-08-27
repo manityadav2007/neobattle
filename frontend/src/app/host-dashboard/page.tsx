@@ -41,6 +41,8 @@ interface Tournament {
   entries: Entry[];
 }
 
+const round2 = (val: any) => Math.round(Number(val) || 0);
+
 export default function HostDashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading, isHost, isAdmin } = useAuth();

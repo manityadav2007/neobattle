@@ -21,6 +21,8 @@ interface TournamentEntry {
   registeredAt: string;
 }
 
+const round2 = (val: any) => Math.round(Number(val) || 0);
+
 export default function AdminTournamentsPage() {
   const router = useRouter();
   const { user, loading: authLoading, isSuperAdmin } = useAuth();
