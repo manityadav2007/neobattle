@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Bell, CheckCheck, Loader2, X, Calendar, AlertTriangle, Ban } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, isAuthenticated } from '@/lib/api';
 import { formatDate } from '@/lib/services';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -43,9 +43,23 @@ export default function NotificationBell() {
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  const fetchNotifications = async () => {
+    if (!isAuthenticated()) return;
+    try {
+      const res = await api.get('/notifications', { params: { limit: 10 } });
+      setNotifications(res.data.data || []);
+      setUnreadCount(res.data.unreadCount || 0);
+    } catch {}
+  };
+
   useEffect(() => {
+    if (!isAuthenticated()) return;
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(() => {
+      if (isAuthenticated()) {
+        fetchNotifications();
+      }
+    }, 45000);
     return () => clearInterval(interval);
   }, []);
 
@@ -56,14 +70,6 @@ export default function NotificationBell() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  const fetchNotifications = async () => {
-    try {
-      const res = await api.get('/notifications', { params: { limit: 10 } });
-      setNotifications(res.data.data || []);
-      setUnreadCount(res.data.unreadCount || 0);
-    } catch {}
-  };
 
   const markAllRead = async () => {
     try {

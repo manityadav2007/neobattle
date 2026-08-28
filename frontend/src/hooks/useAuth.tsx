@@ -40,13 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchUser = useCallback(async () => {
+  const fetchUser = useCallback(async (isSilent = false) => {
     if (!isAuthenticated()) {
       setUser(null);
       setLoading(false);
+      setError(null);
       return;
     }
-    setLoading(true);
+    if (!isSilent) {
+      setLoading(true);
+    }
     try {
       const res = await authApi.me();
       setUser(res.data || null);
@@ -56,17 +59,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         clearAuthTokens();
         setError('Session expired. Please log in again.');
+      } else if (axios.isAxiosError(err) && err.response?.status === 429) {
+        // Rate limited — keep session intact, do not drop user
+        setError('The server is temporarily busy (rate limit). Your session is saved — please wait a moment and retry.');
       } else {
         let recovered = false;
         for (let attempt = 0; attempt < MAX_RETRIES && !recovered; attempt++) {
-          await wait(RETRY_DELAY_MS);
+          await wait(RETRY_DELAY_MS * (attempt + 1));
           try {
             const res = await authApi.me();
             setUser(res.data || null);
             setError(null);
             recovered = true;
           } catch {
-            /* keep retrying */
+            /* keep retrying with backoff */
           }
         }
         if (!recovered) {

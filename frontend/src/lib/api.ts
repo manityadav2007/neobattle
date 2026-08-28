@@ -79,9 +79,6 @@ api.interceptors.response.use(
         const newRefreshToken = data.data.refreshToken;
         localStorage.setItem('accessToken', newAccessToken);
         localStorage.setItem('refreshToken', newRefreshToken);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent(TOKENS_CHANGED_EVENT));
-        }
         processQueue(null, newAccessToken);
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -116,6 +113,9 @@ export interface ApiResponse<T = unknown> {
 
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
+    if (error.response?.status === 429) {
+      return error.response?.data?.message || 'Too many requests. Please wait a moment before trying again.';
+    }
     if (error.code === 'ECONNABORTED') {
       return 'NEOBATTLE API is taking too long to respond. Please try again in a moment.';
     }
