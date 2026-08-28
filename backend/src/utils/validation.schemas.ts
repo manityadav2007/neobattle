@@ -97,6 +97,7 @@ export const verificationSubmitSchema = z.object({
 export const verificationReviewSchema = z.object({
   status: z.enum(['APPROVED', 'REJECTED']),
   rejectionReason: z.string().max(500).optional(),
+  gameLevel: z.coerce.number().int().min(0).optional(),
 });
 
 export const updateEntryScoreSchema = z.object({

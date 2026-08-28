@@ -199,7 +199,7 @@ export default function AdminVerifyPage() {
                           <input
                             type="number"
                             min="0"
-                            value={gameLevels[v.id] || ''}
+                            value={gameLevels[v.id] ?? ''}
                             onChange={(e) => setGameLevels((prev) => ({ ...prev, [v.id]: e.target.value }))}
                             placeholder="e.g. 65"
                             className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm text-center focus:border-green-500/50 focus:outline-none"
@@ -212,7 +212,7 @@ export default function AdminVerifyPage() {
                               className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20 disabled:opacity-50"
                             >
                               {processing === v.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                              Confirm Approval {gameLevels[v.id] ? `— Lvl ${gameLevels[v.id]}` : ''}
+                              Confirm Approval {(gameLevels[v.id] ?? '').trim() !== '' ? `— Lvl ${(gameLevels[v.id] ?? '').trim()}` : ''}
                             </button>
                             <button
                               onClick={() => setLevelInputOpen((prev) => ({ ...prev, [v.id]: false }))}
