@@ -240,18 +240,39 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      {/* Back button */}
+      <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="mb-4">
+        <Link
+          href="/tournaments"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-900/60 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 backdrop-blur-md transition-all shadow-sm group"
+        >
+          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5 text-fire-400" />
+          Back to Tournaments
+        </Link>
+      </motion.div>
 
-        <div className="glass-card rounded-2xl overflow-hidden fire-glow">
-          <div className="relative h-48 overflow-hidden">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+        {/* Main Tournament Hero Card */}
+        <div className="rounded-3xl overflow-hidden bg-zinc-950/80 backdrop-blur-xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.6)] fire-glow relative">
+          
+          {/* Banner Media & Map Backdrop */}
+          <div className="relative h-52 sm:h-60 overflow-hidden">
             {mapTheme.image && (
-              <Image src={mapTheme.image} alt={mapTheme.label} fill className="object-cover" priority />
+              <Image
+                src={mapTheme.image}
+                alt={mapTheme.label}
+                fill
+                className="object-cover scale-105 transition-transform duration-700 hover:scale-100"
+                priority
+              />
             )}
-            {/* Dark readability scrim — keeps badges/title high-contrast over any map art */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30" />
+            {/* Multi-stage dark glass scrim with subtle ambient gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-black/40 backdrop-blur-[1px]" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-black/60" />
 
-            <div className="absolute top-4 left-4 right-4 z-10">
+            {/* Top Status & Mode Tags */}
+            <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between gap-2 flex-wrap">
               <TournamentTags
                 items={[
                   { label: effectiveStatus, color: getStatusColor(effectiveStatus), icon: tagIcons.status },
@@ -259,106 +280,253 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   { label: tournament.platform === 'MOBILE' ? 'Mobile' : 'PC', color: tagColorMap.platform[tournament.platform as keyof typeof tagColorMap.platform], icon: tagIcons.platform },
                   { label: tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad', color: tagColorMap.gameMode[tournament.gameMode as keyof typeof tagColorMap.gameMode], icon: tagIcons.gameMode },
                 ]}
-                className="justify-center sm:justify-start"
+                className="justify-start drop-shadow-md"
               />
+
+              {/* Pulsing indicator if LIVE */}
+              {(tournament.status === 'ACTIVE' || effectiveStatus === 'Live' || effectiveStatus === 'Playing') && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-950/80 border border-red-500/50 backdrop-blur-md shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="absolute -inset-1 rounded-full bg-red-500/50 blur-xs animate-pulse" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 shadow-[0_0_8px_#ef4444]" />
+                  </span>
+                  <span className="text-[11px] font-black tracking-wider uppercase text-red-400">
+                    {effectiveStatus === 'Playing' ? 'Playing Now' : 'Live Match'}
+                  </span>
+                </div>
+              )}
             </div>
 
-            <div className="absolute bottom-6 left-6 right-6 z-10">
-              <h1 className="text-3xl font-display font-black text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">{tournament.title}</h1>
-              <div className="flex items-center gap-4 mt-2 text-xs text-white/90">
+            {/* Title & Host Meta */}
+            <div className="absolute bottom-5 left-5 right-5 z-10">
+              <h1 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)]">
+                {tournament.title}
+              </h1>
+              <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-zinc-300">
                 <button
-                  onClick={() => navigator.clipboard.writeText(tournament.uid)}
-                  className="flex items-center gap-1 hover:text-fire-400 transition-colors font-mono drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
+                  onClick={() => {
+                    navigator.clipboard.writeText(tournament.uid);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-md transition-all font-mono text-zinc-200 hover:text-white"
                   title="Copy UID"
                 >
-                  {tournament.uid} <Copy className="w-3 h-3" />
+                  <span className="text-fire-400 font-bold">UID:</span> {tournament.uid}
+                  {copied ? <ClipboardCheck className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
                 </button>
-                <span className="drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">Host: <span className="text-white font-medium">{tournament.creator?.username || tournament.creatorId}</span></span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 backdrop-blur-sm">
+                  <span className="text-zinc-400">Host:</span>
+                  <span className="text-white font-semibold">{tournament.creator?.username || tournament.creatorId}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
-            {tournament.description && <p className="text-zinc-400 leading-relaxed">{tournament.description}</p>}
-
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2 grid sm:grid-cols-3 gap-4">
-                {prizes.map((p) => (
-                  <div key={p.place} className={`flex items-center gap-3 p-4 rounded-xl ${p.bg} border ${p.border}`}>
-                    <Trophy className={`w-5 h-5 ${p.color} shrink-0`} />
-                    <div><p className="text-xs text-zinc-500">{p.label}</p><p className="text-base font-bold text-white">{formatCurrency(p.value)}</p></div>
-                  </div>
-                ))}
+          <div className="p-6 sm:p-8 space-y-7 bg-zinc-950/60">
+            {tournament.description && (
+              <div className="p-4 rounded-2xl bg-zinc-900/40 backdrop-blur-md border border-white/5">
+                <p className="text-zinc-300 text-sm leading-relaxed">{tournament.description}</p>
               </div>
-              {[
-                { icon: IndianRupee, label: 'Entry Fee', value: entryFee === 0 ? 'FREE' : formatCurrency(entryFee), color: 'text-fire-400' },
-                { icon: Users, label: tournament.teamSize ? 'Team Size' : 'Participants', value: tournament.teamSize ? tournament.teamSize : `${entryCount}/${tournament.maxParticipants}`, color: 'text-blue-400' },
-                { icon: MapPin, label: 'Map', value: tournament.mapName || 'TBA', color: 'text-purple-400' },
-                { icon: Clock, label: 'Start Time', value: formatDate(tournament.startTime), color: 'text-yellow-400' },
-                { icon: Clock, label: 'Registration Ends', value: formatDate(tournament.registrationEnd), color: 'text-orange-400' },
-                {
-                  icon: Shield,
-                  label: 'Min Level Required',
-                  value: Number(tournament.requiredLevel) > 0 ? `Level ${tournament.requiredLevel}+` : 'No Restriction',
-                  color: Number(tournament.requiredLevel) > 0 ? 'text-emerald-400' : 'text-zinc-500',
-                },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center gap-3 p-4 rounded-xl bg-white/3">
-                  <item.icon className={`w-5 h-5 ${item.color}`} />
-                  <div><p className="text-xs text-zinc-500">{item.label}</p><p className="text-sm font-semibold text-white">{item.value}</p></div>
-                </div>
-              ))}
+            )}
+
+            {/* Prize Pool Glassmorphism Cards */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                  <Trophy className="w-3.5 h-3.5 text-yellow-400" /> Prize Distribution
+                </h2>
+                <span className="text-xs font-medium text-zinc-500">
+                  Total Pool: <span className="font-bold text-zinc-300">{formatCurrency(prizePool)}</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                {prizes.map((p) => {
+                  const is1st = p.place === '1st';
+                  const is2nd = p.place === '2nd';
+                  return (
+                    <div
+                      key={p.place}
+                      className={`relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl border transition-all duration-300 hover:scale-[1.02] ${
+                        is1st
+                          ? 'bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-zinc-950/60 border-yellow-500/30 shadow-[0_0_25px_rgba(234,179,8,0.12)]'
+                          : is2nd
+                          ? 'bg-gradient-to-br from-zinc-300/10 via-slate-400/5 to-zinc-950/60 border-zinc-400/25 shadow-[0_0_20px_rgba(200,200,200,0.08)]'
+                          : 'bg-gradient-to-br from-amber-600/10 via-orange-600/5 to-zinc-950/60 border-amber-600/25 shadow-[0_0_20px_rgba(217,119,6,0.08)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div
+                          className={`p-2.5 rounded-xl shrink-0 backdrop-blur-md ${
+                            is1st
+                              ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 shadow-[0_0_12px_rgba(234,179,8,0.25)]'
+                              : is2nd
+                              ? 'bg-zinc-400/15 text-zinc-200 border border-zinc-400/25'
+                              : 'bg-amber-600/20 text-amber-400 border border-amber-600/30'
+                          }`}
+                        >
+                          <Trophy className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">{p.label}</p>
+                          <p
+                            className={`text-lg sm:text-xl font-black tracking-tight ${
+                              is1st
+                                ? 'bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(234,179,8,0.3)]'
+                                : is2nd
+                                ? 'bg-gradient-to-r from-zinc-100 via-slate-200 to-zinc-400 bg-clip-text text-transparent'
+                                : 'bg-gradient-to-r from-amber-300 via-orange-400 to-amber-500 bg-clip-text text-transparent'
+                            }`}
+                          >
+                            {formatCurrency(p.value)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {isSquad && tournament.status === 'REGISTRATION' && !tournament.isRegistered && (
-              <div className="p-4 rounded-xl bg-white/5 space-y-3">
-                <p className="text-sm font-bold text-white flex items-center gap-2"><Gamepad2 className="w-4 h-4 text-fire-400" /> Squad Registration — Enter 4 UIDs</p>
-                {squadUids.map((uid, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500 w-6">#{i + 1}</span>
-                    <input
-                      type="text"
-                      value={uid}
-                      onChange={(e) => updateSquadUid(i, e.target.value)}
-                      placeholder={`Player ${i + 1} UID`}
-                      className="input-field flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleFetchIgn(i)}
-                      disabled={fetchingIgn === i || uid.length < 5}
-                      className="px-3 py-2 rounded-lg bg-fire-500/10 text-fire-400 text-xs font-medium hover:bg-fire-500/20 disabled:opacity-50"
-                    >
-                      {fetchingIgn === i ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Fetch'}
-                    </button>
-                    {squadIgns[i] && <span className="text-xs text-green-400 w-24 truncate">{squadIgns[i]}</span>}
+            {/* Info Cards Grid — Floating Glassmorphic Cards with Gradient Typography */}
+            <div className="space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400">Match Overview</h2>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {[
+                  {
+                    icon: IndianRupee,
+                    label: 'Entry Fee',
+                    value: entryFee === 0 ? 'FREE' : formatCurrency(entryFee),
+                    iconBg: entryFee === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-fire-500/10 text-fire-400 border-fire-500/20',
+                    gradientClass: entryFee === 0
+                      ? 'bg-gradient-to-r from-emerald-300 via-teal-300 to-green-400 bg-clip-text text-transparent font-black text-base'
+                      : 'bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400 bg-clip-text text-transparent font-black text-base',
+                  },
+                  {
+                    icon: Users,
+                    label: tournament.teamSize ? 'Team Size' : 'Participants',
+                    value: tournament.teamSize ? tournament.teamSize : `${entryCount}/${tournament.maxParticipants}`,
+                    iconBg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+                    gradientClass: 'bg-gradient-to-r from-cyan-300 via-blue-400 to-indigo-300 bg-clip-text text-transparent font-black text-base',
+                  },
+                  {
+                    icon: MapPin,
+                    label: 'Map Arena',
+                    value: tournament.mapName || 'TBA',
+                    iconBg: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+                    gradientClass: 'bg-gradient-to-r from-purple-300 via-fuchsia-300 to-pink-400 bg-clip-text text-transparent font-bold text-base',
+                  },
+                  {
+                    icon: Clock,
+                    label: 'Start Time',
+                    value: formatDate(tournament.startTime),
+                    iconBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                    gradientClass: 'bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 bg-clip-text text-transparent font-semibold text-sm',
+                  },
+                  {
+                    icon: Clock,
+                    label: 'Registration Deadline',
+                    value: formatDate(tournament.registrationEnd),
+                    iconBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                    gradientClass: 'bg-gradient-to-r from-rose-300 via-orange-300 to-amber-400 bg-clip-text text-transparent font-semibold text-sm',
+                  },
+                  {
+                    icon: Shield,
+                    label: 'Min Level Required',
+                    value: Number(tournament.requiredLevel) > 0 ? `Level ${tournament.requiredLevel}+` : 'No Restriction',
+                    iconBg: Number(tournament.requiredLevel) > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+                    gradientClass: Number(tournament.requiredLevel) > 0
+                      ? 'bg-gradient-to-r from-emerald-300 via-teal-300 to-green-400 bg-clip-text text-transparent font-black text-base'
+                      : 'text-zinc-400 font-semibold text-sm',
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="group relative overflow-hidden rounded-2xl p-4 bg-zinc-900/50 hover:bg-zinc-900/80 backdrop-blur-xl border border-white/10 hover:border-white/20 transition-all duration-300 hover:shadow-[0_8px_25px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 flex items-center gap-3.5"
+                  >
+                    <div className={`p-2.5 rounded-xl border backdrop-blur-md shrink-0 transition-transform duration-300 group-hover:scale-110 ${item.iconBg}`}>
+                      <item.icon className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 truncate">{item.label}</p>
+                      <p className={`truncate mt-0.5 ${item.gradientClass}`}>{item.value}</p>
+                    </div>
                   </div>
                 ))}
               </div>
-            )}
+            </div>
 
-            {tournament.rules && (
-              <div className="p-4 rounded-xl bg-white/3">
-                <h3 className="text-sm font-bold text-white mb-2">Rules</h3>
-                <p className="text-sm text-zinc-400 whitespace-pre-wrap">{tournament.rules}</p>
+            {/* Squad Registration Box */}
+            {isSquad && tournament.status === 'REGISTRATION' && !tournament.isRegistered && (
+              <div className="p-5 rounded-2xl bg-zinc-900/60 backdrop-blur-xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.08)] space-y-3.5">
+                <p className="text-sm font-bold text-white flex items-center gap-2">
+                  <Gamepad2 className="w-4 h-4 text-fire-400" /> Squad Registration — Enter 4 Free Fire UIDs
+                </p>
+                <div className="space-y-2.5">
+                  {squadUids.map((uid, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-zinc-500 w-6">#{i + 1}</span>
+                      <input
+                        type="text"
+                        value={uid}
+                        onChange={(e) => updateSquadUid(i, e.target.value)}
+                        placeholder={`Player ${i + 1} UID`}
+                        className="input-field flex-1 px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleFetchIgn(i)}
+                        disabled={fetchingIgn === i || uid.length < 5}
+                        className="px-3.5 py-2.5 rounded-xl bg-fire-500/10 text-fire-400 text-xs font-semibold hover:bg-fire-500/20 border border-fire-500/20 disabled:opacity-40 transition-all"
+                      >
+                        {fetchingIgn === i ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Fetch IGN'}
+                      </button>
+                      {squadIgns[i] && (
+                        <span className="text-xs font-bold text-emerald-400 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 truncate max-w-[120px]">
+                          {squadIgns[i]}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {message && <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> {message}</div>}
-            {registerError && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {registerError}</div>}
+            {/* Rules Box */}
+            {tournament.rules && (
+              <div className="p-5 rounded-2xl bg-zinc-900/40 backdrop-blur-md border border-white/5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Tournament Rules</h3>
+                <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{tournament.rules}</p>
+              </div>
+            )}
 
-                {isEnded ? (
-              <div className="w-full py-3 rounded-xl text-sm font-bold text-white text-center bg-blue-500/20 border border-blue-500/30">
-                <CheckCircle className="w-4 h-4 inline mr-1" /> Tournament Completed
+            {/* Messages */}
+            {message && (
+              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-sm backdrop-blur-md">
+                <CheckCircle className="w-4 h-4 shrink-0" /> {message}
+              </div>
+            )}
+            {registerError && (
+              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-400 text-sm backdrop-blur-md">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {registerError}
+              </div>
+            )}
+
+            {/* Admin / Host Action Controls */}
+            {isEnded ? (
+              <div className="w-full py-3.5 rounded-xl text-sm font-bold text-zinc-300 text-center bg-blue-500/10 border border-blue-500/25 backdrop-blur-md">
+                <CheckCircle className="w-4 h-4 inline mr-1 text-blue-400" /> Tournament Completed
               </div>
             ) : canEndTournament && tournament.status !== 'CANCELLED' && (
               <button
                 onClick={handleEndTournament}
                 disabled={endingTournament}
-                className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 transition-all disabled:opacity-50"
+                className="w-full py-3.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 backdrop-blur-md transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(244,63,94,0.15)]"
               >
-                {endingTournament ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />}
-                {endingTournament ? 'Ending...' : 'End Tournament'}
+                {endingTournament ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
+                {endingTournament ? 'Ending Tournament...' : 'End Tournament'}
               </button>
             )}
 
@@ -366,36 +534,36 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               <button
                 onClick={handleDistributePrizes}
                 disabled={distributing}
-                className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 transition-all disabled:opacity-50"
+                className="w-full py-3.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 backdrop-blur-md transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
               >
-                {distributing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                {distributing ? 'Distributing...' : 'Approve & Distribute Prizes'}
+                {distributing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 text-emerald-400" />}
+                {distributing ? 'Distributing Prizes...' : 'Approve & Distribute Prizes'}
               </button>
             )}
 
-            {/* Host result submission */}
+            {/* Host Result Submission Glass Card */}
             {isHostCreator && mySubmission?.status === 'PENDING' && (
-              <div className="w-full p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/25 text-sm text-yellow-300 flex items-center gap-2">
+              <div className="w-full p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 text-sm text-amber-300 flex items-center gap-2 backdrop-blur-md">
                 <Clock className="w-4 h-4 shrink-0" /> Results submitted — awaiting admin approval &amp; payout.
               </div>
             )}
             {isHostCreator && mySubmission?.status === 'APPROVED' && (
-              <div className="w-full p-4 rounded-xl bg-green-500/10 border border-green-500/25 text-sm text-green-300 flex items-center gap-2">
+              <div className="w-full p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-sm text-emerald-300 flex items-center gap-2 backdrop-blur-md">
                 <CheckCircle className="w-4 h-4 shrink-0" /> Results approved — prizes have been distributed.
               </div>
             )}
             {isHostCreator && mySubmission?.status === 'REJECTED' && (
-              <div className="w-full p-4 rounded-xl bg-red-500/10 border border-red-500/25 text-sm text-red-300 mb-1">
+              <div className="w-full p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-sm text-rose-300 backdrop-blur-md mb-1">
                 <AlertCircle className="w-4 h-4 inline mr-1" />
                 Results rejected{mySubmission.rejectionReason ? `: ${mySubmission.rejectionReason}` : ''} — edit below and resubmit.
               </div>
             )}
             {canSubmitResults && (
-              <div className="p-5 rounded-xl bg-white/5 border border-white/10 space-y-4">
+              <div className="p-6 rounded-2xl bg-zinc-900/70 backdrop-blur-xl border border-white/10 space-y-4 shadow-xl">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-yellow-400" /> Submit Tournament Results
                 </h3>
-                <p className="text-xs text-zinc-500">Enter the Free Fire UIDs of your winners. Each UID must belong to a registered Neobattle participant.</p>
+                <p className="text-xs text-zinc-400">Enter the Free Fire UIDs of your winners. Each UID must belong to a registered Neobattle participant.</p>
                 <div className="grid sm:grid-cols-3 gap-3">
                   {([['1st Place', 'first', '🥇'], ['2nd Place (optional)', 'second', '🥈'], ['3rd Place (optional)', 'third', '🥉']] as const).map(([label, key, medal]) => (
                     <div key={key}>
@@ -405,7 +573,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                         value={resUids[key]}
                         onChange={(e) => setResUids((prev) => ({ ...prev, [key]: e.target.value }))}
                         placeholder="Winner UID"
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 focus:outline-none"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 focus:outline-none transition-all"
                       />
                     </div>
                   ))}
@@ -416,13 +584,13 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                     type="file"
                     accept="image/*"
                     onChange={handleResultScreenshot}
-                    className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-fire-500/20 file:text-fire-400 file:text-xs file:font-semibold hover:file:bg-fire-500/30"
+                    className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:bg-fire-500/20 file:text-fire-400 file:text-xs file:font-semibold hover:file:bg-fire-500/30 transition-all cursor-pointer"
                   />
                 </div>
                 <button
                   onClick={handleSubmitResult}
                   disabled={submittingResult || !resUids.first.trim() || (!resFile && !mySubmission?.screenshotUrl)}
-                  className="btn-fire w-full py-3 rounded-xl font-semibold text-white disabled:opacity-50"
+                  className="btn-fire w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all"
                 >
                   {submittingResult ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <CheckCircle className="w-4 h-4 inline mr-2" />}
                   {submittingResult ? 'Submitting...' : 'Submit Results for Review'}
@@ -430,60 +598,69 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </div>
             )}
 
+            {/* Registration / Active / Live Status Section */}
             {isCompletedState ? (
-              <div className="w-full p-4 rounded-xl bg-blue-500/10 border border-blue-500/25 text-center text-sm text-blue-300">
-                <CheckCircle className="w-4 h-4 inline mr-1" />
+              <div className="w-full p-5 rounded-2xl bg-blue-950/30 border border-blue-500/25 backdrop-blur-xl text-center text-sm text-blue-300">
+                <CheckCircle className="w-4 h-4 inline mr-1 text-blue-400" />
                 This tournament has ended
                 {tournament.status === 'PAID' ? ' and prizes have been distributed' : ''}. Registration is closed.
               </div>
             ) : tournament.status === 'ACTIVE' && !tournament.isRegistered ? (
-              <div className="w-full p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-center">
-                <div className="flex items-center justify-center gap-2 text-red-400 font-bold text-base">
-                  <span className="relative flex h-3 w-3">
+              /* Pulsing Neon Live & Playing Banner for Unregistered Users */
+              <div className="w-full p-6 rounded-2xl bg-gradient-to-r from-red-950/40 via-red-900/25 to-red-950/40 border border-red-500/40 backdrop-blur-xl shadow-[0_0_30px_rgba(239,68,68,0.2)] text-center relative overflow-hidden">
+                <div className="flex items-center justify-center gap-3">
+                  <span className="relative flex h-3.5 w-3.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                    <span className="absolute -inset-1 rounded-full bg-red-500/50 blur-sm animate-pulse" />
+                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 shadow-[0_0_12px_#ef4444]" />
                   </span>
-                  Live &amp; Playing
+                  <span className="text-lg font-black tracking-wider uppercase bg-gradient-to-r from-red-400 via-rose-300 to-red-400 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(239,68,68,0.5)]">
+                    Live &amp; Playing
+                  </span>
                 </div>
-                <p className="text-zinc-400 text-xs mt-1">This tournament has already started. Registration is closed.</p>
+                <p className="text-zinc-400 text-xs mt-1.5 font-medium">This tournament has already commenced. Registration is currently closed.</p>
               </div>
             ) : tournament.isRegistered ? (
-              <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-green-500/10">
-                <div className="flex items-center gap-2 text-green-400 font-semibold">
+              /* Registered User Glassmorphic Status Box */
+              <div className="flex flex-col items-center gap-3.5 p-6 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-emerald-900/15 to-zinc-950/70 border border-emerald-500/30 backdrop-blur-xl shadow-[0_0_25px_rgba(16,185,129,0.12)]">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-base">
                   <CheckCircle className="w-5 h-5" /> You are registered for this tournament
                 </div>
+
                 {tournament.status === 'ACTIVE' && (
-                  <div className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold">
-                    <span className="relative flex h-2 w-2">
+                  <div className="w-full flex items-center justify-center gap-2.5 p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 backdrop-blur-md shadow-[0_0_15px_rgba(239,68,68,0.2)] text-red-300 text-xs font-black uppercase tracking-wider">
+                    <span className="relative flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                      <span className="absolute -inset-1 rounded-full bg-red-500/60 blur-xs animate-pulse" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 shadow-[0_0_8px_#ef4444]" />
                     </span>
                     Tournament is Live &amp; Playing
                   </div>
                 )}
+
                 {tournament.canSeeRoom && tournament.roomId ? (
-                  <div className="w-full mt-2 p-3 rounded-lg bg-white/5 text-sm">
+                  <div className="w-full mt-2 p-4 rounded-xl bg-black/50 border border-white/10 backdrop-blur-md space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-zinc-400">Room ID:</span>
-                      <span className="text-white font-mono font-bold">{tournament.roomId}</span>
+                      <span className="text-xs text-zinc-400 font-semibold uppercase">Room ID:</span>
+                      <span className="text-white font-mono font-bold text-sm tracking-wider px-2 py-0.5 rounded bg-white/10">{tournament.roomId}</span>
                     </div>
                     {tournament.roomPassword && (
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-zinc-400">Password:</span>
-                        <span className="text-white font-mono font-bold">{tournament.roomPassword}</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400 font-semibold uppercase">Password:</span>
+                        <span className="text-white font-mono font-bold text-sm tracking-wider px-2 py-0.5 rounded bg-white/10">{tournament.roomPassword}</span>
                       </div>
                     )}
                     <button
                       onClick={handleCopyRoomDetails}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-300 hover:text-white transition-colors"
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-semibold text-zinc-200 hover:text-white transition-all shadow-sm"
                     >
-                      {copied ? <><ClipboardCheck className="w-3.5 h-3.5 text-green-400" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Room Details</>}
+                      {copied ? <><ClipboardCheck className="w-3.5 h-3.5 text-emerald-400" /> Copied Room Credentials!</> : <><Copy className="w-3.5 h-3.5" /> Copy Room Details</>}
                     </button>
                   </div>
                 ) : (
-                  <div className="w-full mt-2 p-3 rounded-lg bg-yellow-500/10 text-yellow-400 text-xs text-center">
-                    <Clock className="w-4 h-4 inline mr-1" />
-                    Room details will be available 5 minutes before the match starts.
+                  <div className="w-full mt-2 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs text-center backdrop-blur-sm">
+                    <Clock className="w-4 h-4 inline mr-1.5" />
+                    Room details will be unlocked 5 minutes prior to match start.
                   </div>
                 )}
                 {myStats && <LeagueBadge wins={myStats.totalWins} size="md" />}
@@ -491,69 +668,69 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             ) : !user ? (
               <button
                 onClick={() => router.push('/login')}
-                className="w-full py-4 rounded-xl text-base font-bold text-white flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-lg"
+                className="w-full py-4 rounded-2xl text-base font-black text-white flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
               >
-                <Trophy className="w-5 h-5" /> Login to Register
+                <Trophy className="w-5 h-5 text-yellow-300" /> Login to Register
               </button>
             ) : tournament.requiredLevel > 0 && !user.isVerified ? (
               <button
                 disabled
-                className="w-full py-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 bg-gray-600 cursor-not-allowed opacity-50"
+                className="w-full py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2 bg-zinc-800/80 border border-white/5 text-zinc-400 cursor-not-allowed opacity-60 backdrop-blur-md"
               >
-                <AlertCircle className="w-5 h-5" /> Please verify your Free Fire ID first
+                <AlertCircle className="w-5 h-5 text-rose-400" /> Please verify your Free Fire ID first
               </button>
             ) : tournament.requiredLevel > 0 && user.gameLevel < tournament.requiredLevel ? (
               <button
                 disabled
-                className="w-full py-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 bg-gray-600 cursor-not-allowed opacity-50"
+                className="w-full py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2 bg-zinc-800/80 border border-white/5 text-zinc-400 cursor-not-allowed opacity-60 backdrop-blur-md"
               >
-                <AlertCircle className="w-5 h-5" /> Level too low (req: {tournament.requiredLevel}, yours: {user.gameLevel})
+                <AlertCircle className="w-5 h-5 text-rose-400" /> Level too low (Required: Level {tournament.requiredLevel}, Yours: Level {user.gameLevel})
               </button>
             ) : entryFee > 0 && !hasSufficientBalance ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <button
                   disabled
-                  className="w-full py-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 bg-gray-600 cursor-not-allowed opacity-50"
+                  className="w-full py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2 bg-zinc-800/80 border border-white/5 text-zinc-400 cursor-not-allowed opacity-60 backdrop-blur-md"
                 >
-                  <AlertCircle className="w-5 h-5" /> Insufficient Balance
+                  <AlertCircle className="w-5 h-5 text-amber-400" /> Insufficient Wallet Balance
                 </button>
                 <button
                   onClick={() => setShowUpiModal(true)}
-                  className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 transition-all"
+                  className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 backdrop-blur-md transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)]"
                 >
-                  <Smartphone className="w-4 h-4" /> Pay ₹{entryFee} (top-up)
+                  <Smartphone className="w-4 h-4 text-emerald-400" /> Quick Top-Up ₹{entryFee} &amp; Register
                 </button>
               </div>
             ) : entryFee > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <button
                   onClick={handleRegister}
                   disabled={registering || (isSquad && !allIgnsFetched)}
-                  className="w-full py-4 rounded-xl text-base font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-lg"
+                  className="w-full py-4 rounded-2xl text-base font-black text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
                 >
                   {registering ? (
-                    <><Loader2 className="w-5 h-5 animate-spin" /> Registering...</>
+                    <><Loader2 className="w-5 h-5 animate-spin" /> Registering Team...</>
                   ) : (
-                    <><Trophy className="w-5 h-5" /> Register with Wallet (₹{entryFee})</>
+                    <><Trophy className="w-5 h-5 text-yellow-300" /> Register with Wallet ({formatCurrency(entryFee)})</>
                   )}
                 </button>
                 <button
                   onClick={() => setShowUpiModal(true)}
-                  className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 transition-all"
+                  className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 backdrop-blur-md transition-all"
                 >
-                  <Smartphone className="w-4 h-4" /> Pay
+                  <Smartphone className="w-4 h-4 text-emerald-400" /> Pay directly via UPI
                 </button>
               </div>
             ) : (
               <button
                 onClick={handleRegister}
                 disabled={registering || (isSquad && !allIgnsFetched)}
-                className="w-full py-4 rounded-xl text-base font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-lg"
+                className="w-full py-4 rounded-2xl text-base font-black text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
               >
                 {registering ? (
                   <><Loader2 className="w-5 h-5 animate-spin" /> Registering...</>
                 ) : (
-                  <><Trophy className="w-5 h-5" /> Register {entryFee > 0 ? `(${formatCurrency(entryFee)}${isSquad ? ' each' : ''})` : '(Free)'}</>
+                  <><Trophy className="w-5 h-5 text-yellow-300" /> Register for Free Match</>
                 )}
               </button>
             )}
@@ -561,11 +738,12 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
         </div>
       </motion.div>
 
+      {/* UPI Payment Modal */}
       {showUpiModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowUpiModal(false)}>
-          <div className="bg-zinc-900 rounded-2xl p-6 max-w-md w-full mx-4 border border-white/10 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowUpiModal(false)}>
+          <div className="bg-zinc-900/90 rounded-3xl p-6 sm:p-7 max-w-md w-full border border-white/10 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Smartphone className="w-5 h-5 text-green-400" /> Pay Entry Fee
+              <Smartphone className="w-5 h-5 text-emerald-400" /> Pay Entry Fee
             </h3>
             <UpiPayment amount={entryFee} tournamentId={id} onSuccess={() => { setShowUpiModal(false); setMessage('Payment submitted! Admin will verify shortly.'); }} />
           </div>
