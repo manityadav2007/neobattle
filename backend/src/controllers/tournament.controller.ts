@@ -38,6 +38,7 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       data: {
         ...data,
         uid: tourUid,
+        requiredLevel: parseInt(String(data.requiredLevel || 0), 10) || 0,
         entryFee: new Decimal(entryFeeNum),
         prizePool: new Decimal(prizePoolNum),
         creatorId: req.user!.id,
@@ -75,6 +76,7 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
     data: {
       ...data,
       uid: tourUid,
+      requiredLevel: parseInt(String(data.requiredLevel || 0), 10) || 0,
       entryFee: new Decimal(0),
       prizePool: new Decimal(Number(data.prizePool) || 0),
       creatorId: req.user!.id,

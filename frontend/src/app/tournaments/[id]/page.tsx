@@ -296,9 +296,12 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 { icon: MapPin, label: 'Map', value: tournament.mapName || 'TBA', color: 'text-purple-400' },
                 { icon: Clock, label: 'Start Time', value: formatDate(tournament.startTime), color: 'text-yellow-400' },
                 { icon: Clock, label: 'Registration Ends', value: formatDate(tournament.registrationEnd), color: 'text-orange-400' },
-                ...(tournament.requiredLevel > 0
-                  ? [{ icon: Shield, label: 'Min Level Required', value: `Level ${tournament.requiredLevel}+`, color: 'text-emerald-400' }]
-                  : []),
+                {
+                  icon: Shield,
+                  label: 'Min Level Required',
+                  value: Number(tournament.requiredLevel) > 0 ? `Level ${tournament.requiredLevel}+` : 'No Restriction',
+                  color: Number(tournament.requiredLevel) > 0 ? 'text-emerald-400' : 'text-zinc-500',
+                },
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-3 p-4 rounded-xl bg-white/3">
                   <item.icon className={`w-5 h-5 ${item.color}`} />
