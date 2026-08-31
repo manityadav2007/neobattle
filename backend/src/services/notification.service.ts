@@ -1,7 +1,7 @@
 import { prisma } from '../config/db';
 import { TournamentStatus } from '@prisma/client';
 
-export type NotificationType = 'MATCH_SCHEDULE' | 'DEADLINE' | 'DISQUALIFICATION' | 'TOURNAMENT_STARTING' | 'TOURNAMENT_DELAYED' | 'PAYOUT_APPROVED' | 'DEPOSIT_APPROVED' | 'MATCH_UPDATE';
+export type NotificationType = 'MATCH_SCHEDULE' | 'DEADLINE' | 'DISQUALIFICATION' | 'TOURNAMENT_STARTING' | 'TOURNAMENT_DELAYED' | 'PAYOUT_APPROVED' | 'DEPOSIT_APPROVED' | 'MATCH_UPDATE' | 'NEW_TOURNAMENT';
 
 interface NotificationPayload {
   type: NotificationType;
@@ -33,6 +33,29 @@ class NotificationService {
 
     for (const userId of userIds) {
       await this.sendToUser(userId, payload);
+    }
+  }
+
+  async notifyNewTournament(tournamentId: string, title: string, entryFee: number): Promise<void> {
+    // Notify all active users who have opted in to tournament notifications
+    const users = await prisma.user.findMany({
+      where: { isActive: true, notifyTournaments: true },
+      select: { id: true },
+    });
+
+    const feeText = entryFee > 0 ? `Entry: ₹${entryFee}` : 'Free Entry';
+    const payload: NotificationPayload = {
+      type: 'NEW_TOURNAMENT',
+      title: '🏆 New Tournament Available',
+      message: `"${title}" is now open for registration! ${feeText}. Join now!`,
+      link: `/tournaments/${tournamentId}`,
+    };
+
+    // Send in batches to avoid blocking the response
+    const batchSize = 50;
+    for (let i = 0; i < users.length; i += batchSize) {
+      const batch = users.slice(i, i + batchSize);
+      await Promise.all(batch.map((u) => this.sendToUser(u.id, payload)));
     }
   }
 
@@ -95,3 +118,4 @@ class NotificationService {
 }
 
 export const notificationService = new NotificationService();
+

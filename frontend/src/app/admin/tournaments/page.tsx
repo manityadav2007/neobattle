@@ -16,7 +16,7 @@ import { getErrorMessage } from '@/lib/api';
 interface TournamentEntry {
   id: string;
   userId: string | null;
-  user: { id: string; username: string; displayName?: string | null } | null;
+  user: { id: string; uid: string; username: string; displayName?: string | null } | null;
   placement: number | null;
   registeredAt: string;
 }
@@ -625,6 +625,9 @@ export default function AdminTournamentsPage() {
                             <div key={entry.id} className="flex items-center justify-between p-2 rounded-lg bg-white/3 border border-white/5">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm text-white">{entry.user?.username || 'Unknown'}</span>
+                                {entry.user?.uid && (
+                                  <span className="text-xs font-mono text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded">{entry.user.uid}</span>
+                                )}
                                 {entry.placement === 1 && <Trophy className="w-4 h-4 text-yellow-400" />}
                               </div>
                               {isFreeTournament && (

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, ArrowLeft, IndianRupee,
-  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone,
+  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone, Shield,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
@@ -296,6 +296,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 { icon: MapPin, label: 'Map', value: tournament.mapName || 'TBA', color: 'text-purple-400' },
                 { icon: Clock, label: 'Start Time', value: formatDate(tournament.startTime), color: 'text-yellow-400' },
                 { icon: Clock, label: 'Registration Ends', value: formatDate(tournament.registrationEnd), color: 'text-orange-400' },
+                ...(tournament.requiredLevel > 0
+                  ? [{ icon: Shield, label: 'Min Level Required', value: `Level ${tournament.requiredLevel}+`, color: 'text-emerald-400' }]
+                  : []),
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-3 p-4 rounded-xl bg-white/3">
                   <item.icon className={`w-5 h-5 ${item.color}`} />
@@ -430,11 +433,31 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 This tournament has ended
                 {tournament.status === 'PAID' ? ' and prizes have been distributed' : ''}. Registration is closed.
               </div>
+            ) : tournament.status === 'ACTIVE' && !tournament.isRegistered ? (
+              <div className="w-full p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-center">
+                <div className="flex items-center justify-center gap-2 text-red-400 font-bold text-base">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                  </span>
+                  Live &amp; Playing
+                </div>
+                <p className="text-zinc-400 text-xs mt-1">This tournament has already started. Registration is closed.</p>
+              </div>
             ) : tournament.isRegistered ? (
               <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-green-500/10">
                 <div className="flex items-center gap-2 text-green-400 font-semibold">
                   <CheckCircle className="w-5 h-5" /> You are registered for this tournament
                 </div>
+                {tournament.status === 'ACTIVE' && (
+                  <div className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                    </span>
+                    Tournament is Live &amp; Playing
+                  </div>
+                )}
                 {tournament.canSeeRoom && tournament.roomId ? (
                   <div className="w-full mt-2 p-3 rounded-lg bg-white/5 text-sm">
                     <div className="flex items-center justify-between">

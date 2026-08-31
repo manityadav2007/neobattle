@@ -76,8 +76,14 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       include: { creator: { select: { id: true, username: true } } },
     });
 
+    // Fire-and-forget: notify subscribed users about the new tournament
+    notificationService.notifyNewTournament(tournament.id, tournament.title, entryFeeNum).catch((err) => {
+      console.error('[Host] Failed to send new-tournament notifications:', err);
+    });
+
     res.status(201).json({ success: true, data: tournament, breakdown: validation.breakdown });
     return;
+
   }
 
   // Free tournament — skip budget validation, zero out all commission fields
@@ -111,6 +117,11 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       prizeThird: data.prizeThird != null && Number(data.prizeThird) > 0 ? new Decimal(Number(data.prizeThird)) : null,
     },
     include: { creator: { select: { id: true, username: true } } },
+  });
+
+  // Fire-and-forget: notify subscribed users about the new free tournament
+  notificationService.notifyNewTournament(tournament.id, tournament.title, 0).catch((err) => {
+    console.error('[Host] Failed to send new-tournament notifications:', err);
   });
 
   res.status(201).json({ success: true, data: tournament });

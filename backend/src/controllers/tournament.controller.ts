@@ -8,6 +8,7 @@ import { cacheGet, cacheSet, cacheDel, cacheDelPattern } from '../config/redis';
 import { validatePrizePool } from '../services/commission.service';
 import { gameProfileService } from '../services/gameProfile.service';
 import { syncTournamentStatuses } from '../utils/tournamentStatus';
+import { notificationService } from '../services/notification.service';
 
 export async function createTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
   const data = req.body;
@@ -55,6 +56,12 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
     });
 
     await cacheDelPattern('tournaments:list*');
+
+    // Fire-and-forget: notify subscribed users about the new tournament
+    notificationService.notifyNewTournament(tournament.id, tournament.title, entryFeeNum).catch((err) => {
+      console.error('[Tournament] Failed to send new-tournament notifications:', err);
+    });
+
     res.status(201).json({ success: true, data: tournament, breakdown: validation.breakdown });
     return;
   }
@@ -86,6 +93,12 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   });
 
   await cacheDelPattern('tournaments:list*');
+
+  // Fire-and-forget: notify subscribed users about the new free tournament
+  notificationService.notifyNewTournament(tournament.id, tournament.title, 0).catch((err) => {
+    console.error('[Tournament] Failed to send new-tournament notifications:', err);
+  });
+
   res.status(201).json({ success: true, data: tournament, message: 'Free tournament created. You can award prize money later from the tournament list.' });
 }
 
@@ -167,7 +180,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
       creator: { select: { id: true, username: true } },
       entries: {
         include: {
-          user: { select: { id: true, username: true, avatarUrl: true } },
+          user: { select: { id: true, uid: true, username: true, avatarUrl: true } },
           team: { select: { id: true, name: true, tag: true } },
         },
         orderBy: [{ points: 'desc' }, { kills: 'desc' }],
@@ -267,7 +280,7 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
     return;
   }
   if (currentUser.gameLevel < tournament.requiredLevel) {
-    res.status(403).json({ success: false, message: 'Level too low to register' });
+    res.status(403).json({ success: false, message: `Your level (${currentUser.gameLevel}) is too low. This tournament requires Level ${tournament.requiredLevel}.` });
     return;
   }
 

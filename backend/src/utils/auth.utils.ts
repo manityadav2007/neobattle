@@ -92,10 +92,12 @@ export async function revokeRefreshToken(token: string): Promise<void> {
 
 export function sanitizeUser(user: {
   id: string;
+  uid: string;
   email: string;
   username: string;
   role: UserRole;
   isVerified: boolean;
+  gameLevel: number;
   freeFireId: string | null;
   ign: string | null;
   displayName: string | null;
@@ -105,10 +107,12 @@ export function sanitizeUser(user: {
 }) {
   return {
     id: user.id,
+    uid: user.uid,
     email: user.email,
     username: user.username,
     role: user.role,
     isVerified: user.isVerified,
+    gameLevel: user.gameLevel,
     freeFireId: user.freeFireId,
     ign: user.ign,
     displayName: user.displayName,
