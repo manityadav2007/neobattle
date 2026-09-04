@@ -26,9 +26,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [registerError, setRegisterError] = useState('');
 
   const [myStats, setMyStats] = useState<UserStats | null>(null);
-  const [squadUids, setSquadUids] = useState<string[]>(['', '', '', '']);
-  const [squadIgns, setSquadIgns] = useState<(string | null)[]>([null, null, null, null]);
-  const [fetchingIgn, setFetchingIgn] = useState<number | null>(null);
+  const [teamName, setTeamName] = useState('');
+  const [teammateUids, setTeammateUids] = useState<string[]>(['', '', '']);
+  const [teammateStatus, setTeammateStatus] = useState<Record<number, { loading?: boolean; valid?: boolean; info?: any; error?: string }>>({});
   const [copied, setCopied] = useState(false);
   const [endingTournament, setEndingTournament] = useState(false);
   const [distributing, setDistributing] = useState(false);
@@ -137,14 +137,89 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     } catch {}
   };
 
+  const checkTeammateUid = async (index: number, uid: string) => {
+    const trimmed = uid.trim();
+    if (!trimmed || trimmed.length < 3) {
+      setTeammateStatus((prev) => {
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+      return;
+    }
+    if (trimmed === user?.freeFireId) {
+      setTeammateStatus((prev) => ({
+        ...prev,
+        [index]: { loading: false, valid: false, error: 'You are already Captain in Slot #1.' },
+      }));
+      return;
+    }
+    // Check if duplicate with other slots
+    const otherSlots = teammateUids.filter((_, i) => i !== index).map((u) => u.trim());
+    if (otherSlots.includes(trimmed)) {
+      setTeammateStatus((prev) => ({
+        ...prev,
+        [index]: { loading: false, valid: false, error: 'This Free Fire ID is already entered in another slot.' },
+      }));
+      return;
+    }
+
+    setTeammateStatus((prev) => ({ ...prev, [index]: { loading: true } }));
+    try {
+      const res = await tournamentApi.checkPlayer(trimmed, tournament?.requiredLevel || 0);
+      if (res.success && res.data) {
+        setTeammateStatus((prev) => ({
+          ...prev,
+          [index]: { loading: false, valid: true, info: res.data },
+        }));
+      } else {
+        setTeammateStatus((prev) => ({
+          ...prev,
+          [index]: { loading: false, valid: false, error: res.message || 'Verification failed' },
+        }));
+      }
+    } catch (err) {
+      setTeammateStatus((prev) => ({
+        ...prev,
+        [index]: { loading: false, valid: false, error: getErrorMessage(err) },
+      }));
+    }
+  };
+
+  const updateTeammateUid = (index: number, val: string) => {
+    const next = [...teammateUids];
+    next[index] = val;
+    setTeammateUids(next);
+  };
+
   const handleRegister = async () => {
     if (!user) { router.push('/login'); return; }
     setRegistering(true);
     setRegisterError('');
     setMessage('');
     try {
-      if (tournament?.format === 'SQUAD') {
-        await tournamentApi.register(id, undefined, squadUids);
+      const isDuoFormat = tournament?.format === 'DUO';
+      const isSquadFormat = tournament?.format === 'SQUAD';
+      const isTeam = isDuoFormat || isSquadFormat;
+      const slots = isDuoFormat ? 1 : (isSquadFormat ? 3 : 0);
+
+      if (isTeam) {
+        const activeTeammates = teammateUids.slice(0, slots).map((u) => u.trim());
+        if (activeTeammates.some((u) => !u)) {
+          setRegisterError(`Please enter Free Fire IDs for all ${slots} teammate slot(s).`);
+          setRegistering(false);
+          return;
+        }
+        for (let i = 0; i < slots; i++) {
+          const st = teammateStatus[i];
+          if (!st?.valid) {
+            setRegisterError(`Slot #${i + 2} (${activeTeammates[i]}) is not verified or does not meet requirements.`);
+            setRegistering(false);
+            return;
+          }
+        }
+        const teamUids = [user.freeFireId || '', ...activeTeammates];
+        await tournamentApi.register(id, undefined, teamUids, teamName.trim() || undefined);
       } else {
         await tournamentApi.register(id);
       }
@@ -155,31 +230,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     } finally {
       setRegistering(false);
     }
-  };
-
-  const handleFetchIgn = async (index: number) => {
-    const uid = squadUids[index];
-    if (!uid || uid.length < 5) return;
-    setFetchingIgn(index);
-    try {
-      const res = await gameApi.fetchProfile(uid);
-      const newIgns = [...squadIgns];
-      newIgns[index] = res.data?.ign || null;
-      setSquadIgns(newIgns);
-    } catch {
-      const newIgns = [...squadIgns];
-      newIgns[index] = null;
-      setSquadIgns(newIgns);
-    } finally {
-      setFetchingIgn(null);
-    }
-  };
-
-  const updateSquadUid = (index: number, value: string) => {
-    const newUids = [...squadUids];
-    newUids[index] = value;
-    setSquadUids(newUids);
-    setSquadIgns(prev => { const n = [...prev]; n[index] = null; return n; });
   };
 
   useEffect(() => {
@@ -202,14 +252,22 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     );
   }
 
+  const isDuo = tournament.format === 'DUO';
+  const isSquad = tournament.format === 'SQUAD';
+  const isTeam = isDuo || isSquad;
+  const teammateCount = isDuo ? 1 : (isSquad ? 3 : 0);
+  const teamMultiplier = isTeam ? (isDuo ? 2 : 4) : 1;
+
   const entryFee = typeof tournament.entryFee === 'string' ? parseFloat(tournament.entryFee) : tournament.entryFee;
+  const totalTeamEntryFee = entryFee * teamMultiplier;
   const walletBalance = user?.wallet?.balance ?? 0;
-  const hasSufficientBalance = entryFee === 0 || walletBalance >= entryFee;
+  const hasSufficientBalance = totalTeamEntryFee === 0 || walletBalance >= totalTeamEntryFee;
   const prizePool = typeof tournament.prizePool === 'string' ? parseFloat(tournament.prizePool) : tournament.prizePool;
   const entryCount = tournament._count?.entries ?? 0;
   const isSlotsFull = tournament.maxParticipants > 0 && entryCount >= tournament.maxParticipants;
-  const isSquad = tournament.format === 'SQUAD';
-  const allIgnsFetched = isSquad ? squadIgns.every((i) => i !== null) : true;
+  const allTeammatesValid = !isTeam || (
+    teammateUids.slice(0, teammateCount).every((u, idx) => u.trim().length >= 3 && teammateStatus[idx]?.valid === true)
+  );
   const mapTheme = getMapTheme(tournament.mapName);
   const isEnded = tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED' || tournament.status === 'PAID';
   const effectiveStatus = getEffectiveStatus(tournament);
@@ -237,9 +295,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const thirdPlace = rawThird > 0 ? rawThird : (hasStoredBreakdown ? 0 : Math.round(prizePool * 0.2));
 
   const prizes = [
-    { place: '1st', label: '1st Place', value: firstPlace, color: 'text-yellow-400', bg: 'bg-yellow-500/5', border: 'border-yellow-500/10' },
-    ...(secondPlace > 0 ? [{ place: '2nd', label: '2nd Place', value: secondPlace, color: 'text-zinc-300', bg: 'bg-zinc-500/5', border: 'border-zinc-500/10' }] : []),
-    ...(thirdPlace > 0 ? [{ place: '3rd', label: '3rd Place', value: thirdPlace, color: 'text-amber-500', bg: 'bg-amber-500/5', border: 'border-amber-500/10' }] : []),
+    { place: '1st', label: isTeam ? '1st Winning Team' : '1st Place', value: firstPlace, color: 'text-yellow-400', bg: 'bg-yellow-500/5', border: 'border-yellow-500/10' },
+    ...(secondPlace > 0 ? [{ place: '2nd', label: isTeam ? '2nd Winning Team' : '2nd Place', value: secondPlace, color: 'text-zinc-300', bg: 'bg-zinc-500/5', border: 'border-zinc-500/10' }] : []),
+    ...(thirdPlace > 0 ? [{ place: '3rd', label: isTeam ? '3rd Winning Team' : '3rd Place', value: thirdPlace, color: 'text-amber-500', bg: 'bg-amber-500/5', border: 'border-amber-500/10' }] : []),
   ];
 
   return (
@@ -452,38 +510,109 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </div>
             </div>
 
-            {/* Squad Registration Box */}
-            {isSquad && tournament.status === 'REGISTRATION' && !isRegistrationClosed && !isCompletedState && !isLiveAndPlaying && !tournament.isRegistered && (
-              <div className="p-5 rounded-2xl bg-zinc-900/60 backdrop-blur-xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.08)] space-y-3.5">
-                <p className="text-sm font-bold text-white flex items-center gap-2">
-                  <Gamepad2 className="w-4 h-4 text-fire-400" /> Squad Registration — Enter 4 Free Fire UIDs
+            {/* Team Registration Box for DUO & SQUAD */}
+            {isTeam && tournament.status === 'REGISTRATION' && !isRegistrationClosed && !isCompletedState && !isLiveAndPlaying && !tournament.isRegistered && (
+              <div className="p-6 rounded-2xl bg-zinc-900/70 backdrop-blur-xl border border-blue-500/30 shadow-[0_0_25px_rgba(59,130,246,0.12)] space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Gamepad2 className="w-5 h-5 text-fire-400" />
+                    <span>{isDuo ? 'Duo' : 'Squad'} Team Registration</span>
+                    <span className="text-xs font-normal text-zinc-400">({isDuo ? '2 Players' : '4 Players'})</span>
+                  </h3>
+                  {Number(tournament.requiredLevel) > 0 && (
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                      Min Level: {tournament.requiredLevel}+
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-zinc-400">
+                  Enter pre-verified Free Fire IDs for your teammates. All teammates must be registered on Neobattle, verified, and meet the tournament&apos;s level requirement.
                 </p>
-                <div className="space-y-2.5">
-                  {squadUids.map((uid, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-zinc-500 w-6">#{i + 1}</span>
-                      <input
-                        type="text"
-                        value={uid}
-                        onChange={(e) => updateSquadUid(i, e.target.value)}
-                        placeholder={`Player ${i + 1} UID`}
-                        className="input-field flex-1 px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 transition-all"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleFetchIgn(i)}
-                        disabled={fetchingIgn === i || uid.length < 5}
-                        className="px-3.5 py-2.5 rounded-xl bg-fire-500/10 text-fire-400 text-xs font-semibold hover:bg-fire-500/20 border border-fire-500/20 disabled:opacity-40 transition-all"
-                      >
-                        {fetchingIgn === i ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Fetch IGN'}
-                      </button>
-                      {squadIgns[i] && (
-                        <span className="text-xs font-bold text-emerald-400 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 truncate max-w-[120px]">
-                          {squadIgns[i]}
-                        </span>
+
+                {/* Team Name Input */}
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
+                    Team Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    placeholder={`e.g., ${user?.username}'s Team`}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-fire-500/50 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  {/* Slot #1: Captain (You) */}
+                  <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                        Captain
+                      </span>
+                      <span className="text-sm font-semibold text-white truncate">{user?.username}</span>
+                      {user?.ign && (
+                        <span className="text-xs font-mono text-zinc-400 truncate">({user.ign})</span>
                       )}
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded">
+                        UID: {user?.freeFireId || '—'}
+                      </span>
+                      <span className="text-[11px] text-zinc-400 font-semibold">Lvl {user?.gameLevel ?? 0}</span>
+                    </div>
+                  </div>
+
+                  {/* Teammate Slots */}
+                  {Array.from({ length: teammateCount }).map((_, i) => {
+                    const status = teammateStatus[i];
+                    return (
+                      <div key={i} className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-zinc-500 w-16 shrink-0">Slot #{i + 2}</span>
+                          <input
+                            type="text"
+                            value={teammateUids[i]}
+                            onChange={(e) => updateTeammateUid(i, e.target.value)}
+                            onBlur={() => checkTeammateUid(i, teammateUids[i])}
+                            placeholder={`Teammate ${i + 1} Free Fire ID`}
+                            className={`flex-1 px-3.5 py-2.5 rounded-xl bg-black/40 border text-white text-sm font-mono focus:outline-none transition-all ${
+                              status?.valid === true
+                                ? 'border-emerald-500/50 focus:border-emerald-400'
+                                : status?.valid === false
+                                ? 'border-rose-500/50 focus:border-rose-400'
+                                : 'border-white/10 focus:border-fire-500/50'
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => checkTeammateUid(i, teammateUids[i])}
+                            disabled={status?.loading || !teammateUids[i]?.trim()}
+                            className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold border border-white/10 disabled:opacity-40 transition-all shrink-0"
+                          >
+                            {status?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
+                          </button>
+                        </div>
+
+                        {/* Status Feedback */}
+                        {status?.valid === true && status.info && (
+                          <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                            <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span className="font-semibold">{status.info.username}</span>
+                            {status.info.ign && <span className="font-mono text-zinc-400">({status.info.ign})</span>}
+                            <span className="ml-auto font-semibold text-emerald-300">Level {status.info.gameLevel}</span>
+                          </div>
+                        )}
+                        {status?.valid === false && status.error && (
+                          <div className="flex items-center gap-2 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{status.error}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -493,6 +622,74 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               <div className="p-5 rounded-2xl bg-zinc-900/40 backdrop-blur-md border border-white/5">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Tournament Rules</h3>
                 <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{tournament.rules}</p>
+              </div>
+            )}
+
+            {/* Registered Teams / Participants Section */}
+            {tournament.entries && tournament.entries.length > 0 && (
+              <div className="p-6 rounded-2xl bg-zinc-900/50 backdrop-blur-xl border border-white/10 space-y-4">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Users className="w-4 h-4 text-fire-400" />
+                  <span>{isTeam ? 'Registered Teams' : 'Registered Participants'} ({tournament.entries.length})</span>
+                </h3>
+
+                {isTeam ? (
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {tournament.entries.map((entry: any) => {
+                      const tName = entry.team?.name || `${entry.user?.username || 'Player'}'s Team`;
+                      const members = entry.team?.members || [];
+                      return (
+                        <div key={entry.id} className="p-4 rounded-xl bg-black/40 border border-white/10 hover:border-white/20 transition-all">
+                          <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-white/5">
+                            <span className="font-bold text-white text-sm truncate">{tName}</span>
+                            {entry.placement && (
+                              <span className="px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-400 text-xs font-bold font-mono">
+                                #{entry.placement}
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {members.length > 0 ? (
+                              members.map((m: any, idx: number) => (
+                                <div key={m.id || idx} className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="text-zinc-500 font-mono">#{idx + 1}</span>
+                                    <span className="text-zinc-200 font-medium truncate">{m.user?.username}</span>
+                                    {m.user?.ign && <span className="text-zinc-500 font-mono truncate">({m.user.ign})</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="font-mono text-zinc-400 text-[11px]">{m.user?.freeFireId}</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-emerald-400 font-semibold">Lvl {m.user?.gameLevel || 0}</span>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-zinc-300">{entry.user?.username}</span>
+                                <span className="font-mono text-zinc-500">{entry.user?.freeFireId}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {tournament.entries.map((entry: any) => (
+                      <div key={entry.id} className="p-3 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-white font-medium truncate">{entry.user?.username}</span>
+                          {entry.user?.ign && <span className="text-zinc-500 truncate">({entry.user.ign})</span>}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono text-zinc-400">{entry.user?.freeFireId}</span>
+                          {entry.placement && <span className="text-yellow-400 font-bold">#{entry.placement}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -559,14 +756,18 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 </h3>
                 <p className="text-xs text-zinc-400">Enter the Free Fire UIDs of your winners. Each UID must belong to a registered Neobattle participant.</p>
                 <div className="grid sm:grid-cols-3 gap-3">
-                  {([['1st Place', 'first', '🥇'], ['2nd Place (optional)', 'second', '🥈'], ['3rd Place (optional)', 'third', '🥉']] as const).map(([label, key, medal]) => (
+                  {([
+                    [isTeam ? '1st Winning Team' : '1st Place', 'first', '🥇'],
+                    [isTeam ? '2nd Winning Team (optional)' : '2nd Place (optional)', 'second', '🥈'],
+                    [isTeam ? '3rd Winning Team (optional)' : '3rd Place (optional)', 'third', '🥉']
+                  ] as const).map(([label, key, medal]) => (
                     <div key={key}>
                       <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">{medal} {label}</label>
                       <input
                         type="text"
                         value={resUids[key]}
                         onChange={(e) => setResUids((prev) => ({ ...prev, [key]: e.target.value }))}
-                        placeholder="Winner UID"
+                        placeholder={isTeam ? "Winner Team/Player UID" : "Winner UID"}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 focus:outline-none transition-all"
                       />
                     </div>
@@ -587,7 +788,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   className="btn-fire w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all"
                 >
                   {submittingResult ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <CheckCircle className="w-4 h-4 inline mr-2" />}
-                  {submittingResult ? 'Submitting...' : 'Submit Results for Review'}
+                  {submittingResult ? 'Submit Results for Review' : 'Submit Results for Review'}
                 </button>
               </div>
             )}
@@ -695,7 +896,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               >
                 <AlertCircle className="w-5 h-5 text-rose-400" /> Level too low (Required: Level {tournament.requiredLevel}, Yours: Level {user.gameLevel})
               </button>
-            ) : entryFee > 0 && !hasSufficientBalance ? (
+            ) : totalTeamEntryFee > 0 && !hasSufficientBalance ? (
               <div className="space-y-3">
                 <button
                   disabled
@@ -707,25 +908,25 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   href="/wallet"
                   className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 backdrop-blur-md transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)]"
                 >
-                  <Wallet className="w-4 h-4 text-emerald-400" /> Top-Up Wallet ({formatCurrency(entryFee)})
+                  <Wallet className="w-4 h-4 text-emerald-400" /> Top-Up Wallet ({formatCurrency(totalTeamEntryFee)})
                 </Link>
               </div>
-            ) : entryFee > 0 ? (
+            ) : totalTeamEntryFee > 0 ? (
               <button
                 onClick={handleRegister}
-                disabled={registering || (isSquad && !allIgnsFetched)}
+                disabled={registering || (isTeam && !allTeammatesValid)}
                 className="w-full py-4 rounded-2xl text-base font-black text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
               >
                 {registering ? (
                   <><Loader2 className="w-5 h-5 animate-spin" /> Registering Team...</>
                 ) : (
-                  <><Trophy className="w-5 h-5 text-yellow-300" /> Register with Wallet ({formatCurrency(entryFee)})</>
+                  <><Trophy className="w-5 h-5 text-yellow-300" /> Register with Wallet ({formatCurrency(totalTeamEntryFee)})</>
                 )}
               </button>
             ) : (
               <button
                 onClick={handleRegister}
-                disabled={registering || (isSquad && !allIgnsFetched)}
+                disabled={registering || (isTeam && !allTeammatesValid)}
                 className="w-full py-4 rounded-2xl text-base font-black text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
               >
                 {registering ? (

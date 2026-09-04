@@ -15,10 +15,42 @@ import { hostApi, winnerProofApi, uploadApi, formatDate, formatCurrency, getStat
 import { getErrorMessage } from '@/lib/api';
 import { calculateCommission } from '@/lib/commission';
 
+interface TeamMember {
+  id: string;
+  role?: string;
+  user: {
+    id: string;
+    username: string;
+    ign: string | null;
+    freeFireId: string | null;
+    gameLevel?: number;
+    isVerified?: boolean;
+    displayName?: string | null;
+  };
+}
+
+interface Team {
+  id: string;
+  name: string;
+  tag?: string | null;
+  members: TeamMember[];
+}
+
 interface Entry {
   id: string;
   userId: string | null;
-  user: { id: string; username: string; ign: string | null; freeFireId: string | null; displayName: string | null } | null;
+  user: {
+    id: string;
+    username: string;
+    ign: string | null;
+    freeFireId: string | null;
+    gameLevel?: number;
+    isVerified?: boolean;
+    displayName?: string | null;
+  } | null;
+  teamId?: string | null;
+  team?: Team | null;
+  placement?: number | null;
   registeredAt: string;
 }
 
@@ -415,111 +447,124 @@ export default function HostDashboardPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">1st Place</label>
-                      <input
-                        type="number"
-                        value={prizes.first === 0 ? '' : prizes.first}
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/^0+(?=\d)/, '');
-                          const num = raw === '' ? 0 : Number(raw);
-                          setPrizes((prev) => ({ ...prev, first: isNaN(num) ? 0 : num }));
-                        }}
-                        placeholder="0"
-                        className="input-field w-full px-3 py-2 rounded-lg bg-fire-500/10 border border-fire-500/30 text-fire-400 text-sm font-bold"
-                        min={0}
-                        required
-                      />
-                    </div>
-                    <div className="pt-5">
-                      <span className="text-fire-400 text-lg">🥇</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const isCreatingTeam = form.gameMode === 'CLASH_SQUAD' ? form.teamSize !== '1v1' : form.format !== 'SOLO';
+                    return (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">
+                              {isCreatingTeam ? '1st Winning Team' : '1st Place'}
+                            </label>
+                            <input
+                              type="number"
+                              value={prizes.first === 0 ? '' : prizes.first}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                                const num = raw === '' ? 0 : Number(raw);
+                                setPrizes((prev) => ({ ...prev, first: isNaN(num) ? 0 : num }));
+                              }}
+                              placeholder="0"
+                              className="input-field w-full px-3 py-2 rounded-lg bg-fire-500/10 border border-fire-500/30 text-fire-400 text-sm font-bold"
+                              min={0}
+                              required
+                            />
+                          </div>
+                          <div className="pt-5">
+                            <span className="text-fire-400 text-lg">🥇</span>
+                          </div>
+                        </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">2nd Place</label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (prizeCount >= 2) {
-                              setPrizes((prev) => ({ ...prev, first: parseFloat((Number(prev.first) + Number(prev.second)).toFixed(2)), second: 0 }));
-                              setPrizeCount(1);
-                            } else {
-                              setPrizeCount(2);
-                            }
-                          }}
-                          className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
-                        >
-                          {prizeCount >= 2 ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-zinc-600" />}
-                          {prizeCount >= 2 ? 'On' : 'Off'}
-                        </button>
-                      </div>
-                      {prizeCount >= 2 ? (
-                        <input
-                          type="number"
-                          value={prizes.second === 0 ? '' : prizes.second}
-                          onChange={(e) => {
-                            const raw = e.target.value.replace(/^0+(?=\d)/, '');
-                            const num = raw === '' ? 0 : Number(raw);
-                            setPrizes((prev) => ({ ...prev, second: isNaN(num) ? 0 : num }));
-                          }}
-                          placeholder="0"
-                          className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
-                          min={0}
-                        />
-                      ) : (
-                        <div className="w-full px-3 py-2 rounded-lg bg-white/3 border border-white/5 text-zinc-600 text-sm italic">Not offered</div>
-                      )}
-                    </div>
-                    <div className="pt-5">
-                      <span className="text-zinc-500 text-lg">🥈</span>
-                    </div>
-                  </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">
+                                {isCreatingTeam ? '2nd Winning Team' : '2nd Place'}
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (prizeCount >= 2) {
+                                    setPrizes((prev) => ({ ...prev, first: parseFloat((Number(prev.first) + Number(prev.second)).toFixed(2)), second: 0 }));
+                                    setPrizeCount(1);
+                                  } else {
+                                    setPrizeCount(2);
+                                  }
+                                }}
+                                className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                              >
+                                {prizeCount >= 2 ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-zinc-600" />}
+                                {prizeCount >= 2 ? 'On' : 'Off'}
+                              </button>
+                            </div>
+                            {prizeCount >= 2 ? (
+                              <input
+                                type="number"
+                                value={prizes.second === 0 ? '' : prizes.second}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                                  const num = raw === '' ? 0 : Number(raw);
+                                  setPrizes((prev) => ({ ...prev, second: isNaN(num) ? 0 : num }));
+                                }}
+                                placeholder="0"
+                                className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
+                                min={0}
+                              />
+                            ) : (
+                              <div className="w-full px-3 py-2 rounded-lg bg-white/3 border border-white/5 text-zinc-600 text-sm italic">Not offered</div>
+                            )}
+                          </div>
+                          <div className="pt-5">
+                            <span className="text-zinc-500 text-lg">🥈</span>
+                          </div>
+                        </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">3rd Place</label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (prizeCount >= 3) {
-                              setPrizes((prev) => ({ ...prev, first: parseFloat((Number(prev.first) + Number(prev.third)).toFixed(2)), second: prizeCount >= 2 ? Number(prev.second) : 0, third: 0 }));
-                              setPrizeCount(2);
-                            } else if (prizeCount === 2) {
-                              setPrizeCount(3);
-                            }
-                          }}
-                          className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
-                        >
-                          {prizeCount >= 3 ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-zinc-600" />}
-                          {prizeCount >= 3 ? 'On' : 'Off'}
-                        </button>
-                      </div>
-                      {prizeCount >= 3 ? (
-                        <input
-                          type="number"
-                          value={prizes.third === 0 ? '' : prizes.third}
-                          onChange={(e) => {
-                            const raw = e.target.value.replace(/^0+(?=\d)/, '');
-                            const num = raw === '' ? 0 : Number(raw);
-                            setPrizes((prev) => ({ ...prev, third: isNaN(num) ? 0 : num }));
-                          }}
-                          placeholder="0"
-                          className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
-                          min={0}
-                        />
-                      ) : (
-                        <div className="w-full px-3 py-2 rounded-lg bg-white/3 border border-white/5 text-zinc-600 text-sm italic">Not offered</div>
-                      )}
-                    </div>
-                    <div className="pt-5">
-                      <span className="text-zinc-500 text-lg">🥉</span>
-                    </div>
-                  </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">
+                                {isCreatingTeam ? '3rd Winning Team' : '3rd Place'}
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (prizeCount >= 3) {
+                                    setPrizes((prev) => ({ ...prev, first: parseFloat((Number(prev.first) + Number(prev.third)).toFixed(2)), second: prizeCount >= 2 ? Number(prev.second) : 0, third: 0 }));
+                                    setPrizeCount(2);
+                                  } else if (prizeCount === 2) {
+                                    setPrizeCount(3);
+                                  }
+                                }}
+                                className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                              >
+                                {prizeCount >= 3 ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-zinc-600" />}
+                                {prizeCount >= 3 ? 'On' : 'Off'}
+                              </button>
+                            </div>
+                            {prizeCount >= 3 ? (
+                              <input
+                                type="number"
+                                value={prizes.third === 0 ? '' : prizes.third}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                                  const num = raw === '' ? 0 : Number(raw);
+                                  setPrizes((prev) => ({ ...prev, third: isNaN(num) ? 0 : num }));
+                                }}
+                                placeholder="0"
+                                className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
+                                min={0}
+                              />
+                            ) : (
+                              <div className="w-full px-3 py-2 rounded-lg bg-white/3 border border-white/5 text-zinc-600 text-sm italic">Not offered</div>
+                            )}
+                          </div>
+                          <div className="pt-5">
+                            <span className="text-zinc-500 text-lg">🥉</span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {maxPool > 0 && (
@@ -640,29 +685,117 @@ export default function HostDashboardPage() {
 
                   {t.entries.length > 0 && (
                     <div className="mb-4">
-                      <p className="text-sm font-semibold text-zinc-300 mb-2">Registered Players</p>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-white/5 text-zinc-500 text-xs">
-                              <th className="text-left px-3 py-2 font-medium">Username</th>
-                              <th className="text-left px-3 py-2 font-medium">IGN</th>
-                              <th className="text-left px-3 py-2 font-medium">Free Fire ID</th>
-                              <th className="text-left px-3 py-2 font-medium">Registered</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {t.entries.map((e) => (
-                              <tr key={e.id} className="border-b border-white/5 last:border-0">
-                                <td className="px-3 py-2 text-white">{e.user?.username || '—'}</td>
-                                <td className="px-3 py-2 text-fire-400 font-mono">{e.user?.ign || '—'}</td>
-                                <td className="px-3 py-2 text-zinc-400 font-mono">{e.user?.freeFireId || '—'}</td>
-                                <td className="px-3 py-2 text-zinc-500">{formatDate(e.registeredAt)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold text-zinc-300">
+                          {t.format === 'SOLO' ? 'Registered Players' : 'Registered Teams & Rosters'}
+                        </p>
+                        <span className="text-xs text-zinc-500">
+                          {t.format === 'SOLO' ? `${t.entries.length} players` : `${t.entries.length} teams`}
+                        </span>
                       </div>
+                      {t.format === 'DUO' || t.format === 'SQUAD' || t.entries.some((e: any) => e.team) ? (
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          {t.entries.map((entry: any, tIdx: number) => {
+                            const team = entry.team;
+                            const members = team?.members && team.members.length > 0
+                              ? team.members
+                              : entry.user ? [{ id: entry.id, role: 'LEADER', user: entry.user }] : [];
+
+                            return (
+                              <div
+                                key={entry.id}
+                                className="p-3.5 rounded-xl bg-black/40 border border-white/10 hover:border-white/20 transition-all space-y-2.5"
+                              >
+                                <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-6 h-6 rounded-lg bg-fire-500/20 text-fire-400 flex items-center justify-center text-xs font-bold font-mono shrink-0">
+                                      #{tIdx + 1}
+                                    </div>
+                                    <span className="font-bold text-white text-sm truncate">
+                                      {team?.name || `Team ${entry.user?.username || tIdx + 1}`}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-zinc-400">
+                                      {members.length} {members.length === 1 ? 'player' : 'players'}
+                                    </span>
+                                    {entry.placement && (
+                                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-yellow-500/20 text-yellow-300 font-bold border border-yellow-500/30">
+                                        #{entry.placement}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  {members.map((m: any, mIdx: number) => (
+                                    <div
+                                      key={m.id || mIdx}
+                                      className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] text-xs"
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${mIdx === 0 || m.role === 'LEADER' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-zinc-800 text-zinc-400'}`}>
+                                          {mIdx === 0 || m.role === 'LEADER' ? 'C' : `#${mIdx + 1}`}
+                                        </span>
+                                        <span className="text-white font-medium truncate">{m.user?.username || '—'}</span>
+                                        {m.user?.ign && (
+                                          <span className="text-fire-400 font-mono text-[11px] truncate">({m.user.ign})</span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {m.user?.gameLevel != null && (
+                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/25 font-mono">
+                                            Lv. {m.user.gameLevel}
+                                          </span>
+                                        )}
+                                        <span className="font-mono text-zinc-400 text-[11px]">{m.user?.freeFireId || '—'}</span>
+                                        {m.user?.isVerified && (
+                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                                            Verified
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-white/5 text-zinc-500 text-xs">
+                                <th className="text-left px-3 py-2 font-medium">Username</th>
+                                <th className="text-left px-3 py-2 font-medium">IGN</th>
+                                <th className="text-left px-3 py-2 font-medium">Free Fire ID</th>
+                                <th className="text-left px-3 py-2 font-medium">Level</th>
+                                <th className="text-left px-3 py-2 font-medium">Status</th>
+                                <th className="text-left px-3 py-2 font-medium">Registered</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {t.entries.map((e) => (
+                                <tr key={e.id} className="border-b border-white/5 last:border-0 text-xs">
+                                  <td className="px-3 py-2 text-white font-medium">{e.user?.username || '—'}</td>
+                                  <td className="px-3 py-2 text-fire-400 font-mono">{e.user?.ign || '—'}</td>
+                                  <td className="px-3 py-2 text-zinc-400 font-mono">{e.user?.freeFireId || '—'}</td>
+                                  <td className="px-3 py-2 text-blue-300 font-mono">{e.user?.gameLevel ? `Lv. ${e.user.gameLevel}` : '—'}</td>
+                                  <td className="px-3 py-2">
+                                    {e.user?.isVerified ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 text-[10px]">Verified</span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px]">Unverified</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-zinc-500">{formatDate(e.registeredAt)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -733,19 +866,35 @@ export default function HostDashboardPage() {
 
                   {selectedTournament?.id === t.id && (
                     <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} onSubmit={handleSubmitWinner} className="mt-4 p-4 rounded-xl bg-white/5 space-y-3">
-                      <p className="text-sm font-semibold text-white">Submit Winner Proof</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-white">
+                          Submit Winner Proof — {t.format === 'SOLO' ? 'Solo Match' : `${t.format} Match`}
+                        </p>
+                        {t.format !== 'SOLO' && (
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">
+                            Team Split Payout
+                          </span>
+                        )}
+                      </div>
                       {submitMsg && <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> {submitMsg}</div>}
                       {submitErr && <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {submitErr}</div>}
                       <div>
-                        <label className="block text-xs font-semibold text-zinc-400 mb-1.5">Free Fire Winner UID</label>
+                        <label className="block text-xs font-semibold text-zinc-400 mb-1.5">
+                          {t.format === 'SOLO' ? '🥇 1st Place Free Fire Winner UID' : '🥇 1st Winning Team — Member/Captain UID'}
+                        </label>
                         <input
                           type="text"
                           value={winnerUid}
                           onChange={(e) => setWinnerUid(e.target.value)}
-                          placeholder="e.g. 123456789"
+                          placeholder={t.format === 'SOLO' ? 'Winner Free Fire UID (e.g. 123456789)' : 'Enter any winning team member/captain UID'}
                           className="input-field w-full px-3.5 py-2.5 rounded-xl text-white text-sm bg-black/40 border border-white/10 font-mono focus:border-fire-500/50"
                           required
                         />
+                        {t.format !== 'SOLO' && (
+                          <p className="text-[11px] text-zinc-400 mt-1.5">
+                            Enter any verified Free Fire UID belonging to the 1st winning team. When approved by admin, the prize will automatically split equally among all verified teammates directly into their wallets.
+                          </p>
+                        )}
                       </div>
 
                       <div>

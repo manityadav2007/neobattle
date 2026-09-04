@@ -16,6 +16,7 @@ const router = Router();
 
 router.get('/', optionalAuth, validate(paginationSchema, 'query'), tournamentController.listTournaments);
 router.get('/my', authenticate, tournamentController.getMyTournaments);
+router.get('/check-player', authenticate, tournamentController.checkPlayerEligibility);
 router.get('/:id', optionalAuth, tournamentController.getTournament);
 
 router.post('/', authenticate, hostOrSuper, validate(createTournamentSchema), tournamentController.createTournament);

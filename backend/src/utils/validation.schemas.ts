@@ -73,7 +73,9 @@ export const updateTournamentSchema = createTournamentSchema.partial().extend({
 export const registerTournamentSchema = z.object({
   tournamentId: z.string().cuid(),
   teamId: z.string().cuid().optional(),
-  squadUids: z.array(z.string().min(5)).length(4).optional(),
+  teamName: z.string().optional(),
+  teamUids: z.array(z.string().min(3)).optional(),
+  squadUids: z.array(z.string().min(3)).optional(),
 });
 
 export const walletDepositSchema = z.object({

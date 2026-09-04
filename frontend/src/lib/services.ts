@@ -56,6 +56,7 @@ export interface Tournament {
   _count?: { entries: number };
   creator?: { id: string; username: string };
   creatorId: string;
+  entries?: any[];
 }
 
 export interface WalletData {
@@ -129,8 +130,24 @@ export const tournamentApi = {
     const res = await api.get<ApiResponse<Tournament>>(`/tournaments/${id}`);
     return res.data;
   },
-  register: async (tournamentId: string, teamId?: string, squadUids?: string[]) => {
-    const res = await api.post('/tournaments/register', { tournamentId, teamId, squadUids });
+  checkPlayer: async (uid: string, requiredLevel?: number) => {
+    const res = await api.get<{
+      success: boolean;
+      data: {
+        id: string;
+        username: string;
+        ign: string | null;
+        freeFireId: string;
+        gameLevel: number;
+        isVerified: boolean;
+        avatarUrl?: string | null;
+      };
+      message?: string;
+    }>('/tournaments/check-player', { params: { uid, requiredLevel } });
+    return res.data;
+  },
+  register: async (tournamentId: string, teamId?: string, teamUids?: string[], teamName?: string) => {
+    const res = await api.post('/tournaments/register', { tournamentId, teamId, teamUids, squadUids: teamUids, teamName });
     return res.data;
   },
   my: async () => {
@@ -576,6 +593,7 @@ export interface ResultSubmission {
   createdAt: string;
   tournament?: {
     id: string; uid: string; title: string; status: string;
+    format?: string;
     prizePool: number;
     prizeFirst: number; prizeSecond: number | null; prizeThird: number | null;
     platformCommission: number; hostCommission: number;

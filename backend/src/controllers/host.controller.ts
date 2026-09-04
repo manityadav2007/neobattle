@@ -15,7 +15,19 @@ export async function getMyTournaments(req: AuthenticatedRequest, res: Response)
       _count: { select: { entries: true } },
       entries: {
         include: {
-          user: { select: { id: true, username: true, ign: true, freeFireId: true } },
+          user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+          team: {
+            select: {
+              id: true,
+              name: true,
+              tag: true,
+              members: {
+                include: {
+                  user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -341,8 +353,19 @@ export async function getTournamentEntries(req: AuthenticatedRequest, res: Respo
   const entries = await prisma.tournamentEntry.findMany({
     where: { tournamentId: req.params.id },
     include: {
-      user: { select: { id: true, username: true, ign: true, freeFireId: true, displayName: true } },
-      team: { select: { id: true, name: true, tag: true } },
+      user: { select: { id: true, username: true, ign: true, freeFireId: true, displayName: true, gameLevel: true, isVerified: true } },
+      team: {
+        select: {
+          id: true,
+          name: true,
+          tag: true,
+          members: {
+            include: {
+              user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+            },
+          },
+        },
+      },
     },
     orderBy: { registeredAt: 'asc' },
   });

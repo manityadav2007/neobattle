@@ -189,6 +189,61 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
   });
 }
 
+export async function checkPlayerEligibility(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const uid = String(req.query.uid || '').trim();
+  const minLevel = parseInt(String(req.query.requiredLevel || 0), 10) || 0;
+
+  if (!uid) {
+    res.status(400).json({ success: false, message: 'Free Fire UID is required' });
+    return;
+  }
+
+  const player = await prisma.user.findUnique({
+    where: { freeFireId: uid },
+    select: {
+      id: true,
+      username: true,
+      ign: true,
+      freeFireId: true,
+      gameLevel: true,
+      isVerified: true,
+      avatarUrl: true,
+    },
+  });
+
+  if (!player) {
+    res.status(404).json({
+      success: false,
+      message: `Player with Free Fire ID "${uid}" is not registered on Neobattle. Teammates must create an account first.`,
+    });
+    return;
+  }
+
+  if (!player.isVerified) {
+    res.status(400).json({
+      success: false,
+      message: `Player "${player.username}" (UID: ${uid}) has not verified their Free Fire ID.`,
+      data: player,
+    });
+    return;
+  }
+
+  if (player.gameLevel < minLevel) {
+    res.status(400).json({
+      success: false,
+      message: `Player "${player.username}" (Level ${player.gameLevel}) is below required Level ${minLevel}.`,
+      data: player,
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: player,
+    message: `Verified: ${player.username} (Level ${player.gameLevel})`,
+  });
+}
+
 export async function getTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
   await syncTournamentStatuses();
 
@@ -198,8 +253,19 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
       creator: { select: { id: true, username: true } },
       entries: {
         include: {
-          user: { select: { id: true, uid: true, username: true, avatarUrl: true } },
-          team: { select: { id: true, name: true, tag: true } },
+          user: { select: { id: true, uid: true, username: true, avatarUrl: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true } },
+          team: {
+            select: {
+              id: true,
+              name: true,
+              tag: true,
+              members: {
+                include: {
+                  user: { select: { id: true, uid: true, username: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true, avatarUrl: true } },
+                },
+              },
+            },
+          },
         },
         orderBy: [{ points: 'desc' }, { kills: 'desc' }],
       },
@@ -213,7 +279,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
   }
 
   const isRegistered = req.user
-    ? tournament.entries.some((e) => e.userId === req.user!.id)
+    ? tournament.entries.some((e) => e.userId === req.user!.id || e.team?.members.some((m) => m.userId === req.user!.id))
     : false;
 
   const now = new Date();
@@ -326,45 +392,119 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
     return;
   }
 
-  if (tournament.format === TournamentFormat.SQUAD) {
-    if (!squadUids || !Array.isArray(squadUids) || squadUids.length !== 4) {
-      res.status(400).json({ success: false, message: 'Squad mode requires exactly 4 UIDs' });
+  if (tournament.format === TournamentFormat.DUO || tournament.format === TournamentFormat.SQUAD) {
+    const requiredSlots = tournament.format === TournamentFormat.DUO ? 2 : 4;
+    const { teamName, teamId } = req.body;
+    let inputUids: string[] = Array.isArray(req.body.teamUids)
+      ? req.body.teamUids
+      : (Array.isArray(req.body.squadUids) ? req.body.squadUids : []);
+
+    // If teamId provided and no UIDs, look up existing team members
+    if (inputUids.length === 0 && teamId) {
+      const existingTeam = await prisma.team.findUnique({
+        where: { id: teamId },
+        include: { members: { include: { user: true } } },
+      });
+      if (existingTeam) {
+        inputUids = existingTeam.members.map((m) => m.user?.freeFireId).filter(Boolean) as string[];
+      }
+    }
+
+    // If user provided (requiredSlots - 1) UIDs, prepend current user's Free Fire ID
+    const currentUid = (currentUser as any).freeFireId || '';
+    if (inputUids.length === requiredSlots - 1 && currentUid) {
+      inputUids = [currentUid, ...inputUids];
+    }
+
+    const trimmedUids = inputUids.map((u) => (typeof u === 'string' ? u.trim() : '')).filter(Boolean);
+
+    if (trimmedUids.length !== requiredSlots) {
+      res.status(400).json({
+        success: false,
+        message: `${tournament.format} registration requires exactly ${requiredSlots} player Free Fire IDs (provided ${trimmedUids.length}).`,
+      });
       return;
     }
 
-    const igns: string[] = [];
-    for (const uid of squadUids) {
-      if (!uid || typeof uid !== 'string' || uid.length < 5) {
-        res.status(400).json({ success: false, message: `Invalid UID: ${uid}` });
-        return;
-      }
-      const profile = await gameProfileService.fetchByUid(uid);
-      if (!profile) {
-        res.status(400).json({ success: false, message: `Could not fetch game profile for UID: ${uid}` });
-        return;
-      }
-      igns.push(profile.ign);
-    }
-
-    const existingSquad = await prisma.tournamentEntry.findFirst({
-      where: { tournamentId, userId },
-    });
-    if (existingSquad) {
-      res.status(409).json({ success: false, message: 'Already registered in this tournament' });
+    // Ensure all UIDs are unique
+    if (new Set(trimmedUids).size !== requiredSlots) {
+      res.status(400).json({
+        success: false,
+        message: 'All player Free Fire IDs in the roster must be unique.',
+      });
       return;
     }
 
-    const entryFee = Number(tournament.entryFee) * 4;
-    let isPaid = entryFee === 0;
+    // Strictly validate each player against registered Neobattle accounts
+    const verifiedPlayers: { id: string; username: string; ign: string | null; freeFireId: string | null; gameLevel: number }[] = [];
 
-    if (entryFee > 0) {
+    for (const uid of trimmedUids) {
+      const player = await prisma.user.findUnique({
+        where: { freeFireId: uid },
+        select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true },
+      });
+
+      if (!player) {
+        res.status(400).json({
+          success: false,
+          message: `Player with Free Fire ID "${uid}" is not registered on Neobattle. Teammates must create an account first.`,
+        });
+        return;
+      }
+
+      if (!player.isVerified) {
+        res.status(400).json({
+          success: false,
+          message: `Player "${player.username}" (${uid}) does not have a verified Free Fire ID. All teammates must be verified.`,
+        });
+        return;
+      }
+
+      if (player.gameLevel < tournament.requiredLevel) {
+        res.status(400).json({
+          success: false,
+          message: `Player "${player.username}" (Level ${player.gameLevel}) does not meet the tournament requirement of Level ${tournament.requiredLevel}.`,
+        });
+        return;
+      }
+
+      // Check if player is already in this tournament
+      const alreadyInTournament = await prisma.tournamentEntry.findFirst({
+        where: {
+          tournamentId,
+          OR: [
+            { userId: player.id },
+            { team: { members: { some: { userId: player.id } } } },
+          ],
+        },
+      });
+
+      if (alreadyInTournament) {
+        res.status(409).json({
+          success: false,
+          message: `Player "${player.username}" (${uid}) is already registered in this tournament.`,
+        });
+        return;
+      }
+
+      verifiedPlayers.push(player);
+    }
+
+    // Total entry fee for the entire team
+    const totalTeamFee = Number(tournament.entryFee) * requiredSlots;
+    let isPaid = totalTeamFee === 0;
+
+    if (totalTeamFee > 0) {
       const wallet = await prisma.wallet.findUnique({ where: { userId } });
-      if (!wallet || Number(wallet.balance) < entryFee) {
-        res.status(400).json({ success: false, message: `Insufficient balance. Squad entry requires ₹${entryFee} (4 × ₹${Number(tournament.entryFee)})` });
+      if (!wallet || Number(wallet.balance) < totalTeamFee) {
+        res.status(400).json({
+          success: false,
+          message: `Insufficient wallet balance. Team registration requires ₹${totalTeamFee} (${requiredSlots} × ₹${Number(tournament.entryFee)}).`,
+        });
         return;
       }
 
-      const holdResult = await escrowService.holdFunds(wallet.id, userId, tournamentId, entryFee);
+      const holdResult = await escrowService.holdFunds(wallet.id, userId, tournamentId, totalTeamFee);
       if (!holdResult.success) {
         res.status(400).json({ success: false, message: holdResult.message });
         return;
@@ -372,36 +512,73 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
       isPaid = true;
     }
 
+    // Create a new Team record for this tournament roster
+    const rawTeamName = teamName?.trim() || `${(currentUser as any).username || 'Player'}'s Team`;
+    const uniqueSuffix = Date.now().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
+    const safeTag = rawTeamName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'TM';
+    const uniqueTeamTag = `${safeTag}${uniqueSuffix.slice(-3)}`;
+
+    const team = await prisma.team.create({
+      data: {
+        name: `${rawTeamName} #${uniqueSuffix}`,
+        tag: uniqueTeamTag.slice(0, 6),
+        leaderId: userId,
+        maxMembers: requiredSlots,
+        members: {
+          create: verifiedPlayers.map((p) => ({
+            userId: p.id,
+            role: p.id === userId ? 'LEADER' : 'MEMBER',
+          })),
+        },
+      },
+    });
+
     const entry = await prisma.tournamentEntry.create({
       data: {
         tournamentId,
         userId,
+        teamId: team.id,
         isPaid,
+      },
+      include: {
+        tournament: { select: { title: true, startTime: true } },
+        user: { select: { id: true, username: true } },
+        team: {
+          select: {
+            id: true,
+            name: true,
+            tag: true,
+            members: {
+              include: {
+                user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+              },
+            },
+          },
+        },
       },
     });
 
     res.status(201).json({
       success: true,
-      data: { ...entry, squadIgns: igns },
-      message: `Squad registered with IGNs: ${igns.join(', ')}`,
+      data: entry,
+      message: `Team "${team.name}" registered successfully with ${verifiedPlayers.length} verified players!`,
     });
     return;
   }
 
-  if (tournament.format !== TournamentFormat.SOLO && !teamId) {
-    res.status(400).json({ success: false, message: 'Team required for duo format' });
-    return;
-  }
-
-  const existing = await prisma.tournamentEntry.findFirst({
+  // SOLO Registration
+  const existingSolo = await prisma.tournamentEntry.findFirst({
     where: {
       tournamentId,
-      OR: [{ userId }, ...(teamId ? [{ teamId }] : [])],
+      OR: [
+        { userId },
+        { team: { members: { some: { userId } } } },
+      ],
     },
   });
 
-  if (existing) {
-    res.status(409).json({ success: false, message: 'Already registered' });
+  if (existingSolo) {
+    res.status(409).json({ success: false, message: 'You are already registered in this tournament' });
     return;
   }
 
@@ -426,18 +603,16 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
   const entry = await prisma.tournamentEntry.create({
     data: {
       tournamentId,
-      userId: tournament.format === TournamentFormat.SOLO ? userId : undefined,
-      teamId: teamId || undefined,
+      userId,
       isPaid,
     },
     include: {
       tournament: { select: { title: true, startTime: true } },
-      user: { select: { id: true, username: true } },
-      team: { select: { id: true, name: true, tag: true } },
+      user: { select: { id: true, username: true, freeFireId: true, ign: true } },
     },
   });
 
-  res.status(201).json({ success: true, data: entry });
+  res.status(201).json({ success: true, data: entry, message: 'Successfully registered for tournament!' });
 }
 
 export async function updateEntryScore(req: AuthenticatedRequest, res: Response): Promise<void> {

@@ -45,13 +45,15 @@ export default function AdminPendingResultsPage() {
 
   const handleApprove = async (sub: ResultSubmission) => {
     const t = sub.tournament;
+    const isTeam = t?.format === 'DUO' || t?.format === 'SQUAD';
+    const splitCount = t?.format === 'DUO' ? 2 : (t?.format === 'SQUAD' ? 4 : 1);
     const lines = [
-      Number(t?.prizeFirst) > 0 && `1st (${sub.firstUid}): ${formatCurrency(Number(t!.prizeFirst))}`,
-      Number(t?.prizeSecond) > 0 && `2nd (${sub.secondUid || '—'}): ${formatCurrency(Number(t!.prizeSecond))}`,
-      Number(t?.prizeThird) > 0 && `3rd (${sub.thirdUid || '—'}): ${formatCurrency(Number(t!.prizeThird))}`,
+      Number(t?.prizeFirst) > 0 && `${isTeam ? '1st Winning Team' : '1st Place'} (${sub.firstUid}): ${formatCurrency(Number(t!.prizeFirst))}${isTeam ? ` (${formatCurrency(Math.floor(Number(t!.prizeFirst) / splitCount))}/player)` : ''}`,
+      Number(t?.prizeSecond) > 0 && `${isTeam ? '2nd Winning Team' : '2nd Place'} (${sub.secondUid || '—'}): ${formatCurrency(Number(t!.prizeSecond))}${isTeam && sub.secondUid ? ` (${formatCurrency(Math.floor(Number(t!.prizeSecond) / splitCount))}/player)` : ''}`,
+      Number(t?.prizeThird) > 0 && `${isTeam ? '3rd Winning Team' : '3rd Place'} (${sub.thirdUid || '—'}): ${formatCurrency(Number(t!.prizeThird))}${isTeam && sub.thirdUid ? ` (${formatCurrency(Math.floor(Number(t!.prizeThird) / splitCount))}/player)` : ''}`,
       Number(t?.hostCommission) > 0 && `Host commission: ${formatCurrency(Number(t!.hostCommission))}`,
     ].filter(Boolean);
-    if (!confirm(`Approve & distribute prizes?\n\n${lines.join('\n')}\n\nWinners' and host wallets will be credited instantly.`)) return;
+    if (!confirm(`Approve & distribute prizes?\n\n${lines.join('\n')}\n\n${isTeam ? 'Winning team prizes will be split equally among all verified members directly into their wallets.' : "Winners' and host wallets will be credited instantly."}`)) return;
 
     setBusy(sub.id);
     setError('');
@@ -175,21 +177,43 @@ export default function AdminPendingResultsPage() {
 
             {/* Winners */}
             <div className="mt-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Submitted Winners</p>
-              <div className="space-y-2">
-                {[
-                  { medal: '🥇', label: '1st Place', uid: selected.firstUid, prize: Number(selected.tournament.prizeFirst) },
-                  { medal: '🥈', label: '2nd Place', uid: selected.secondUid, prize: Number(selected.tournament.prizeSecond) },
-                  { medal: '🥉', label: '3rd Place', uid: selected.thirdUid, prize: Number(selected.tournament.prizeThird) },
-                ]
-                  .filter((w) => w.uid)
-                  .map((w) => (
-                    <div key={w.label} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
-                      <span className="text-sm text-white font-medium">{w.medal} {w.label} — <span className="font-mono text-fire-400">{w.uid}</span></span>
-                      <span className="text-sm font-bold text-yellow-400">{formatCurrency(w.prize)}</span>
+              {(() => {
+                const isTeam = selected.tournament.format === 'DUO' || selected.tournament.format === 'SQUAD';
+                const splitCount = selected.tournament.format === 'DUO' ? 2 : (selected.tournament.format === 'SQUAD' ? 4 : 1);
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Submitted Winners</p>
+                      {isTeam && (
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-semibold">
+                          {selected.tournament.format} Match — {splitCount}-Way Split Payout
+                        </span>
+                      )}
                     </div>
-                  ))}
-              </div>
+                    <div className="space-y-2">
+                      {[
+                        { medal: '🥇', label: isTeam ? '1st Winning Team' : '1st Place', uid: selected.firstUid, prize: Number(selected.tournament.prizeFirst) },
+                        { medal: '🥈', label: isTeam ? '2nd Winning Team' : '2nd Place', uid: selected.secondUid, prize: Number(selected.tournament.prizeSecond) },
+                        { medal: '🥉', label: isTeam ? '3rd Winning Team' : '3rd Place', uid: selected.thirdUid, prize: Number(selected.tournament.prizeThird) },
+                      ]
+                        .filter((w) => w.uid)
+                        .map((w) => (
+                          <div key={w.label} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                            <div>
+                              <span className="text-sm text-white font-medium">{w.medal} {w.label} — <span className="font-mono text-fire-400">{w.uid}</span></span>
+                              {isTeam && (
+                                <p className="text-[11px] text-zinc-400 mt-0.5">
+                                  Total Pool: {formatCurrency(w.prize)} → <span className="text-emerald-400 font-semibold">{formatCurrency(Math.floor(w.prize / splitCount))} per player</span> ({splitCount} verified members)
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-sm font-bold text-yellow-400">{formatCurrency(w.prize)}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Commission breakdown */}

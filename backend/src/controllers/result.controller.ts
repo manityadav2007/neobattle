@@ -14,25 +14,76 @@ interface ResolvedWinner {
 }
 
 async function resolveWinners(tournament: {
+  id: string;
+  format: string;
   prizeFirst: Decimal;
   prizeSecond: Decimal | null;
   prizeThird: Decimal | null;
 }, firstUid: string, secondUid: string | null, thirdUid: string | null): Promise<ResolvedWinner[]> {
+  const isTeam = tournament.format === 'DUO' || tournament.format === 'SQUAD';
   const candidates = [
-    { placement: 1, label: '1st Place', amount: Number(tournament.prizeFirst) || 0, uid: firstUid?.trim() },
-    { placement: 2, label: '2nd Place', amount: Number(tournament.prizeSecond) || 0, uid: secondUid?.trim() || null },
-    { placement: 3, label: '3rd Place', amount: Number(tournament.prizeThird) || 0, uid: thirdUid?.trim() || null },
+    { placement: 1, label: isTeam ? '1st Winning Team' : '1st Place', amount: Number(tournament.prizeFirst) || 0, uid: firstUid?.trim() },
+    { placement: 2, label: isTeam ? '2nd Winning Team' : '2nd Place', amount: Number(tournament.prizeSecond) || 0, uid: secondUid?.trim() || null },
+    { placement: 3, label: isTeam ? '3rd Winning Team' : '3rd Place', amount: Number(tournament.prizeThird) || 0, uid: thirdUid?.trim() || null },
   ].filter((c) => c.amount > 0 && c.uid);
 
   const resolved: ResolvedWinner[] = [];
+
   for (const c of candidates) {
-    const user = await prisma.user.findUnique({
-      where: { freeFireId: c.uid! },
-      select: { id: true, username: true },
+    const entry = await prisma.tournamentEntry.findFirst({
+      where: {
+        tournamentId: tournament.id,
+        OR: [
+          { user: { freeFireId: c.uid! } },
+          { team: { members: { some: { user: { freeFireId: c.uid! } } } } },
+        ],
+      },
+      include: {
+        user: { select: { id: true, username: true, freeFireId: true } },
+        team: {
+          include: {
+            members: {
+              include: {
+                user: { select: { id: true, username: true, freeFireId: true } },
+              },
+            },
+          },
+        },
+      },
     });
-    if (!user) throw new Error(`${c.label}: UID ${c.uid} is not registered on Neobattle`);
-    resolved.push({ placement: c.placement, label: c.label, amount: c.amount, userId: user.id, username: user.username });
+
+    if (!entry) {
+      throw new Error(`${c.label}: Free Fire UID ${c.uid} is not a registered participant in this tournament.`);
+    }
+
+    if (entry.team && entry.team.members.length > 0) {
+      const members = entry.team.members.map((m) => m.user);
+      const splitAmount = Math.floor(c.amount / members.length);
+      const remainder = c.amount - (splitAmount * members.length);
+
+      members.forEach((m, idx) => {
+        const payout = idx === 0 ? splitAmount + remainder : splitAmount;
+        resolved.push({
+          placement: c.placement,
+          label: `${c.label} (${entry.team!.name})`,
+          amount: payout,
+          userId: m.id,
+          username: m.username,
+        });
+      });
+    } else if (entry.user) {
+      resolved.push({
+        placement: c.placement,
+        label: c.label,
+        amount: c.amount,
+        userId: entry.user.id,
+        username: entry.user.username,
+      });
+    } else {
+      throw new Error(`${c.label}: Registered entry has no associated user or team.`);
+    }
   }
+
   return resolved;
 }
 
@@ -130,7 +181,7 @@ export async function listPendingResults(_req: AuthenticatedRequest, res: Respon
       host: { select: { id: true, username: true, email: true } },
       tournament: {
         select: {
-          id: true, uid: true, title: true, status: true, entryFee: true, prizePool: true,
+          id: true, uid: true, title: true, status: true, format: true, entryFee: true, prizePool: true,
           prizeFirst: true, prizeSecond: true, prizeThird: true,
           platformCommission: true, hostCommission: true, maxParticipants: true,
           creator: { select: { id: true, username: true } },
@@ -212,11 +263,23 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
     return;
   }
 
-  // Verify each winner is an actual participant
-  const participantUserIds = new Set(
-    (await prisma.tournamentEntry.findMany({ where: { tournamentId: t.id, userId: { not: null } }, select: { userId: true } }))
-      .map((e) => e.userId!)
-  );
+  // Verify each winner is an actual participant (either individual or team member)
+  const allEntries = await prisma.tournamentEntry.findMany({
+    where: { tournamentId: t.id },
+    include: {
+      team: { include: { members: { select: { userId: true } } } },
+    },
+  });
+  const participantUserIds = new Set<string>();
+  for (const e of allEntries) {
+    if (e.userId) participantUserIds.add(e.userId);
+    if (e.team) {
+      for (const m of e.team.members) {
+        participantUserIds.add(m.userId);
+      }
+    }
+  }
+
   const outsiders = winners.filter((w) => !participantUserIds.has(w.userId));
   if (outsiders.length > 0) {
     res.status(400).json({ success: false, message: `Not a registered participant of this tournament: ${outsiders.map((o) => `${o.username} (${o.label})`).join(', ')}` });
@@ -239,7 +302,13 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
       // Stamp placements on the winning entries for record-keeping
       for (const w of winners) {
         await tx.tournamentEntry.updateMany({
-          where: { tournamentId: t.id, userId: w.userId },
+          where: {
+            tournamentId: t.id,
+            OR: [
+              { userId: w.userId },
+              { team: { members: { some: { userId: w.userId } } } },
+            ],
+          },
           data: { placement: w.placement },
         });
       }

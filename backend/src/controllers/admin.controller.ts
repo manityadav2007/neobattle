@@ -544,7 +544,16 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
     where: { id: req.params.id },
     include: {
       entries: {
-        include: { user: { select: { id: true, username: true } } },
+        include: {
+          user: { select: { id: true, username: true } },
+          team: {
+            include: {
+              members: {
+                include: { user: { select: { id: true, username: true } } },
+              },
+            },
+          },
+        },
       },
     },
   });
@@ -564,28 +573,66 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
     return;
   }
 
+  const isTeam = tournament.format === 'DUO' || tournament.format === 'SQUAD';
   const shares = [
-    { placement: 1, amount: Number(tournament.prizeFirst) || 0, label: '1st Place' },
-    { placement: 2, amount: Number(tournament.prizeSecond) || 0, label: '2nd Place' },
-    { placement: 3, amount: Number(tournament.prizeThird) || 0, label: '3rd Place' },
+    { placement: 1, amount: Number(tournament.prizeFirst) || 0, label: isTeam ? '1st Winning Team' : '1st Place' },
+    { placement: 2, amount: Number(tournament.prizeSecond) || 0, label: isTeam ? '2nd Winning Team' : '2nd Place' },
+    { placement: 3, amount: Number(tournament.prizeThird) || 0, label: isTeam ? '3rd Winning Team' : '3rd Place' },
   ].filter((s) => s.amount > 0);
+  interface WinnerPayout {
+    placement: number;
+    label: string;
+    amount: number;
+    userId: string;
+    username: string;
+  }
 
-  const winners = shares.map((s) => ({
-    ...s,
-    entry: tournament.entries.find((e) => e.placement === s.placement && e.userId != null),
-  }));
+  const winnerPayouts: WinnerPayout[] = [];
 
-  const missing = winners.filter((w) => !w.entry);
-  if (missing.length > 0) {
-    res.status(400).json({
-      success: false,
-      message: `No verified winner recorded for: ${missing.map((m) => m.label).join(', ')}. Set player placements before distributing.`,
-    });
-    return;
+  for (const s of shares) {
+    const entry = tournament.entries.find((e) => e.placement === s.placement);
+    if (!entry) {
+      res.status(400).json({
+        success: false,
+        message: `No winner entry recorded with placement #${s.placement} (${s.label}). Set player placements before distributing.`,
+      });
+      return;
+    }
+
+    if (entry.team && entry.team.members.length > 0) {
+      const members = entry.team.members.map((m) => m.user);
+      const splitAmount = Math.floor(s.amount / members.length);
+      const remainder = s.amount - (splitAmount * members.length);
+
+      members.forEach((m, idx) => {
+        const payout = idx === 0 ? splitAmount + remainder : splitAmount;
+        winnerPayouts.push({
+          placement: s.placement,
+          label: `${s.label} (${entry.team!.name})`,
+          amount: payout,
+          userId: m.id,
+          username: m.username,
+        });
+      });
+    } else if (entry.user) {
+      winnerPayouts.push({
+        placement: s.placement,
+        label: s.label,
+        amount: s.amount,
+        userId: entry.user.id,
+        username: entry.user.username,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: `Winner entry #${s.placement} has no associated user or team.`,
+      });
+      return;
+    }
   }
 
   const hostAmount = Math.round(Number(tournament.hostCommission) || 0);
-  const totalPrize = winners.reduce((sum, w) => sum + w.amount, 0);
+  const totalPrize = winnerPayouts.reduce((sum, w) => sum + w.amount, 0);
   const totalCollection = Math.round(Number(tournament.entryFee) * tournament.maxParticipants);
   const platformAmount = totalCollection > 0
     ? Math.max(0, totalCollection - hostAmount - totalPrize)
@@ -598,9 +645,9 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Winner payouts
-      for (const w of winners) {
-        const wallet = await tx.wallet.findUnique({ where: { userId: w.entry!.userId! } });
-        if (!wallet) throw new Error(`Wallet missing for ${w.entry!.user?.username ?? 'winner'} (${w.label})`);
+      for (const w of winnerPayouts) {
+        const wallet = await tx.wallet.findUnique({ where: { userId: w.userId } });
+        if (!wallet) throw new Error(`Wallet missing for ${w.username} (${w.label})`);
 
         await tx.wallet.update({
           where: { id: wallet.id },
@@ -609,12 +656,12 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
         await tx.transaction.create({
           data: {
             walletId: wallet.id,
-            userId: w.entry!.userId!,
+            userId: w.userId,
             type: TransactionType.PRIZE,
             status: TransactionStatus.COMPLETED,
             amount: new Decimal(w.amount),
             description: `${w.label} prize — ${tournament.title}`,
-            reference: `DIST-${tournament.id.slice(0, 8)}-P${w.placement}`,
+            reference: `DIST-${tournament.id.slice(0, 8)}-P${w.placement}-${w.userId.slice(-4)}`,
           },
         });
       }
@@ -664,12 +711,10 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
     });
 
     // Notify winners and host
-    for (const w of winners) {
-      if (w.entry?.userId) {
-        notificationService.notifyWinnerPayout(w.entry.userId, tournament.title, w.amount, w.label).catch((err) => {
-          console.error(`[Notification] Failed to notify winner ${w.entry!.userId}:`, err);
-        });
-      }
+    for (const w of winnerPayouts) {
+      notificationService.notifyWinnerPayout(w.userId, tournament.title, w.amount, w.label).catch((err) => {
+        console.error(`[Notification] Failed to notify winner ${w.userId}:`, err);
+      });
     }
     if (hostAmount > 0 && tournament.creatorId) {
       notificationService.notifyHostCommission(tournament.creatorId, tournament.title, hostAmount).catch((err) => {
@@ -681,7 +726,7 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
     res.json({
       success: true,
       message:
-        `Distributed ${fmt(totalPrize)} to ${winners.length} winner(s)` +
+        `Distributed ${fmt(totalPrize)} to ${winnerPayouts.length} winner(s)` +
         (hostAmount > 0 ? ` + ${fmt(hostAmount)} host commission` : '') +
         (platformAmount > 0 ? ` (+${fmt(platformAmount)} platform revenue). Tournament marked as PAID.` : '. Tournament marked as PAID.'),
     });
