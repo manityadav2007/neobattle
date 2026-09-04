@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   Trophy, Users, Shield, ArrowRight, Loader2, CheckCircle, AlertCircle,
   Upload, DollarSign, MapPin, Clock, Plus, Smartphone, Monitor, Gamepad2, Globe,
-  ToggleLeft, ToggleRight, Key, KeyRound, X, Image as ImageIcon, Wallet,
+  ToggleLeft, ToggleRight, Key, KeyRound, X, Image as ImageIcon,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
@@ -324,13 +324,6 @@ export default function HostDashboardPage() {
             <p className="text-zinc-400 mt-2">Create and manage your tournaments, view entries, and complete matches.</p>
           </div>
           <div className="flex items-center gap-3">
-            <Link
-              href="/wallet"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-fire-500/10 text-fire-400 border border-fire-500/30 hover:bg-fire-500/20 hover:border-fire-500/50 text-sm font-medium transition-all shadow-sm"
-            >
-              <Wallet className="w-4 h-4" />
-              <span>Wallet</span>
-            </Link>
             <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-fire-500/20 text-fire-400 text-sm font-medium hover:bg-fire-500/30">
               <Plus className="w-4 h-4" /> {showCreate ? 'Cancel' : 'Create Tournament'}
             </button>
