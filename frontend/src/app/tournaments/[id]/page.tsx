@@ -7,13 +7,12 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, ArrowLeft, IndianRupee,
-  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Smartphone, Shield,
+  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Shield, Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
 import TournamentTags, { tagColorMap, tagIcons } from '@/components/TournamentTags';
 import { tournamentApi, gameApi, userApi, adminApi, uploadApi, resultApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, TOURNAMENT_PLAY_GRACE_MS, type UserStats, type ResultSubmission } from '@/lib/services';
-import UpiPayment from '@/components/RazorpayCheckout';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
 
@@ -33,7 +32,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [copied, setCopied] = useState(false);
   const [endingTournament, setEndingTournament] = useState(false);
   const [distributing, setDistributing] = useState(false);
-  const [showUpiModal, setShowUpiModal] = useState(false);
 
   // Host result submission
   const [mySubmission, setMySubmission] = useState<ResultSubmission | null>(null);
@@ -704,33 +702,25 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 >
                   <AlertCircle className="w-5 h-5 text-amber-400" /> Insufficient Wallet Balance
                 </button>
-                <button
-                  onClick={() => setShowUpiModal(true)}
+                <Link
+                  href="/wallet"
                   className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 backdrop-blur-md transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)]"
                 >
-                  <Smartphone className="w-4 h-4 text-emerald-400" /> Quick Top-Up ₹{entryFee} &amp; Register
-                </button>
+                  <Wallet className="w-4 h-4 text-emerald-400" /> Top-Up Wallet ({formatCurrency(entryFee)})
+                </Link>
               </div>
             ) : entryFee > 0 ? (
-              <div className="space-y-3">
-                <button
-                  onClick={handleRegister}
-                  disabled={registering || (isSquad && !allIgnsFetched)}
-                  className="w-full py-4 rounded-2xl text-base font-black text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
-                >
-                  {registering ? (
-                    <><Loader2 className="w-5 h-5 animate-spin" /> Registering Team...</>
-                  ) : (
-                    <><Trophy className="w-5 h-5 text-yellow-300" /> Register with Wallet ({formatCurrency(entryFee)})</>
-                  )}
-                </button>
-                <button
-                  onClick={() => setShowUpiModal(true)}
-                  className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 backdrop-blur-md transition-all"
-                >
-                  <Smartphone className="w-4 h-4 text-emerald-400" /> Pay directly via UPI
-                </button>
-              </div>
+              <button
+                onClick={handleRegister}
+                disabled={registering || (isSquad && !allIgnsFetched)}
+                className="w-full py-4 rounded-2xl text-base font-black text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
+              >
+                {registering ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Registering Team...</>
+                ) : (
+                  <><Trophy className="w-5 h-5 text-yellow-300" /> Register with Wallet ({formatCurrency(entryFee)})</>
+                )}
+              </button>
             ) : (
               <button
                 onClick={handleRegister}
@@ -747,18 +737,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
       </motion.div>
-
-      {/* UPI Payment Modal */}
-      {showUpiModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowUpiModal(false)}>
-          <div className="bg-zinc-900/90 rounded-3xl p-6 sm:p-7 max-w-md w-full border border-white/10 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Smartphone className="w-5 h-5 text-emerald-400" /> Pay Entry Fee
-            </h3>
-            <UpiPayment amount={entryFee} tournamentId={id} onSuccess={() => { setShowUpiModal(false); setMessage('Payment submitted! Admin will verify shortly.'); }} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
