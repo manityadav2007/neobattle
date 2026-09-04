@@ -6,6 +6,7 @@ import { GameMode, Platform, TournamentFormat, TournamentStatus } from '@prisma/
 import { validatePrizePool } from '../services/commission.service';
 import { escrowService } from '../services/escrow.service';
 import { notificationService } from '../services/notification.service';
+import { cacheDel, cacheDelPattern } from '../config/redis';
 
 export async function getMyTournaments(req: AuthenticatedRequest, res: Response): Promise<void> {
   const tournaments = await prisma.tournament.findMany({
@@ -347,4 +348,46 @@ export async function getTournamentEntries(req: AuthenticatedRequest, res: Respo
   });
 
   res.json({ success: true, data: entries });
+}
+
+export async function updateRoomDetails(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { roomId, roomPassword } = req.body;
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!tournament) {
+    res.status(404).json({ success: false, message: 'Tournament not found' });
+    return;
+  }
+
+  if (tournament.creatorId !== req.user!.id && req.user!.role !== 'ADMIN' && req.user!.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ success: false, message: 'Not authorized' });
+    return;
+  }
+
+  const updated = await prisma.tournament.update({
+    where: { id: req.params.id },
+    data: {
+      roomId: typeof roomId === 'string' ? roomId.trim() : null,
+      roomPassword: typeof roomPassword === 'string' ? roomPassword.trim() : null,
+    },
+  });
+
+  try {
+    await cacheDelPattern('tournaments:list*');
+    await cacheDel(`tournament:${req.params.id}`);
+  } catch (cacheErr) {
+    console.warn('[HostController] Failed to clear cache:', cacheErr);
+  }
+
+  res.json({
+    success: true,
+    message: 'Room credentials updated successfully',
+    data: {
+      id: updated.id,
+      roomId: updated.roomId,
+      roomPassword: updated.roomPassword,
+    },
+  });
 }

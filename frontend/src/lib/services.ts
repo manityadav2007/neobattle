@@ -527,6 +527,10 @@ export const hostApi = {
     const res = await api.post(`/host/tournaments/${id}/complete`);
     return res.data;
   },
+  updateRoomDetails: async (id: string, data: { roomId: string; roomPassword?: string }) => {
+    const res = await api.patch(`/host/tournaments/${id}/room`, data);
+    return res.data;
+  },
 };
 
 export function formatTag(tournament: { format: string; platform?: string; gameMode?: string }): string {
