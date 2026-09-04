@@ -11,7 +11,7 @@ export default function PrizePolicyPage() {
         <h2 className="text-2xl font-bold text-white mt-8">Prize Distribution</h2>
         <p>Tournament prizes are distributed based on the prize breakdown specified at the time of tournament creation. Prizes are credited to the winner&apos;s wallet within 7 business days after tournament completion.</p>
         <h2 className="text-2xl font-bold text-white mt-8">Platform Commission</h2>
-        <p>A 28% platform commission is deducted from the total entry fee collection. 20% goes to the host, and the remaining 52% forms the prize pool.</p>
+        <p>A 16% platform share and 4% host commission (20% total deduction) are deducted from the total entry fee collection. The remaining 80% forms the prize pool.</p>
         <h2 className="text-2xl font-bold text-white mt-8">Taxes</h2>
         <p>Winners are responsible for any applicable taxes on their winnings as per local laws. NEOBATTLE may issue tax forms where required.</p>
         <h2 className="text-2xl font-bold text-white mt-8">Disputes</h2>

@@ -632,15 +632,15 @@ export default function AdminTournamentsPage() {
                     <p className="text-white font-bold">{formatCurrency(breakdown.totalCollection)}</p>
                   </div>
                   <div>
-                    <p className="text-zinc-500">Platform (28%)</p>
+                    <p className="text-zinc-500">Platform (16%)</p>
                     <p className="text-fire-400 font-bold">{formatCurrency(breakdown.platformCommission)}</p>
                   </div>
                   <div>
-                    <p className="text-zinc-500">Host (20%)</p>
+                    <p className="text-zinc-500">Host (4%)</p>
                     <p className="text-green-400 font-bold">{formatCurrency(breakdown.hostCommission)}</p>
                   </div>
                   <div>
-                    <p className="text-zinc-500">Max Prize Pool</p>
+                    <p className="text-zinc-500">Max Prize Pool (80%)</p>
                     <p className="font-bold text-yellow-400">{formatCurrency(breakdown.maxPrizePool)}</p>
                   </div>
                 </div>

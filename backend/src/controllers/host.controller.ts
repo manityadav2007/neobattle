@@ -199,7 +199,7 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
           type: 'PRIZE',
           status: 'COMPLETED',
           amount: hostCommissionNum,
-          description: `20% Host commission for: ${tournament.title}`,
+          description: `Host commission for: ${tournament.title}`,
         },
       });
     }
@@ -226,7 +226,7 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
             type: 'PRIZE',
             status: 'COMPLETED',
             amount: adminAmount,
-            description: `28% Platform commission + surplus for: ${tournament.title}`,
+            description: `Platform commission + surplus for: ${tournament.title}`,
           },
         });
       }
@@ -252,7 +252,7 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
         type: 'PRIZE',
         status: 'COMPLETED',
         amount: prizePoolNum,
-        description: `52% Winner prize for: ${tournament.title}`,
+        description: `Winner prize for: ${tournament.title}`,
       },
     });
   }

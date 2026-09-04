@@ -219,8 +219,8 @@ export default function AdminPendingResultsPage() {
             {/* Commission breakdown */}
             <div className="mt-5 p-4 rounded-xl bg-white/[0.03] border border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div><p className="text-zinc-500">Prize Pool</p><p className="text-white font-bold">{formatCurrency(Number(selected.tournament.prizePool))}</p></div>
-              <div><p className="text-zinc-500">Platform (28%)</p><p className="text-fire-400 font-bold">{formatCurrency(Number(selected.tournament.platformCommission))}</p></div>
-              <div><p className="text-zinc-500">Host (20%)</p><p className="text-green-400 font-bold">{formatCurrency(Number(selected.tournament.hostCommission))}</p></div>
+              <div><p className="text-zinc-500">Platform (16%)</p><p className="text-fire-400 font-bold">{formatCurrency(Number(selected.tournament.platformCommission))}</p></div>
+              <div><p className="text-zinc-500">Host (4%)</p><p className="text-green-400 font-bold">{formatCurrency(Number(selected.tournament.hostCommission))}</p></div>
               <div><p className="text-zinc-500">Total Prizes</p><p className="text-yellow-400 font-bold">
                 {formatCurrency(
                   Number(selected.tournament.prizeFirst) +
