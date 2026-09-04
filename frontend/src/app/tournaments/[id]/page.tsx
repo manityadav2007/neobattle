@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
-  Trophy, Users, MapPin, Clock, ArrowLeft, IndianRupee,
+  Trophy, Users, MapPin, Clock, IndianRupee,
   CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Shield, Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -242,18 +242,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-      {/* Back button */}
-      <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="mb-4">
-        <Link
-          href="/tournaments"
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-900/60 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 backdrop-blur-md transition-all shadow-sm group"
-        >
-          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5 text-fire-400" />
-          Back to Tournaments
-        </Link>
-      </motion.div>
-
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
         {/* Main Tournament Hero Card */}
         <div className="rounded-3xl overflow-hidden bg-zinc-950/80 backdrop-blur-xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.6)] fire-glow relative">
