@@ -30,8 +30,9 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
   const theme = getMapTheme(tournament.mapName);
   const effectiveStatus = getEffectiveStatus(tournament);
   const ended = isTournamentEnded(tournament);
+  const isFull = spotsLeft <= 0;
   const countdown = ended ? 'Ended' : effectiveStatus === 'Playing' ? 'Playing now' : getCountdown(tournament.startTime);
-  const isUrgent = spotsLeft <= 5 && !ended;
+  const isUrgent = spotsLeft > 0 && spotsLeft <= 5 && !ended;
 
   return (
     <motion.div
@@ -120,6 +121,9 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
           <div className="flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5 text-blue-400" />
             <span>{entryCount}/{tournament.maxParticipants}</span>
+            {isFull && !ended && (
+              <span className="text-[10px] text-amber-400 font-semibold ml-1">Full</span>
+            )}
             {isUrgent && (
               <span className="text-[10px] text-red-400 font-semibold ml-1 animate-pulse">{spotsLeft} left</span>
             )}

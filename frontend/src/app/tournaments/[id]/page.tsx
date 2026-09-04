@@ -207,6 +207,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const hasSufficientBalance = entryFee === 0 || walletBalance >= entryFee;
   const prizePool = typeof tournament.prizePool === 'string' ? parseFloat(tournament.prizePool) : tournament.prizePool;
   const entryCount = tournament._count?.entries ?? 0;
+  const isSlotsFull = tournament.maxParticipants > 0 && entryCount >= tournament.maxParticipants;
   const isSquad = tournament.format === 'SQUAD';
   const allIgnsFetched = isSquad ? squadIgns.every((i) => i !== null) : true;
   const mapTheme = getMapTheme(tournament.mapName);
@@ -220,10 +221,10 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const oneHourPastStart = startTimeMs > 0 && now >= startTimeMs + TOURNAMENT_PLAY_GRACE_MS;
   const isCompletedState = isEnded || effectiveStatus === 'Ended' || oneHourPastStart;
   const isLiveAndPlaying = !isCompletedState && (tournament.status === 'ACTIVE' || effectiveStatus === 'Playing' || effectiveStatus === 'Live' || startTimeReached);
-  const isRegistrationClosed = !isCompletedState && !isLiveAndPlaying && (registrationEndReached || tournament.status !== 'REGISTRATION');
+  const isRegistrationClosed = !isCompletedState && !isLiveAndPlaying && (isSlotsFull || registrationEndReached || tournament.status !== 'REGISTRATION');
   const canEndTournament = !isEnded && startTimeReached && (isSuperAdmin || isAdmin || user?.id === tournament.creatorId);
 
-  console.log('[TournamentView] status:', tournament.status, 'effectiveStatus:', effectiveStatus, 'isCompletedState:', isCompletedState, 'isLiveAndPlaying:', isLiveAndPlaying, 'isRegistrationClosed:', isRegistrationClosed);
+  console.log('[TournamentView] status:', tournament.status, 'effectiveStatus:', effectiveStatus, 'isSlotsFull:', isSlotsFull, 'isCompletedState:', isCompletedState, 'isLiveAndPlaying:', isLiveAndPlaying, 'isRegistrationClosed:', isRegistrationClosed);
 
   const rawFirst = tournament.prizeFirst != null ? Number(tournament.prizeFirst) : 0;
   const rawSecond = tournament.prizeSecond != null ? Number(tournament.prizeSecond) : 0;
@@ -398,9 +399,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   {
                     icon: Users,
                     label: tournament.teamSize ? 'Team Size' : 'Participants',
-                    value: tournament.teamSize ? tournament.teamSize : `${entryCount}/${tournament.maxParticipants}`,
-                    iconBg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-                    gradientClass: 'bg-gradient-to-r from-cyan-300 via-blue-400 to-indigo-300 bg-clip-text text-transparent font-black text-base',
+                    value: tournament.teamSize ? tournament.teamSize : isSlotsFull ? `${entryCount}/${tournament.maxParticipants} (Full)` : `${entryCount}/${tournament.maxParticipants}`,
+                    iconBg: isSlotsFull ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+                    gradientClass: isSlotsFull
+                      ? 'bg-gradient-to-r from-amber-300 via-orange-400 to-amber-500 bg-clip-text text-transparent font-black text-base'
+                      : 'bg-gradient-to-r from-cyan-300 via-blue-400 to-indigo-300 bg-clip-text text-transparent font-black text-base',
                   },
                   {
                     icon: MapPin,
@@ -450,7 +453,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             </div>
 
             {/* Squad Registration Box */}
-            {isSquad && tournament.status === 'REGISTRATION' && !tournament.isRegistered && (
+            {isSquad && tournament.status === 'REGISTRATION' && !isRegistrationClosed && !isCompletedState && !isLiveAndPlaying && !tournament.isRegistered && (
               <div className="p-5 rounded-2xl bg-zinc-900/60 backdrop-blur-xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.08)] space-y-3.5">
                 <p className="text-sm font-bold text-white flex items-center gap-2">
                   <Gamepad2 className="w-4 h-4 text-fire-400" /> Squad Registration — Enter 4 Free Fire UIDs
@@ -657,10 +660,19 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 {myStats && <LeagueBadge wins={myStats.totalWins} size="md" />}
               </div>
             ) : isRegistrationClosed ? (
-              /* Registration Closed Banner */
+              /* Slots Full or Registration Closed Banner */
               <div className="w-full p-5 rounded-2xl bg-zinc-900/60 border border-zinc-700/40 backdrop-blur-xl text-center text-sm text-zinc-300">
-                <Clock className="w-4 h-4 inline mr-1.5 text-amber-400" />
-                Registration has closed for this tournament. Match will begin shortly.
+                {isSlotsFull ? (
+                  <>
+                    <Users className="w-4 h-4 inline mr-1.5 text-amber-400" />
+                    <span className="font-bold text-amber-400">Slots Full:</span> All {tournament.maxParticipants} participant slots for this tournament have been filled. Registration is now closed.
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-4 h-4 inline mr-1.5 text-amber-400" />
+                    Registration has closed for this tournament. Match will begin shortly.
+                  </>
+                )}
               </div>
             ) : !user ? (
               <button

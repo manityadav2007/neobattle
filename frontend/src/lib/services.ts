@@ -806,6 +806,7 @@ export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     REGISTRATION: 'text-green-400 bg-green-400/10',
     REGISTRATION_CLOSED: 'text-zinc-400 bg-zinc-400/10',
+    SLOTS_FULL: 'text-amber-400 bg-amber-400/10',
     ACTIVE: 'text-fire-400 bg-fire-400/10',
     LIVE: 'text-fire-400 bg-fire-400/10',
     PLAYING: 'text-amber-300 bg-amber-400/10',
@@ -823,17 +824,20 @@ export function getStatusColor(status: string): string {
 export const TOURNAMENT_PLAY_GRACE_MS = 60 * 60 * 1000;
 
 /**
- * Display status derived from DB status + start time + end time:
+ * Display status derived from DB status + start time + end time + participants capacity:
  * - COMPLETED, PAID, or >1h past startTime, or past endTime → 'Ended'
  * - Active match within 1h after startTime → 'Playing'
  * - ACTIVE before startTime → 'Live'
  * - Past registrationEnd but before startTime → 'Registration Closed'
+ * - Capacity full (entryCount >= maxParticipants) and still in registration phase → 'Slots Full'
  */
 export function getEffectiveStatus(t: {
   status: string;
   startTime?: string | Date | null;
   endTime?: string | Date | null;
   registrationEnd?: string | Date | null;
+  maxParticipants?: number;
+  _count?: { entries: number };
 }): string {
   if (t.status === 'COMPLETED' || t.status === 'PAID') return 'Ended';
   if (t.status === 'CANCELLED') return 'Cancelled';
@@ -859,6 +863,16 @@ export function getEffectiveStatus(t: {
   // If registration window ended but tournament hasn't started yet
   if (t.registrationEnd && new Date(t.registrationEnd).getTime() <= now && t.status === 'REGISTRATION') {
     return 'Registration Closed';
+  }
+
+  // If participant slots are full during registration phase
+  if (
+    t.status === 'REGISTRATION' &&
+    t.maxParticipants &&
+    t._count &&
+    t._count.entries >= t.maxParticipants
+  ) {
+    return 'Slots Full';
   }
 
   return t.status;
