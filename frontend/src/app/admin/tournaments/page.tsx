@@ -107,8 +107,21 @@ export default function AdminTournamentsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await tournamentApi.list({ page: 1, limit: 200, all: true });
-      setTournaments(res.data || []);
+      const res = await tournamentApi.list({ page: 1, limit: 100, all: true });
+      let allTournaments = res.data || [];
+      if (res.pagination && res.pagination.totalPages > 1) {
+        const pagePromises = [];
+        for (let p = 2; p <= Math.min(res.pagination.totalPages, 10); p++) {
+          pagePromises.push(tournamentApi.list({ page: p, limit: 100, all: true }));
+        }
+        const extraPages = await Promise.all(pagePromises);
+        for (const pageRes of extraPages) {
+          if (pageRes.data && pageRes.data.length > 0) {
+            allTournaments = allTournaments.concat(pageRes.data);
+          }
+        }
+      }
+      setTournaments(allTournaments);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
