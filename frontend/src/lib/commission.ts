@@ -11,10 +11,10 @@ const HOST_RATE = 0.20;
 const REMAINING_RATE = 1 - PLATFORM_RATE - HOST_RATE;
 
 export function calculateCommission(entryFee: number, maxPlayers: number): CommissionBreakdown {
-  const totalCollection = entryFee * maxPlayers;
-  const platformCommission = Math.round(totalCollection * PLATFORM_RATE * 100) / 100;
-  const hostCommission = Math.round(totalCollection * HOST_RATE * 100) / 100;
-  const remainingPool = Math.round(totalCollection * REMAINING_RATE * 100) / 100;
-  const maxPrizePool = Math.round(remainingPool);
+  const totalCollection = Math.round(entryFee * maxPlayers);
+  const hostCommission = Math.round(totalCollection * HOST_RATE);
+  const maxPrizePool = Math.round(totalCollection * REMAINING_RATE);
+  const platformCommission = Math.max(0, totalCollection - hostCommission - maxPrizePool);
+  const remainingPool = maxPrizePool;
   return { totalCollection, platformCommission, hostCommission, remainingPool, maxPrizePool };
 }

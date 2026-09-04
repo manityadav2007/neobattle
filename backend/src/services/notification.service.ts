@@ -115,6 +115,25 @@ class NotificationService {
       message: `Your team has been disqualified from "${tournamentTitle}".`,
     });
   }
+
+  async notifyWinnerPayout(userId: string, tournamentTitle: string, amount: number, placementLabel?: string): Promise<void> {
+    const labelText = placementLabel ? ` (${placementLabel})` : '';
+    await this.sendToUser(userId, {
+      type: 'PAYOUT_APPROVED',
+      title: '🏆 Tournament Prize Won!',
+      message: `You won ₹${amount}${labelText} from tournament "${tournamentTitle}". Prize added to your wallet!`,
+      link: '/wallet',
+    });
+  }
+
+  async notifyHostCommission(hostId: string, tournamentTitle: string, amount: number): Promise<void> {
+    await this.sendToUser(hostId, {
+      type: 'PAYOUT_APPROVED',
+      title: '💰 Host Commission Received',
+      message: `You received ₹${amount} host commission for tournament "${tournamentTitle}". Added to your wallet!`,
+      link: '/wallet',
+    });
+  }
 }
 
 export const notificationService = new NotificationService();

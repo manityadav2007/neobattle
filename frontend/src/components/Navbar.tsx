@@ -90,6 +90,14 @@ export default function Navbar() {
               <div className="w-24 h-8 bg-white/5 rounded-lg animate-pulse" />
             ) : user ? (
               <>
+                <Link
+                  href="/wallet"
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-fire-500/10 border border-white/10 hover:border-fire-500/30 text-xs font-semibold text-zinc-300 hover:text-fire-400 transition-all"
+                  title="My Wallet"
+                >
+                  <Wallet className="w-3.5 h-3.5 text-fire-400" />
+                  <span>{user.wallet ? `₹${Number(user.wallet.balance).toLocaleString('en-IN')}` : '₹0'}</span>
+                </Link>
                 <NotificationBell />
                 <Link
                   href="/dashboard"

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Bell, CheckCheck, Loader2, X, Calendar, AlertTriangle, Ban } from 'lucide-react';
+import { Bell, CheckCheck, Loader2, X, Calendar, AlertTriangle, Ban, Trophy } from 'lucide-react';
 import { api, isAuthenticated } from '@/lib/api';
 import { formatDate } from '@/lib/services';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,6 +34,8 @@ const typeIcons: Record<string, any> = {
   MATCH_UPDATE: Calendar,
   DEADLINE: AlertTriangle,
   DISQUALIFICATION: Ban,
+  PAYOUT_APPROVED: Trophy,
+  NEW_TOURNAMENT: Trophy,
 };
 
 export default function NotificationBell() {
@@ -148,6 +150,7 @@ export default function NotificationBell() {
                         <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${
                           notif.type === 'DISQUALIFICATION' ? 'text-red-400' :
                           notif.type === 'DEADLINE' ? 'text-yellow-400' :
+                          notif.type === 'PAYOUT_APPROVED' ? 'text-amber-400' :
                           'text-cyan-400'
                         }`} />
                         <div className="min-w-0">

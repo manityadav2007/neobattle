@@ -3,6 +3,7 @@ import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { TournamentStatus, TransactionType, TransactionStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { notificationService } from '../services/notification.service';
 
 interface ResolvedWinner {
   placement: number;
@@ -222,9 +223,12 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
     return;
   }
 
-  const hostAmount = Number(t.hostCommission) || 0;
-  const platformAmount = Number(t.platformCommission) || 0;
+  const hostAmount = Math.round(Number(t.hostCommission) || 0);
   const totalPrize = winners.reduce((sum, w) => sum + w.amount, 0);
+  const totalCollection = Math.round(Number(t.entryFee) * t.maxParticipants);
+  const platformAmount = totalCollection > 0
+    ? Math.max(0, totalCollection - hostAmount - totalPrize)
+    : Math.round(Number(t.platformCommission) || 0);
 
   const adminUser = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' }, orderBy: { createdAt: 'asc' } });
   const adminWallet = adminUser ? await prisma.wallet.findUnique({ where: { userId: adminUser.id } }) : null;
@@ -293,6 +297,18 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
         data: { status: 'APPROVED', reviewedBy: req.user!.id, reviewedAt: new Date() },
       });
     });
+
+    // Notify winners and host
+    for (const w of winners) {
+      notificationService.notifyWinnerPayout(w.userId, t.title, w.amount, w.label).catch((err) => {
+        console.error(`[Notification] Failed to notify winner ${w.userId}:`, err);
+      });
+    }
+    if (hostAmount > 0 && t.creatorId) {
+      notificationService.notifyHostCommission(t.creatorId, t.title, hostAmount).catch((err) => {
+        console.error(`[Notification] Failed to notify host ${t.creatorId}:`, err);
+      });
+    }
 
     const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
     res.json({

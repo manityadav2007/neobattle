@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { UserRole, TournamentStatus, TransactionType, TransactionStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
+import { notificationService } from '../services/notification.service';
 
 function formatCurrency(n: number): string {
   return `₹${n.toLocaleString('en-IN')}`;
@@ -583,14 +584,16 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
     return;
   }
 
-  const hostAmount = Number(tournament.hostCommission) || 0;
-  const platformAmount = Number(tournament.platformCommission) || 0;
+  const hostAmount = Math.round(Number(tournament.hostCommission) || 0);
+  const totalPrize = winners.reduce((sum, w) => sum + w.amount, 0);
+  const totalCollection = Math.round(Number(tournament.entryFee) * tournament.maxParticipants);
+  const platformAmount = totalCollection > 0
+    ? Math.max(0, totalCollection - hostAmount - totalPrize)
+    : Math.round(Number(tournament.platformCommission) || 0);
 
   const adminUser = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' }, orderBy: { createdAt: 'asc' } });
   const adminWallet = adminUser ? await prisma.wallet.findUnique({ where: { userId: adminUser.id } }) : null;
   const hostWallet = await prisma.wallet.findUnique({ where: { userId: tournament.creatorId } });
-
-  const totalPrize = winners.reduce((sum, w) => sum + w.amount, 0);
 
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -659,6 +662,20 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
         data: { status: TournamentStatus.PAID },
       });
     });
+
+    // Notify winners and host
+    for (const w of winners) {
+      if (w.entry?.userId) {
+        notificationService.notifyWinnerPayout(w.entry.userId, tournament.title, w.amount, w.label).catch((err) => {
+          console.error(`[Notification] Failed to notify winner ${w.entry!.userId}:`, err);
+        });
+      }
+    }
+    if (hostAmount > 0 && tournament.creatorId) {
+      notificationService.notifyHostCommission(tournament.creatorId, tournament.title, hostAmount).catch((err) => {
+        console.error(`[Notification] Failed to notify host ${tournament.creatorId}:`, err);
+      });
+    }
 
     const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
     res.json({

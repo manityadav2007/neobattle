@@ -5,6 +5,7 @@ import { TournamentStatus, WinnerProofStatus, TransactionStatus, TransactionType
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { gameProfileService } from '../services/gameProfile.service';
+import { notificationService } from '../services/notification.service';
 
 export async function submitWinnerProof(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { tournamentId, winnerUid, screenshotUrl } = req.body;
@@ -107,9 +108,12 @@ export async function reviewWinnerProof(req: AuthenticatedRequest, res: Response
 
   if (status === WinnerProofStatus.APPROVED && proof.tournament) {
     const t = proof.tournament;
-    const prizeAmount = Number(t.prizePool);
-    const hostAmount = Number(t.hostCommission);
-    const adminAmount = Number(t.platformCommission);
+    const prizeAmount = Math.round(Number(t.prizePool));
+    const hostAmount = Math.round(Number(t.hostCommission));
+    const totalCollection = Math.round(Number(t.entryFee) * t.maxParticipants);
+    const adminAmount = totalCollection > 0
+      ? Math.max(0, totalCollection - hostAmount - prizeAmount)
+      : Math.round(Number(t.platformCommission));
 
     const winnerWallet = await prisma.wallet.findUnique({ where: { userId: proof.userId } });
     const hostWallet = await prisma.wallet.findUnique({ where: { userId: t.creatorId } });
@@ -150,14 +154,14 @@ export async function reviewWinnerProof(req: AuthenticatedRequest, res: Response
           },
         });
       }
-      if (adminAmount > 0 && adminWallet) {
+      if (adminAmount > 0 && adminWallet && adminUser) {
         await tx.wallet.update({
           where: { id: adminWallet.id },
           data: { balance: { increment: adminAmount } },
         });
         await tx.transaction.create({
           data: {
-            walletId: adminWallet.id, userId: adminUser!.id,
+            walletId: adminWallet.id, userId: adminUser.id,
             type: TransactionType.PRIZE, status: TransactionStatus.COMPLETED,
             amount: new Decimal(adminAmount),
             description: `Platform commission from ${t.title}`, reference: `PLAT-COMM-${proofId.slice(0, 8)}`,
@@ -165,6 +169,17 @@ export async function reviewWinnerProof(req: AuthenticatedRequest, res: Response
         });
       }
     });
+
+    if (prizeAmount > 0) {
+      notificationService.notifyWinnerPayout(proof.userId, t.title, prizeAmount, '1st Place').catch((err) => {
+        console.error(`[Notification] Failed to notify winner ${proof.userId}:`, err);
+      });
+    }
+    if (hostAmount > 0 && t.creatorId) {
+      notificationService.notifyHostCommission(t.creatorId, t.title, hostAmount).catch((err) => {
+        console.error(`[Notification] Failed to notify host ${t.creatorId}:`, err);
+      });
+    }
   }
 
   const updated = await prisma.winnerProof.update({
@@ -182,13 +197,20 @@ export async function reviewWinnerProof(req: AuthenticatedRequest, res: Response
     data: { status: status === WinnerProofStatus.APPROVED ? TournamentStatus.PAID : TournamentStatus.COMPLETED },
   });
 
-  const fmt = (n: number) => `₹${n.toFixed(2)}`;
+  const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+
+  const prizeDisplay = Math.round(Number(proof.tournament.prizePool));
+  const hostDisplay = Math.round(Number(proof.tournament.hostCommission));
+  const collDisplay = Math.round(Number(proof.tournament.entryFee) * proof.tournament.maxParticipants);
+  const platDisplay = collDisplay > 0
+    ? Math.max(0, collDisplay - hostDisplay - prizeDisplay)
+    : Math.round(Number(proof.tournament.platformCommission));
 
   res.json({
     success: true,
     data: updated,
     message: status === WinnerProofStatus.APPROVED
-      ? `Payout approved. Prize (${fmt(Number(proof.tournament.prizePool))}) → Winner, Host commission (${fmt(Number(proof.tournament.hostCommission))}) → Host, Platform commission (${fmt(Number(proof.tournament.platformCommission))}) → Admin.`
+      ? `Payout approved. Prize (${fmt(prizeDisplay)}) → Winner, Host commission (${fmt(hostDisplay)}) → Host, Platform commission (${fmt(platDisplay)}) → Admin.`
       : 'Winner proof rejected.',
   });
 }
