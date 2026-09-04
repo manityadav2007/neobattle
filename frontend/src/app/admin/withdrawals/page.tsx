@@ -3,11 +3,10 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Banknote, Copy, CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw, ArrowLeft, Search, Check,
+  Banknote, Copy, CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw, Search, Check,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { adminApi, formatCurrency } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 
@@ -138,11 +137,6 @@ export default function AdminWithdrawalsPage() {
 
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs text-zinc-500 mb-2">
-              <Link href="/admin" className="hover:text-white transition-colors flex items-center gap-1">
-                <ArrowLeft className="w-3.5 h-3.5" /> Back to Admin
-              </Link>
-            </div>
             <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
               <Banknote className="w-8 h-8 text-blue-400" />
               Withdrawal Requests
