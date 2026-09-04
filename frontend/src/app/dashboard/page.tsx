@@ -184,13 +184,6 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <Link
-              href="/wallet"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-fire-500/10 text-fire-400 border border-fire-500/30 hover:bg-fire-500/20 hover:border-fire-500/50 transition-all shadow-sm"
-            >
-              <Wallet className="w-4 h-4" />
-              <span>Wallet: {user.wallet ? formatCurrency(user.wallet.balance) : '₹0'}</span>
-            </Link>
-            <Link
               href="/dashboard/verify"
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                 user.isVerified

@@ -79,7 +79,7 @@ export default function GlobalSidebar() {
             },
           ]
         : []),
-      ...(user && !isHost
+      ...(user
         ? [
             {
               href: '/wallet',
