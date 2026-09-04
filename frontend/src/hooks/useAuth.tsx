@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' || isOwner;
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'MODERATOR' || isSuperAdmin;
   const isHost = user?.role === 'HOST';
-  const canAccessWallet = !!user && !isHost;
+  const canAccessWallet = !!user;
 
   return (
     <AuthContext.Provider value={{ user, loading, error, refetch: fetchUser, refreshUser, logout, setUser, isAdmin, isSuperAdmin, isHost, canAccessWallet, isOwner }}>

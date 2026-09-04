@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Trophy, AlertCircle, RefreshCw, Loader2, Users, DollarSign, MapPin, Clock,
-  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X,
+  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X, Copy, Check,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentApi, adminApi, formatCurrency, formatDate, getStatusColor, type Tournament } from '@/lib/services';
@@ -57,13 +57,24 @@ const round2 = (val: any) => Math.round(Number(val) || 0);
 
 export default function AdminTournamentsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, isSuperAdmin } = useAuth();
+  const { user, loading: authLoading, isSuperAdmin, isAdmin } = useAuth();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [copiedUid, setCopiedUid] = useState<string | null>(null);
+
+  const handleCopyUid = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(uid);
+      setCopiedUid(uid);
+      setTimeout(() => setCopiedUid(null), 2000);
+    }
+  };
 
   const [showCreate, setShowCreate] = useState(false);
   const [isFree, setIsFree] = useState(false);
@@ -89,14 +100,14 @@ export default function AdminTournamentsPage() {
   const [awardMsg, setAwardMsg] = useState('');
 
   useEffect(() => {
-    if (!authLoading && (!user || !isSuperAdmin)) router.push('/dashboard');
-  }, [user, authLoading, isSuperAdmin, router]);
+    if (!authLoading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
+  }, [user, authLoading, isSuperAdmin, isAdmin, router]);
 
   const loadData = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await tournamentApi.list({ page: 1 });
+      const res = await tournamentApi.list({ page: 1, limit: 200, all: true });
       setTournaments(res.data || []);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -106,8 +117,10 @@ export default function AdminTournamentsPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin]);
+    if (!authLoading && (isSuperAdmin || isAdmin)) {
+      loadData();
+    }
+  }, [authLoading, isSuperAdmin, isAdmin]);
 
   const loadEntries = async (tournamentId: string) => {
     if (entriesLoading[tournamentId]) return;
@@ -659,6 +672,17 @@ export default function AdminTournamentsPage() {
               <option value="DRAFT">Draft</option>
             </select>
 
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              title="Refresh tournaments list"
+              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-fire-400' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+
             {(searchQuery || statusFilter) && (
               <button
                 onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
@@ -714,6 +738,24 @@ export default function AdminTournamentsPage() {
                     {/* Header: Title, UID & Status */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
+                        {/* Prominent UID badge and creator info */}
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyUid(t.uid || t.id.slice(0, 8).toUpperCase(), e)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-fire-500/20 to-neo-500/20 hover:from-fire-500/30 hover:to-neo-500/30 border border-fire-500/30 text-fire-400 font-mono text-xs font-bold tracking-wider shadow-sm transition-all group/uid cursor-pointer"
+                            title="Click to copy UID"
+                          >
+                            <span>UID: {t.uid || t.id.slice(0, 8).toUpperCase()}</span>
+                            {copiedUid === (t.uid || t.id.slice(0, 8).toUpperCase()) ? (
+                              <Check className="w-3 h-3 text-green-400" />
+                            ) : (
+                              <Copy className="w-3 h-3 opacity-60 group-hover/uid:opacity-100 transition-opacity" />
+                            )}
+                          </button>
+                          <span className="text-xs text-zinc-400">by <span className="text-zinc-200 font-medium">{t.creator?.username || 'System'}</span></span>
+                        </div>
+
                         <Link
                           href={`/tournaments/${t.id}`}
                           className="text-base font-bold text-white hover:text-fire-400 transition-colors line-clamp-1 flex items-center gap-1.5"
@@ -722,16 +764,9 @@ export default function AdminTournamentsPage() {
                           <span>{t.title}</span>
                           <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-fire-400" />
                         </Link>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          {t.uid && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-fire-500/10 border border-fire-500/25 text-fire-400 font-mono text-[11px] font-bold tracking-wider">
-                              UID: {t.uid}
-                            </span>
-                          )}
-                          <span className="text-xs text-zinc-500">by {t.creator?.username || 'System'}</span>
-                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
+
+                      <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
                         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(t.status)}`}>{t.status}</span>
                         {isFreeTournament && (
                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-500/10 text-green-400">FREE</span>

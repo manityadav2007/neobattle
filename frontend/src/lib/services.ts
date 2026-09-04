@@ -122,7 +122,7 @@ export const authApi = {
 };
 
 export const tournamentApi = {
-  list: async (params?: { page?: number; status?: string; format?: string; platform?: string; gameMode?: string }) => {
+  list: async (params?: { page?: number; limit?: number; status?: string; format?: string; platform?: string; gameMode?: string; all?: boolean; search?: string }) => {
     const res = await api.get<ApiResponse<Tournament[]>>('/tournaments', { params });
     return res.data;
   },

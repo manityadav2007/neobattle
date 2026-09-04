@@ -109,53 +109,81 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
   await syncTournamentStatuses();
 
   const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 20;
-  const status = req.query.status as TournamentStatus | undefined;
+  const rawAll = req.query.all;
+  const isAll = rawAll === 'true' || rawAll === '1' || rawAll === true || req.query.status === 'ALL';
+  const limit = parseInt(req.query.limit as string) || (isAll ? 100 : 20);
+  const status = req.query.status as TournamentStatus | 'ALL' | undefined;
   const format = req.query.format as TournamentFormat | undefined;
   const platform = req.query.platform as Platform | undefined;
   const gameMode = req.query.gameMode as GameMode | undefined;
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
   const skip = (page - 1) * limit;
 
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-  const where = {
-    ...(status
-      ? status === TournamentStatus.REGISTRATION
-        ? {
-            status: TournamentStatus.REGISTRATION,
-            startTime: { gt: now },
-            registrationEnd: { gt: now },
-          }
-        : status === TournamentStatus.ACTIVE
-        ? {
-            status: TournamentStatus.ACTIVE,
-            startTime: { gte: oneHourAgo },
-          }
-        : status === TournamentStatus.COMPLETED
-        ? {
-            OR: [
-              { status: { in: [TournamentStatus.COMPLETED, TournamentStatus.PAID] as TournamentStatus[] } },
-              { startTime: { lt: oneHourAgo } },
-            ],
-          }
-        : { status }
-      : {
-          // Default (live/open listings): strictly hide anything terminal OR expired (>1h past start or past endTime)
-          status: { notIn: [TournamentStatus.COMPLETED, TournamentStatus.CANCELLED, TournamentStatus.PAID] as TournamentStatus[] },
-          startTime: { gte: oneHourAgo },
-          OR: [
-            { endTime: null },
-            { endTime: { gt: now } },
-          ],
-        }),
-    ...(format && { format }),
-    ...(platform && { platform }),
-    ...(gameMode && { gameMode }),
-  };
+  let where: any = {};
 
-  const cacheKey = `tournaments:list:${page}:${limit}:${status || ''}:${format || ''}:${platform || ''}:${gameMode || ''}`;
-  const cached = await cacheGet<{ tournaments: unknown[]; total: number }>(cacheKey);
+  if (isAll) {
+    // Admin / All mode: No time restrictions; include all tournaments
+    if (status && status !== 'ALL') {
+      where.status = status;
+    }
+  } else {
+    // Public listing mode: active/upcoming tournaments
+    if (status) {
+      if (status === TournamentStatus.REGISTRATION) {
+        where.status = TournamentStatus.REGISTRATION;
+        where.startTime = { gt: now };
+        where.registrationEnd = { gt: now };
+      } else if (status === TournamentStatus.ACTIVE) {
+        where.status = TournamentStatus.ACTIVE;
+        where.startTime = { gte: oneHourAgo };
+      } else if (status === TournamentStatus.COMPLETED) {
+        where.OR = [
+          { status: { in: [TournamentStatus.COMPLETED, TournamentStatus.PAID] as TournamentStatus[] } },
+          { startTime: { lt: oneHourAgo } },
+        ];
+      } else {
+        where.status = status;
+      }
+    } else {
+      // Default (live/open listings): strictly hide anything terminal OR expired (>1h past start or past endTime)
+      where.status = { notIn: [TournamentStatus.COMPLETED, TournamentStatus.CANCELLED, TournamentStatus.PAID] as TournamentStatus[] };
+      where.startTime = { gte: oneHourAgo };
+      where.OR = [
+        { endTime: null },
+        { endTime: { gt: now } },
+      ];
+    }
+  }
+
+  if (format) where.format = format;
+  if (platform) where.platform = platform;
+  if (gameMode) where.gameMode = gameMode;
+
+  if (search) {
+    const searchConditions = [
+      { title: { contains: search, mode: 'insensitive' } },
+      { uid: { contains: search, mode: 'insensitive' } },
+      { id: { contains: search, mode: 'insensitive' } },
+      { mapName: { contains: search, mode: 'insensitive' } },
+      { creator: { username: { contains: search, mode: 'insensitive' } } },
+    ];
+    if (where.OR) {
+      where = {
+        AND: [
+          where,
+          { OR: searchConditions },
+        ],
+      };
+    } else {
+      where.OR = searchConditions;
+    }
+  }
+
+  const cacheKey = isAll ? null : `tournaments:list:${page}:${limit}:${status || ''}:${format || ''}:${platform || ''}:${gameMode || ''}:${search || ''}`;
+  const cached = cacheKey ? await cacheGet<{ tournaments: unknown[]; total: number }>(cacheKey) : null;
 
   if (cached) {
     res.json({
@@ -166,6 +194,8 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
     return;
   }
 
+  const orderBy = isAll ? { createdAt: 'desc' as const } : { startTime: 'asc' as const };
+
   const [tournaments, total] = await Promise.all([
     prisma.tournament.findMany({
       where,
@@ -175,12 +205,14 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
       },
       skip,
       take: limit,
-      orderBy: { startTime: 'asc' },
+      orderBy,
     }),
     prisma.tournament.count({ where }),
   ]);
 
-  await cacheSet(cacheKey, { tournaments, total }, 60);
+  if (cacheKey) {
+    await cacheSet(cacheKey, { tournaments, total }, 60);
+  }
 
   res.json({
     success: true,
