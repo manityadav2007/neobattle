@@ -383,6 +383,14 @@ export const adminApi = {
     const res = await api.patch(`/redeem/${id}/review`, { status, ...data });
     return res.data;
   },
+  withdrawals: async (status?: string) => {
+    const res = await api.get('/admin/withdrawals', { params: { status } });
+    return res.data;
+  },
+  reviewWithdrawal: async (id: string, status: 'COMPLETED' | 'APPROVED' | 'REJECTED', data?: { reference?: string; rejectionReason?: string; giftCode?: string }) => {
+    const res = await api.patch(`/admin/withdrawals/${id}/review`, { status, ...data });
+    return res.data;
+  },
   promoteUser: async (userId: string) => {
     const res = await api.patch(`/admin/promote-user/${userId}`);
     return res.data;

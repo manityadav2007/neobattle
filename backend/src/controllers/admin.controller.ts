@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import { UserRole, TournamentStatus, TransactionType, TransactionStatus, Prisma } from '@prisma/client';
+import { UserRole, TournamentStatus, TransactionType, TransactionStatus, Prisma, RedeemStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
 import { notificationService } from '../services/notification.service';
@@ -783,5 +783,285 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
   } catch (err: any) {
     console.error('[Admin] distributeTournamentPrizes error:', err);
     res.status(400).json({ success: false, message: err.message || 'Distribution failed — no changes were saved' });
+  }
+}
+
+export async function listWithdrawals(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const statusParam = (req.query.status as string | undefined)?.toUpperCase();
+
+    // 1. Query Transaction withdrawals
+    let txWhere: Prisma.TransactionWhereInput = { type: TransactionType.WITHDRAWAL };
+    if (statusParam && statusParam !== 'ALL') {
+      if (statusParam === 'PENDING') {
+        txWhere.status = TransactionStatus.PENDING;
+      } else if (statusParam === 'COMPLETED' || statusParam === 'APPROVED') {
+        txWhere.status = TransactionStatus.COMPLETED;
+      } else if (statusParam === 'REJECTED' || statusParam === 'CANCELLED') {
+        txWhere.status = { in: [TransactionStatus.CANCELLED, TransactionStatus.FAILED] };
+      }
+    }
+
+    const txWithdrawals = await prisma.transaction.findMany({
+      where: txWhere,
+      include: {
+        user: { select: { id: true, uid: true, username: true, email: true, freeFireId: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    // 2. Query RedeemRequest
+    let redeemWhere: Prisma.RedeemRequestWhereInput = {};
+    if (statusParam && statusParam !== 'ALL') {
+      if (statusParam === 'PENDING') redeemWhere.status = RedeemStatus.PENDING;
+      else if (statusParam === 'APPROVED') redeemWhere.status = RedeemStatus.APPROVED;
+      else if (statusParam === 'COMPLETED') redeemWhere.status = RedeemStatus.COMPLETED;
+      else if (statusParam === 'REJECTED') redeemWhere.status = RedeemStatus.REJECTED;
+    }
+
+    const redeemRequests = await prisma.redeemRequest.findMany({
+      where: redeemWhere,
+      include: {
+        user: { select: { id: true, uid: true, username: true, email: true, freeFireId: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    // Format transactions
+    const formattedTx = txWithdrawals.map((tx) => {
+      const meta = (tx.metadata as any) || {};
+      const payout = meta.payout || {};
+      const method = payout.method || (meta.method ? meta.method : (tx.description?.includes('UPI') ? 'UPI' : 'BANK_TRANSFER'));
+
+      let accountDetails = '';
+      if (payout.upiId) {
+        accountDetails = `UPI: ${payout.upiId}`;
+      } else if (payout.bankAccountNumber) {
+        accountDetails = `A/C: ${payout.bankAccountNumber} | IFSC: ${payout.bankIfsc || ''}${payout.accountHolderName ? ` | Name: ${payout.accountHolderName}` : ''}`;
+      } else if (tx.description) {
+        accountDetails = tx.description.replace(/^Withdrawal request to\s*/i, '').replace(/\s*—\s*pending.*$/i, '');
+      }
+
+      let status = tx.status as string;
+      if (status === 'CANCELLED' || status === 'FAILED') status = 'REJECTED';
+
+      return {
+        id: tx.id,
+        userId: tx.userId,
+        amount: Number(tx.amount),
+        type: method,
+        status,
+        accountDetails,
+        payoutMethod: method,
+        payoutDetails: payout,
+        reference: tx.reference,
+        description: tx.description,
+        giftCode: meta.redeemCode || meta.giftCode || null,
+        rejectionReason: meta.rejectionReason || null,
+        createdAt: tx.createdAt.toISOString(),
+        user: tx.user,
+        source: 'TRANSACTION',
+      };
+    });
+
+    // Format redeem requests
+    const formattedRedeem = redeemRequests.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      amount: Number(r.amount),
+      type: r.type,
+      status: r.status as string,
+      accountDetails: r.accountDetails || `${r.type} redemption`,
+      payoutMethod: r.type,
+      payoutDetails: null,
+      reference: null,
+      description: `Redeem request: ${r.type}`,
+      giftCode: r.giftCode,
+      rejectionReason: r.rejectionReason,
+      createdAt: r.createdAt.toISOString(),
+      user: r.user,
+      source: 'REDEEM_REQUEST',
+    }));
+
+    const combined = [...formattedTx, ...formattedRedeem].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    res.json({
+      success: true,
+      data: combined,
+    });
+  } catch (error) {
+    console.error('[Admin] listWithdrawals error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch withdrawal requests' });
+  }
+}
+
+export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { status, reference, rejectionReason, giftCode } = req.body;
+    const adminId = req.user!.id;
+
+    if (!['COMPLETED', 'APPROVED', 'REJECTED'].includes(status)) {
+      res.status(400).json({ success: false, message: 'Invalid status. Must be COMPLETED, APPROVED, or REJECTED.' });
+      return;
+    }
+
+    // 1. Check if it's a Transaction withdrawal
+    const tx = await prisma.transaction.findUnique({
+      where: { id },
+      include: { wallet: true, user: true },
+    });
+
+    if (tx && tx.type === TransactionType.WITHDRAWAL) {
+      if (tx.status !== TransactionStatus.PENDING) {
+        res.status(400).json({ success: false, message: `Withdrawal has already been ${tx.status.toLowerCase()}` });
+        return;
+      }
+
+      const meta = (tx.metadata as any) || {};
+
+      if (status === 'COMPLETED' || status === 'APPROVED') {
+        const updatedTx = await prisma.transaction.update({
+          where: { id },
+          data: {
+            status: TransactionStatus.COMPLETED,
+            reference: reference?.trim() || tx.reference || `WTH-${Date.now().toString(36).toUpperCase()}`,
+            metadata: {
+              ...meta,
+              approvedBy: adminId,
+              approvedAt: new Date().toISOString(),
+              ...(reference ? { reference: reference.trim() } : {}),
+              ...(giftCode ? { giftCode: giftCode.trim() } : {}),
+            },
+          },
+        });
+
+        notificationService.sendToUser(tx.userId, {
+          type: 'PAYOUT_APPROVED',
+          title: '✅ Withdrawal Successful',
+          message: `Your withdrawal of ₹${Number(tx.amount)} has been approved and processed!${reference ? ` Reference: ${reference.trim()}` : ''}`,
+          link: '/wallet/history',
+        }).catch((err) => console.error('[Notification] Failed to notify withdrawal approval:', err));
+
+        res.json({
+          success: true,
+          message: `Withdrawal of ₹${Number(tx.amount)} approved and completed!`,
+          data: updatedTx,
+        });
+        return;
+      }
+
+      if (status === 'REJECTED') {
+        const reason = rejectionReason?.trim() || 'Withdrawal rejected by administrator';
+
+        await prisma.$transaction(async (prismaClient) => {
+          // Refund the wallet balance
+          await prismaClient.wallet.update({
+            where: { id: tx.walletId },
+            data: { balance: { increment: tx.amount } },
+          });
+
+          // Mark withdrawal transaction as CANCELLED
+          await prismaClient.transaction.update({
+            where: { id: tx.id },
+            data: {
+              status: TransactionStatus.CANCELLED,
+              metadata: {
+                ...meta,
+                rejectedBy: adminId,
+                rejectedAt: new Date().toISOString(),
+                rejectionReason: reason,
+              },
+            },
+          });
+
+          // Create REFUND transaction
+          await prismaClient.transaction.create({
+            data: {
+              walletId: tx.walletId,
+              userId: tx.userId,
+              type: TransactionType.REFUND,
+              status: TransactionStatus.COMPLETED,
+              amount: tx.amount,
+              description: `Refund: Withdrawal of ₹${Number(tx.amount)} rejected (${reason})`,
+              metadata: { originalTransactionId: tx.id, rejectionReason: reason },
+            },
+          });
+        });
+
+        notificationService.sendToUser(tx.userId, {
+          type: 'PAYOUT_APPROVED',
+          title: '❌ Withdrawal Request Rejected',
+          message: `Your withdrawal request of ₹${Number(tx.amount)} was rejected (${reason}). The amount has been refunded back to your wallet.`,
+          link: '/wallet',
+        }).catch((err) => console.error('[Notification] Failed to notify withdrawal rejection:', err));
+
+        res.json({
+          success: true,
+          message: `Withdrawal rejected and ₹${Number(tx.amount)} refunded to user's wallet.`,
+        });
+        return;
+      }
+    }
+
+    // 2. Check if it's a RedeemRequest
+    const redeem = await prisma.redeemRequest.findUnique({ where: { id } });
+    if (redeem) {
+      if (redeem.status !== RedeemStatus.PENDING) {
+        res.status(400).json({ success: false, message: 'Already reviewed' });
+        return;
+      }
+
+      if (status === 'REJECTED') {
+        const reason = rejectionReason?.trim() || 'Request denied by admin';
+        await prisma.redeemRequest.update({
+          where: { id },
+          data: { status: RedeemStatus.REJECTED, rejectionReason: reason, reviewedBy: adminId, reviewedAt: new Date() },
+        });
+
+        const wallet = await prisma.wallet.findUnique({ where: { userId: redeem.userId } });
+        if (wallet) {
+          await prisma.$transaction([
+            prisma.wallet.update({ where: { id: wallet.id }, data: { balance: { increment: redeem.amount } } }),
+            prisma.transaction.create({
+              data: {
+                walletId: wallet.id,
+                userId: redeem.userId,
+                type: TransactionType.REFUND,
+                status: TransactionStatus.COMPLETED,
+                amount: redeem.amount,
+                description: 'Redeem request rejected — funds returned',
+                metadata: { redeemRequestId: id, rejectionReason: reason },
+              },
+            }),
+          ]);
+        }
+        res.json({ success: true, message: 'Redeem request rejected and refunded' });
+        return;
+      }
+
+      if (status === 'COMPLETED' || status === 'APPROVED') {
+        await prisma.redeemRequest.update({
+          where: { id },
+          data: {
+            status: status === 'APPROVED' ? RedeemStatus.APPROVED : RedeemStatus.COMPLETED,
+            giftCode: giftCode?.trim() || null,
+            reviewedBy: adminId,
+            reviewedAt: new Date(),
+          },
+        });
+        res.json({ success: true, message: `Redeem request marked as ${status.toLowerCase()}` });
+        return;
+      }
+    }
+
+    res.status(404).json({ success: false, message: 'Withdrawal request not found' });
+  } catch (error) {
+    console.error('[Admin] reviewWithdrawal error:', error);
+    res.status(500).json({ success: false, message: 'Failed to review withdrawal request' });
   }
 }

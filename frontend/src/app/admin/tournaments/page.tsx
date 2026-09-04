@@ -297,8 +297,16 @@ export default function AdminTournamentsPage() {
             <p className="text-zinc-400 mt-1">View, create, and manage tournaments on the platform</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-fire-500/20 text-fire-400 text-sm font-medium hover:bg-fire-500/30 transition-colors">
-              <Plus className="w-4 h-4" /> {showCreate ? 'Cancel' : 'Create Tournament'}
+            <button
+              onClick={() => setShowCreate(!showCreate)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                showCreate
+                  ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white border border-white/10'
+                  : 'bg-fire-500/20 text-fire-400 hover:bg-fire-500/30'
+              }`}
+            >
+              {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              <span>{showCreate ? 'Cancel' : 'Create Tournament'}</span>
             </button>
             <button onClick={loadData} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-zinc-300">
               <RefreshCw className="w-4 h-4" /> Refresh

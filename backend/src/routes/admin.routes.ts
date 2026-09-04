@@ -21,6 +21,8 @@ router.post('/award-prize', adminController.awardPrize);
 router.patch('/users/:id/verify-game-level', adminController.verifyUserGameLevel);
 router.get('/revenue', adminController.getRevenueStats);
 router.get('/transactions', adminController.getTransactions);
+router.get('/withdrawals', adminController.listWithdrawals);
+router.patch('/withdrawals/:id/review', adminController.reviewWithdrawal);
 router.post('/wallet/adjust', adminController.adjustWallet);
 router.post('/wallet/adjust-by-uid', adminController.adjustWalletByUid);
 router.post('/add-balance', adminController.adjustWallet);

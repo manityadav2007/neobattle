@@ -324,8 +324,16 @@ export default function HostDashboardPage() {
             <p className="text-zinc-400 mt-2">Create and manage your tournaments, view entries, and complete matches.</p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-fire-500/20 text-fire-400 text-sm font-medium hover:bg-fire-500/30">
-              <Plus className="w-4 h-4" /> {showCreate ? 'Cancel' : 'Create Tournament'}
+            <button
+              onClick={() => setShowCreate(!showCreate)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                showCreate
+                  ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white border border-white/10'
+                  : 'bg-fire-500/20 text-fire-400 hover:bg-fire-500/30'
+              }`}
+            >
+              {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              <span>{showCreate ? 'Cancel' : 'Create Tournament'}</span>
             </button>
           </div>
         </div>
