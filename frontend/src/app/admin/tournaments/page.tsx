@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Trophy, AlertCircle, RefreshCw, Loader2, Users, DollarSign, MapPin, Clock,
-  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight,
+  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentApi, adminApi, formatCurrency, formatDate, getStatusColor, type Tournament } from '@/lib/services';
@@ -30,6 +30,8 @@ export default function AdminTournamentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const [showCreate, setShowCreate] = useState(false);
   const [isFree, setIsFree] = useState(false);
@@ -117,6 +119,21 @@ export default function AdminTournamentsPage() {
   const prizeError = (maxPrizePool > 0 && !isPrizesBalanced)
     ? `Prize distribution must equal the Max Prize Pool: ₹${maxPrizePool} (currently ₹${totalDistribution})`
     : '';
+
+  const filteredTournaments = tournaments.filter((t) => {
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      t.title.toLowerCase().includes(q) ||
+      (t.uid && t.uid.toLowerCase().includes(q)) ||
+      (t.id && t.id.toLowerCase().includes(q)) ||
+      (t.mapName && t.mapName.toLowerCase().includes(q)) ||
+      (t.creator?.username && t.creator.username.toLowerCase().includes(q));
+
+    const matchesStatus = !statusFilter || t.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   const toggleExpand = (id: string, tournament: Tournament) => {
     if (expandedTournament === id) {
@@ -559,16 +576,82 @@ export default function AdminTournamentsPage() {
           </motion.form>
         )}
 
+        {/* Search & Status Filter Controls */}
+        <div className="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by Tournament UID (e.g. T-9812), title, map, or creator..."
+              className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-zinc-900/80 border border-white/10 text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-fire-500/50 backdrop-blur-md transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3.5 py-2.5 rounded-xl bg-zinc-900/80 border border-white/10 text-white text-sm focus:outline-none focus:border-fire-500/50 backdrop-blur-md transition-colors"
+            >
+              <option value="">All Statuses</option>
+              <option value="REGISTRATION">Open Registrations</option>
+              <option value="ACTIVE">Active / Playing</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="PENDING_PAYOUT">Pending Payout</option>
+              <option value="PAID">Paid / Distributed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="DRAFT">Draft</option>
+            </select>
+
+            {(searchQuery || statusFilter) && (
+              <button
+                onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
+                className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white text-xs font-medium transition-colors whitespace-nowrap"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Results summary when filtered */}
+        {(searchQuery || statusFilter) && (
+          <p className="text-xs text-zinc-400 mb-4">
+            Showing <span className="font-semibold text-white">{filteredTournaments.length}</span> of {tournaments.length} tournaments
+          </p>
+        )}
+
         {loading ? (
           <div className="p-20 flex justify-center"><Loader2 className="w-8 h-8 text-fire-400 animate-spin" /></div>
-        ) : tournaments.length === 0 ? (
+        ) : filteredTournaments.length === 0 ? (
           <div className="glass-card rounded-2xl p-10 text-center">
             <Trophy className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-            <p className="text-zinc-400">No tournaments found.</p>
+            <p className="text-zinc-400">
+              {tournaments.length === 0 ? 'No tournaments found.' : 'No tournaments match your search or filter.'}
+            </p>
+            {(searchQuery || statusFilter) && (
+              <button
+                onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
+                className="mt-3 text-sm text-fire-400 hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {tournaments.map((t, i) => {
+            {filteredTournaments.map((t, i) => {
               const entryFee = typeof t.entryFee === 'string' ? parseFloat(t.entryFee) : t.entryFee;
               const prizePool = typeof t.prizePool === 'string' ? parseFloat(t.prizePool) : t.prizePool;
               const entryCount = t._count?.entries ?? 0;
@@ -580,21 +663,37 @@ export default function AdminTournamentsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="glass-card rounded-2xl overflow-hidden group"
+                  className="glass-card rounded-2xl overflow-hidden group hover:border-white/20 transition-all shadow-lg flex flex-col justify-between"
                 >
                   <div className="p-5 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-base font-bold text-white group-hover:text-fire-400 transition-colors">{t.title}</h3>
-                        <p className="text-xs text-zinc-500 mt-1">by {t.creator?.username || 'System'}</p>
+                    {/* Header: Title, UID & Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/tournaments/${t.id}`}
+                          className="text-base font-bold text-white hover:text-fire-400 transition-colors line-clamp-1 flex items-center gap-1.5"
+                          title="Click to view full tournament details"
+                        >
+                          <span>{t.title}</span>
+                          <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-fire-400" />
+                        </Link>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          {t.uid && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-fire-500/10 border border-fire-500/25 text-fire-400 font-mono text-[11px] font-bold tracking-wider">
+                              UID: {t.uid}
+                            </span>
+                          )}
+                          <span className="text-xs text-zinc-500">by {t.creator?.username || 'System'}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(t.status)}`}>{t.status}</span>
                         {isFreeTournament && (
                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-500/10 text-green-400">FREE</span>
                         )}
                       </div>
                     </div>
+
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <span className="flex items-center gap-1 text-zinc-400"><DollarSign className="w-3 h-3 text-green-400" /> {isFreeTournament && prizePool === 0 ? 'FREE' : formatCurrency(prizePool)}</span>
                       <span className="flex items-center gap-1 text-zinc-400"><Users className="w-3 h-3 text-blue-400" /> {entryCount}/{t.maxParticipants}</span>
@@ -608,16 +707,27 @@ export default function AdminTournamentsPage() {
                       <span className="text-purple-400 font-semibold">{t.format}</span>
                     </div>
 
-                    <button
-                      onClick={() => toggleExpand(t.id, t)}
-                      className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-zinc-400 text-xs font-medium hover:bg-white/10 transition-colors"
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                      {expandedTournament === t.id ? 'Hide Players' : `View Players (${entryCount})`}
-                    </button>
+                    {/* Action buttons: View Full Details & Quick Players view */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <Link
+                        href={`/tournaments/${t.id}`}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-fire-500/20 to-neo-500/20 hover:from-fire-500/30 hover:to-neo-500/30 text-fire-400 border border-fire-500/30 text-xs font-semibold transition-all hover:scale-[1.02]"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" /> Full Details
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(t.id, t)}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 border border-white/10 text-xs font-medium transition-colors"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        {expandedTournament === t.id ? 'Hide Players' : `Players (${entryCount})`}
+                      </button>
+                    </div>
 
                     {expandedTournament === t.id && (
-                      <div className="space-y-2">
+                      <div className="space-y-2 pt-2 border-t border-white/5">
                         {entriesLoading[t.id] ? (
                           <div className="flex justify-center py-3"><Loader2 className="w-5 h-5 text-fire-400 animate-spin" /></div>
                         ) : entries[t.id] && entries[t.id].length > 0 ? (

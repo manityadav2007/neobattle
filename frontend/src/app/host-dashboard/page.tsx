@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, Shield, ArrowRight, Loader2, CheckCircle, AlertCircle,
   Upload, DollarSign, MapPin, Clock, Plus, Smartphone, Monitor, Gamepad2, Globe,
-  ToggleLeft, ToggleRight, Key, KeyRound, X,
+  ToggleLeft, ToggleRight, Key, KeyRound, X, Image as ImageIcon,
 } from 'lucide-react';
+import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
-import { hostApi, winnerProofApi, formatDate, formatCurrency, getStatusColor, CommissionBreakdown } from '@/lib/services';
+import { hostApi, winnerProofApi, uploadApi, formatDate, formatCurrency, getStatusColor, CommissionBreakdown } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 import { calculateCommission } from '@/lib/commission';
 
@@ -54,6 +55,9 @@ export default function HostDashboardPage() {
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [winnerUid, setWinnerUid] = useState('');
   const [screenshotUrl, setScreenshotUrl] = useState('');
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitMsg, setSubmitMsg] = useState('');
   const [submitErr, setSubmitErr] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -174,17 +178,52 @@ export default function HostDashboardPage() {
     }
   };
 
+  const handleProofFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+    if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(selected.type)) {
+      setSubmitErr('Only JPG, PNG, or WebP images are allowed');
+      return;
+    }
+    if (selected.size > 10 * 1024 * 1024) {
+      setSubmitErr('File size must be under 10MB');
+      return;
+    }
+    setProofFile(selected);
+    setProofPreview(URL.createObjectURL(selected));
+    setSubmitErr('');
+  };
+
   const handleSubmitWinner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTournament) return;
+    if (!proofFile && !screenshotUrl) {
+      setSubmitErr('Please select a screenshot file to upload as winner proof');
+      return;
+    }
     setSubmitErr('');
     setSubmitMsg('');
     setSubmitting(true);
     try {
-      const res = await winnerProofApi.submit({ tournamentId: selectedTournament.id, winnerUid, screenshotUrl });
+      let finalScreenshotUrl = screenshotUrl;
+      if (proofFile) {
+        const uploadRes = await uploadApi.verificationScreenshot(proofFile);
+        finalScreenshotUrl = uploadRes?.data?.screenshotUrl || uploadRes?.screenshotUrl;
+      }
+      if (!finalScreenshotUrl) {
+        throw new Error('Screenshot upload failed: no URL returned');
+      }
+
+      const res = await winnerProofApi.submit({
+        tournamentId: selectedTournament.id,
+        winnerUid: winnerUid.trim(),
+        screenshotUrl: finalScreenshotUrl,
+      });
       setSubmitMsg(res.message || 'Winner proof submitted!');
       setWinnerUid('');
       setScreenshotUrl('');
+      setProofFile(null);
+      setProofPreview(null);
     } catch (err) {
       setSubmitErr(getErrorMessage(err));
     } finally {
@@ -635,7 +674,22 @@ export default function HostDashboardPage() {
                       </button>
                     )}
                     {t.entries.length > 0 && (t.status === 'ACTIVE' || t.status === 'COMPLETED') && (
-                      <button onClick={() => setSelectedTournament(selectedTournament?.id === t.id ? null : t)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fire-500/10 text-fire-400 text-sm font-medium hover:bg-fire-500/20 transition-colors">
+                      <button
+                        onClick={() => {
+                          if (selectedTournament?.id === t.id) {
+                            setSelectedTournament(null);
+                          } else {
+                            setSelectedTournament(t);
+                            setWinnerUid('');
+                            setScreenshotUrl('');
+                            setProofFile(null);
+                            setProofPreview(null);
+                            setSubmitErr('');
+                            setSubmitMsg('');
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fire-500/10 text-fire-400 text-sm font-medium hover:bg-fire-500/20 transition-colors"
+                      >
                         <Upload className="w-4 h-4" /> {selectedTournament?.id === t.id ? 'Cancel' : 'Submit Winner'}
                       </button>
                     )}
@@ -673,10 +727,80 @@ export default function HostDashboardPage() {
                       <p className="text-sm font-semibold text-white">Submit Winner Proof</p>
                       {submitMsg && <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> {submitMsg}</div>}
                       {submitErr && <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 text-red-400 text-sm"><AlertCircle className="w-4 h-4" /> {submitErr}</div>}
-                      <input type="text" value={winnerUid} onChange={(e) => setWinnerUid(e.target.value)} placeholder="Winner UID" className="input-field w-full px-3 py-2 rounded-lg text-white text-sm bg-white/5 border border-white/10" required />
-                      <input type="url" value={screenshotUrl} onChange={(e) => setScreenshotUrl(e.target.value)} placeholder="Screenshot URL (proof)" className="input-field w-full px-3 py-2 rounded-lg text-white text-sm bg-white/5 border border-white/10" required />
-                      <button type="submit" disabled={submitting} className="btn-fire px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50">
-                        {submitting ? 'Submitting...' : 'Submit for Payout'}
+                      <div>
+                        <label className="block text-xs font-semibold text-zinc-400 mb-1.5">Free Fire Winner UID</label>
+                        <input
+                          type="text"
+                          value={winnerUid}
+                          onChange={(e) => setWinnerUid(e.target.value)}
+                          placeholder="e.g. 123456789"
+                          className="input-field w-full px-3.5 py-2.5 rounded-xl text-white text-sm bg-black/40 border border-white/10 font-mono focus:border-fire-500/50"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-zinc-400 mb-1.5">Winner Match Screenshot Proof</label>
+                        <div className="border-2 border-dashed border-white/15 rounded-xl p-4 text-center hover:border-fire-500/40 transition-colors bg-black/20">
+                          {proofPreview ? (
+                            <div className="relative inline-block">
+                              <Image
+                                src={proofPreview}
+                                alt="Winner proof preview"
+                                width={280}
+                                height={160}
+                                className="rounded-lg object-cover max-h-44 border border-white/10 shadow-lg"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setProofFile(null);
+                                  setProofPreview(null);
+                                  if (fileInputRef.current) fileInputRef.current.value = '';
+                                }}
+                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-md transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                              <p className="text-[11px] text-zinc-400 mt-2 truncate max-w-[280px]">{proofFile?.name}</p>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="w-full flex flex-col items-center justify-center py-4 gap-2 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <div className="p-2.5 rounded-full bg-fire-500/10 text-fire-400 border border-fire-500/20">
+                                <Upload className="w-5 h-5" />
+                              </div>
+                              <span className="text-sm font-medium">Click to upload screenshot file</span>
+                              <span className="text-xs text-zinc-500">JPG, PNG or WebP (max 10MB) from device storage</span>
+                            </button>
+                          )}
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/jpg,image/webp"
+                            onChange={handleProofFileChange}
+                            className="hidden"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={submitting || !winnerUid.trim() || (!proofFile && !screenshotUrl)}
+                        className="btn-fire w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-fire-500/20"
+                      >
+                        {submitting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" /> Uploading &amp; Submitting...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4" /> Submit Proof for Admin Payout
+                          </>
+                        )}
                       </button>
                     </motion.form>
                   )}
