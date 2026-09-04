@@ -12,7 +12,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
 import TournamentTags, { tagColorMap, tagIcons } from '@/components/TournamentTags';
-import { tournamentApi, gameApi, userApi, adminApi, uploadApi, resultApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, type UserStats, type ResultSubmission } from '@/lib/services';
+import { tournamentApi, gameApi, userApi, adminApi, uploadApi, resultApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, TOURNAMENT_PLAY_GRACE_MS, type UserStats, type ResultSubmission } from '@/lib/services';
 import UpiPayment from '@/components/RazorpayCheckout';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
@@ -214,14 +214,18 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const mapTheme = getMapTheme(tournament.mapName);
   const isEnded = tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED' || tournament.status === 'PAID';
   const effectiveStatus = getEffectiveStatus(tournament);
-  const startTimeReached = new Date(tournament.startTime).getTime() <= Date.now();
+  const now = Date.now();
+  const startTimeMs = tournament.startTime ? new Date(tournament.startTime).getTime() : 0;
+  const registrationEndMs = tournament.registrationEnd ? new Date(tournament.registrationEnd).getTime() : 0;
+  const startTimeReached = startTimeMs > 0 && startTimeMs <= now;
+  const registrationEndReached = registrationEndMs > 0 && registrationEndMs <= now;
+  const oneHourPastStart = startTimeMs > 0 && now >= startTimeMs + TOURNAMENT_PLAY_GRACE_MS;
+  const isCompletedState = isEnded || effectiveStatus === 'Ended' || oneHourPastStart;
+  const isLiveAndPlaying = !isCompletedState && (tournament.status === 'ACTIVE' || effectiveStatus === 'Playing' || effectiveStatus === 'Live' || startTimeReached);
+  const isRegistrationClosed = !isCompletedState && !isLiveAndPlaying && (registrationEndReached || tournament.status !== 'REGISTRATION');
   const canEndTournament = !isEnded && startTimeReached && (isSuperAdmin || isAdmin || user?.id === tournament.creatorId);
 
-  // Absolute priority: finished tournaments never show registration/payment/top-up triggers,
-  // regardless of balance, level, or registration state.
-  const isCompletedState = isEnded || effectiveStatus === 'Ended';
-
-  console.log('[TournamentView] status:', tournament.status, 'isRegistered:', tournament.isRegistered, 'isEnded:', isEnded, 'entryFee:', entryFee, 'user:', user?.id);
+  console.log('[TournamentView] status:', tournament.status, 'effectiveStatus:', effectiveStatus, 'isCompletedState:', isCompletedState, 'isLiveAndPlaying:', isLiveAndPlaying, 'isRegistrationClosed:', isRegistrationClosed);
 
   const rawFirst = tournament.prizeFirst != null ? Number(tournament.prizeFirst) : 0;
   const rawSecond = tournament.prizeSecond != null ? Number(tournament.prizeSecond) : 0;
@@ -284,7 +288,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               />
 
               {/* Pulsing indicator if LIVE */}
-              {(tournament.status === 'ACTIVE' || effectiveStatus === 'Live' || effectiveStatus === 'Playing') && (
+              {isLiveAndPlaying && (
                 <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-950/80 border border-red-500/50 backdrop-blur-md shadow-[0_0_15px_rgba(239,68,68,0.4)]">
                   <span className="relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -605,7 +609,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 This tournament has ended
                 {tournament.status === 'PAID' ? ' and prizes have been distributed' : ''}. Registration is closed.
               </div>
-            ) : tournament.status === 'ACTIVE' && !tournament.isRegistered ? (
+            ) : isLiveAndPlaying && !tournament.isRegistered ? (
               /* Pulsing Neon Live & Playing Banner for Unregistered Users */
               <div className="w-full p-6 rounded-2xl bg-gradient-to-r from-red-950/40 via-red-900/25 to-red-950/40 border border-red-500/40 backdrop-blur-xl shadow-[0_0_30px_rgba(239,68,68,0.2)] text-center relative overflow-hidden">
                 <div className="flex items-center justify-center gap-3">
@@ -618,7 +622,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                     Live &amp; Playing
                   </span>
                 </div>
-                <p className="text-zinc-400 text-xs mt-1.5 font-medium">This tournament has already commenced. Registration is currently closed.</p>
+                <p className="text-zinc-400 text-xs mt-1.5 font-medium">This tournament has already commenced. Registration is closed.</p>
               </div>
             ) : tournament.isRegistered ? (
               /* Registered User Glassmorphic Status Box */
@@ -627,7 +631,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   <CheckCircle className="w-5 h-5" /> You are registered for this tournament
                 </div>
 
-                {tournament.status === 'ACTIVE' && (
+                {isLiveAndPlaying && (
                   <div className="w-full flex items-center justify-center gap-2.5 p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 backdrop-blur-md shadow-[0_0_15px_rgba(239,68,68,0.2)] text-red-300 text-xs font-black uppercase tracking-wider">
                     <span className="relative flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -664,6 +668,12 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   </div>
                 )}
                 {myStats && <LeagueBadge wins={myStats.totalWins} size="md" />}
+              </div>
+            ) : isRegistrationClosed ? (
+              /* Registration Closed Banner */
+              <div className="w-full p-5 rounded-2xl bg-zinc-900/60 border border-zinc-700/40 backdrop-blur-xl text-center text-sm text-zinc-300">
+                <Clock className="w-4 h-4 inline mr-1.5 text-amber-400" />
+                Registration has closed for this tournament. Match will begin shortly.
               </div>
             ) : !user ? (
               <button

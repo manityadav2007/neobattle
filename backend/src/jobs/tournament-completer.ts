@@ -1,58 +1,47 @@
 import cron from 'node-cron';
-import { prisma } from '../config/db';
+import { syncTournamentStatuses } from '../utils/tournamentStatus';
+
+let isRunning = false;
+
+/**
+ * Runs a single cycle of the tournament lifecycle background worker.
+ * Checks for expired tournaments (1h past startTime or past endTime)
+ * and updates them to COMPLETED.
+ * Checks for newly started tournaments and updates them to ACTIVE.
+ */
+export async function runTournamentLifecycleWorker(): Promise<void> {
+  if (isRunning) return;
+  isRunning = true;
+  try {
+    await syncTournamentStatuses(true);
+  } catch (err) {
+    console.error('[TournamentWorker] Background worker error:', err);
+  } finally {
+    isRunning = false;
+  }
+}
 
 export function startTournamentCompleter(): void {
-  cron.schedule('*/15 * * * *', async () => {
-    try {
-      const now = new Date();
-
-      const expired = await prisma.tournament.findMany({
-        where: {
-          status: { in: ['REGISTRATION', 'ACTIVE'] },
-          endTime: { lte: now },
-        },
-        select: { id: true, title: true, status: true },
-      });
-
-      if (expired.length === 0) return;
-
-      const ids = expired.map((t) => t.id);
-      await prisma.tournament.updateMany({
-        where: { id: { in: ids } },
-        data: { status: 'COMPLETED' },
-      });
-
-      console.log(`[Cron] Auto-completed ${expired.length} tournaments past endTime: ${expired.map((t) => t.title).join(', ')}`);
-    } catch (err) {
-      console.error('[Cron] Tournament completer error:', err);
-    }
+  // 1. Run immediately on server boot so expired tournaments are updated right away
+  runTournamentLifecycleWorker().catch((err) => {
+    console.error('[TournamentWorker] Initial boot sync failed:', err);
   });
 
-  cron.schedule('*/15 * * * *', async () => {
-    try {
-      const now = new Date();
-
-      const staleActive = await prisma.tournament.findMany({
-        where: {
-          status: 'ACTIVE',
-          startTime: { lte: new Date(now.getTime() - 60 * 60 * 1000) },
-        },
-        select: { id: true, title: true },
-      });
-
-      if (staleActive.length === 0) return;
-
-      const ids = staleActive.map((t) => t.id);
-      await prisma.tournament.updateMany({
-        where: { id: { in: ids } },
-        data: { status: 'COMPLETED', endTime: now },
-      });
-
-      console.log(`[Cron] Auto-ended ${staleActive.length} tournaments (1h+ past startTime): ${staleActive.map((t) => t.title).join(', ')}`);
-    } catch (err) {
-      console.error('[Cron] Stale tournament completer error:', err);
-    }
+  // 2. Schedule cron to run every minute
+  cron.schedule('* * * * *', async () => {
+    await runTournamentLifecycleWorker();
   });
 
-  console.log('[Cron] Tournament completer started (every 15 min for endTime, every 30 min for stale active)');
+  // 3. Robust fallback interval worker (every 60 seconds) ensuring regular background execution
+  const intervalId = setInterval(() => {
+    runTournamentLifecycleWorker().catch((err) => {
+      console.error('[TournamentWorker] Interval sync failed:', err);
+    });
+  }, 60_000);
+
+  if (intervalId && typeof intervalId.unref === 'function') {
+    intervalId.unref();
+  }
+
+  console.log('[TournamentWorker] Tournament lifecycle background worker started (running every 60s + immediate startup sync)');
 }

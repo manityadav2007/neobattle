@@ -120,19 +120,35 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
   const where = {
-    // Default (live/open listings): hide anything terminal or expired
     ...(status
       ? status === TournamentStatus.REGISTRATION
-        ? { status, startTime: { gt: now } }
+        ? {
+            status: TournamentStatus.REGISTRATION,
+            startTime: { gt: now },
+            registrationEnd: { gt: now },
+          }
+        : status === TournamentStatus.ACTIVE
+        ? {
+            status: TournamentStatus.ACTIVE,
+            startTime: { gte: oneHourAgo },
+          }
+        : status === TournamentStatus.COMPLETED
+        ? {
+            OR: [
+              { status: { in: [TournamentStatus.COMPLETED, TournamentStatus.PAID] as TournamentStatus[] } },
+              { startTime: { lt: oneHourAgo } },
+            ],
+          }
         : { status }
-      : { status: { notIn: [TournamentStatus.COMPLETED, TournamentStatus.CANCELLED, TournamentStatus.PAID] as TournamentStatus[] } }),
-    // Belt-and-braces: never surface ACTIVE tournaments past the 1h play window in open/live lists
-    ...(!status && {
-      OR: [
-        { status: { not: TournamentStatus.ACTIVE } },
-        { startTime: { gte: oneHourAgo } },
-      ],
-    }),
+      : {
+          // Default (live/open listings): strictly hide anything terminal OR expired (>1h past start or past endTime)
+          status: { notIn: [TournamentStatus.COMPLETED, TournamentStatus.CANCELLED, TournamentStatus.PAID] as TournamentStatus[] },
+          startTime: { gte: oneHourAgo },
+          OR: [
+            { endTime: null },
+            { endTime: { gt: now } },
+          ],
+        }),
     ...(format && { format }),
     ...(platform && { platform }),
     ...(gameMode && { gameMode }),
@@ -249,6 +265,8 @@ export async function updateTournament(req: AuthenticatedRequest, res: Response)
 }
 
 export async function registerForTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
+  await syncTournamentStatuses();
+
   const { tournamentId, teamId, squadUids } = req.body;
   const userId = req.user!.id;
 
@@ -264,8 +282,19 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
 
   console.log(`[registerForTournament] tournamentId=${tournamentId} status=${tournament.status} serverTime=${new Date().toISOString()} regStart=${tournament.registrationStart.toISOString()} regEnd=${tournament.registrationEnd.toISOString()}`);
 
+  const now = new Date();
+  if (now >= tournament.startTime) {
+    res.status(400).json({ success: false, message: 'Tournament has already started. Registration is closed.' });
+    return;
+  }
+
+  if (now > tournament.registrationEnd) {
+    res.status(400).json({ success: false, message: 'Registration deadline has passed.' });
+    return;
+  }
+
   if (tournament.status !== TournamentStatus.REGISTRATION) {
-    res.status(400).json({ success: false, message: 'Registration is not open' });
+    res.status(400).json({ success: false, message: 'Registration is closed for this tournament' });
     return;
   }
 
@@ -286,10 +315,9 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
     return;
   }
 
-  const now = new Date();
   console.log(`[registerForTournament] windowCheck: now=${now.toISOString()} registrationStart=${tournament.registrationStart.toISOString()} registrationEnd=${tournament.registrationEnd.toISOString()} insideWindow=${now >= tournament.registrationStart && now <= tournament.registrationEnd}`);
-  if (now < tournament.registrationStart || now > tournament.registrationEnd) {
-    res.status(400).json({ success: false, message: 'Outside registration window' });
+  if (now < tournament.registrationStart) {
+    res.status(400).json({ success: false, message: 'Registration has not opened yet' });
     return;
   }
 

@@ -26,7 +26,7 @@ export async function getWallet(req: AuthenticatedRequest, res: Response): Promi
     data: {
       id: wallet.id,
       balance: Number(wallet.balance),
-      currency: wallet.currency,
+      currency: wallet.currency === 'USD' ? 'INR' : (wallet.currency || 'INR'),
       transactions: wallet.transactions.map((t) => ({
         ...t,
         amount: Number(t.amount),

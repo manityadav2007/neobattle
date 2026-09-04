@@ -152,7 +152,7 @@ export async function me(req: AuthenticatedRequest, res: Response): Promise<void
       ...sanitizeUser(user),
       ign: user.ign,
       wallet: user.wallet
-        ? { balance: Number(user.wallet.balance), currency: user.wallet.currency }
+        ? { balance: Number(user.wallet.balance), currency: user.wallet.currency === 'USD' ? 'INR' : (user.wallet.currency || 'INR') }
         : null,
     },
   });

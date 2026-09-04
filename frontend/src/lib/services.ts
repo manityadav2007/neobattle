@@ -802,8 +802,10 @@ export function resolveAssetUrl(path: string | null | undefined): string | undef
 }
 
 export function getStatusColor(status: string): string {
+  const norm = (status || '').toUpperCase().replace(/\s+/g, '_');
   const colors: Record<string, string> = {
     REGISTRATION: 'text-green-400 bg-green-400/10',
+    REGISTRATION_CLOSED: 'text-zinc-400 bg-zinc-400/10',
     ACTIVE: 'text-fire-400 bg-fire-400/10',
     LIVE: 'text-fire-400 bg-fire-400/10',
     PLAYING: 'text-amber-300 bg-amber-400/10',
@@ -814,34 +816,58 @@ export function getStatusColor(status: string): string {
     PENDING_PAYOUT: 'text-yellow-400 bg-yellow-400/10',
     PAID: 'text-purple-400 bg-purple-400/10',
   };
-  return colors[status] || 'text-zinc-400 bg-zinc-400/10';
+  return colors[norm] || colors[status] || 'text-zinc-400 bg-zinc-400/10';
 }
 
-/** Grace window after startTime during which a started tournament is still 'Playing' */
+/** Grace window after startTime during which a started tournament is still 'Playing' (1 hour) */
 export const TOURNAMENT_PLAY_GRACE_MS = 60 * 60 * 1000;
 
 /**
- * Display status derived from DB status + start time:
- * - ACTIVE before startTime        → 'Live'
- * - ACTIVE within 1h after start   → 'Playing'
- * - ACTIVE >1h past / terminal     → 'Ended'
+ * Display status derived from DB status + start time + end time:
+ * - COMPLETED, PAID, or >1h past startTime, or past endTime → 'Ended'
+ * - Active match within 1h after startTime → 'Playing'
+ * - ACTIVE before startTime → 'Live'
+ * - Past registrationEnd but before startTime → 'Registration Closed'
  */
-export function getEffectiveStatus(t: { status: string; startTime?: string | Date | null }): string {
+export function getEffectiveStatus(t: {
+  status: string;
+  startTime?: string | Date | null;
+  endTime?: string | Date | null;
+  registrationEnd?: string | Date | null;
+}): string {
   if (t.status === 'COMPLETED' || t.status === 'PAID') return 'Ended';
   if (t.status === 'CANCELLED') return 'Cancelled';
   if (t.status === 'PENDING_PAYOUT') return 'Awaiting Payout';
 
-  if (t.status === 'ACTIVE' && t.startTime) {
-    const start = new Date(t.startTime).getTime();
-    const now = Date.now();
-    if (now < start) return 'Live';
-    if (now < start + TOURNAMENT_PLAY_GRACE_MS) return 'Playing';
+  const now = Date.now();
+
+  // Explicit endTime passed
+  if (t.endTime && new Date(t.endTime).getTime() <= now) {
     return 'Ended';
+  }
+
+  if (t.startTime) {
+    const start = new Date(t.startTime).getTime();
+    // 1h past startTime -> tournament is finished / Ended
+    if (now >= start + TOURNAMENT_PLAY_GRACE_MS) return 'Ended';
+    // Between startTime and startTime + 1h -> match is live Playing
+    if (now >= start) return 'Playing';
+    // Before startTime, if DB status is ACTIVE
+    if (t.status === 'ACTIVE') return 'Live';
+  }
+
+  // If registration window ended but tournament hasn't started yet
+  if (t.registrationEnd && new Date(t.registrationEnd).getTime() <= now && t.status === 'REGISTRATION') {
+    return 'Registration Closed';
   }
 
   return t.status;
 }
 
-export function isTournamentEnded(t: { status: string; startTime?: string | Date | null }): boolean {
+export function isTournamentEnded(t: {
+  status: string;
+  startTime?: string | Date | null;
+  endTime?: string | Date | null;
+}): boolean {
   return getEffectiveStatus(t) === 'Ended';
 }

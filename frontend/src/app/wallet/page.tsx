@@ -117,7 +117,7 @@ export default function WalletPage() {
           <p className="text-5xl font-display font-black gradient-text">
             {wallet ? formatCurrency(wallet.balance) : '₹0'}
           </p>
-          <p className="text-xs text-zinc-500 mt-2">{wallet?.currency || 'INR'}</p>
+          <p className="text-xs font-semibold tracking-wider text-zinc-500 mt-2">INR</p>
         </div>
 
         <div className="glass-card rounded-2xl p-6 mb-6">
