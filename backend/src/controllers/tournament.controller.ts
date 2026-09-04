@@ -287,11 +287,16 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
   const canSeeRoom = isRegistered && now >= fiveMinBeforeStart;
 
   const { roomId, roomPassword, ...rest } = tournament;
+  const isTeam = tournament.format === 'DUO' || tournament.format === 'SQUAD';
+  const displayEntries = isTeam
+    ? rest.entries.filter((e) => e.teamId !== null)
+    : rest.entries;
 
   res.json({
     success: true,
     data: {
       ...rest,
+      entries: displayEntries,
       isRegistered,
       canSeeRoom,
       ...(canSeeRoom ? { roomId, roomPassword } : {}),

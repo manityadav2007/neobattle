@@ -125,7 +125,14 @@ export async function reviewWinnerProof(req: AuthenticatedRequest, res: Response
       return;
     }
 
+    const winPoints = t.gameMode === 'CLASH_SQUAD' ? 2 : 4;
+
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.tournamentEntry.updateMany({
+        where: { tournamentId: t.id, userId: proof.userId },
+        data: { placement: 1, points: { increment: winPoints } },
+      });
+
       if (prizeAmount > 0) {
         await tx.wallet.update({
           where: { id: winnerWallet.id },

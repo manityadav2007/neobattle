@@ -182,15 +182,26 @@ export async function getLeaderboard(_req: AuthenticatedRequest, res: Response):
 
   const userMap = new Map(users.map((u) => [u.id, u]));
 
-  const leaderboard = entries.map((entry, index) => ({
-    rank: index + 1,
-    user: userMap.get(entry.userId!),
-    totalPoints: entry._sum.points || 0,
-    totalKills: entry._sum.kills || 0,
-    tournamentsPlayed: entry._count.id,
-    totalWins: winMap.get(entry.userId!) || 0,
-    league: getLeague(winMap.get(entry.userId!) || 0),
-  }));
+  const leaderboard = entries
+    .map((entry) => ({
+      user: userMap.get(entry.userId!) || null,
+      totalPoints: entry._sum.points || 0,
+      totalKills: entry._sum.kills || 0,
+      tournamentsPlayed: entry._count.id,
+      totalWins: winMap.get(entry.userId!) || 0,
+      league: getLeague(winMap.get(entry.userId!) || 0),
+    }))
+    .filter((entry) => entry.user !== null)
+    .sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
+      if (b.totalKills !== a.totalKills) return b.totalKills - a.totalKills;
+      return b.tournamentsPlayed - a.tournamentsPlayed;
+    })
+    .map((entry, index) => ({
+      rank: index + 1,
+      ...entry,
+    }));
 
   res.json({ success: true, data: leaderboard });
 }

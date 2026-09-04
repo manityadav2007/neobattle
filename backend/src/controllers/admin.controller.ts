@@ -642,28 +642,78 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
   const adminWallet = adminUser ? await prisma.wallet.findUnique({ where: { userId: adminUser.id } }) : null;
   const hostWallet = await prisma.wallet.findUnique({ where: { userId: tournament.creatorId } });
 
+  const winPoints = tournament.gameMode === 'CLASH_SQUAD' ? 2 : 4;
+
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Winner payouts
+      // 1. Stamp placements on the team entries for record-keeping
       for (const w of winnerPayouts) {
-        const wallet = await tx.wallet.findUnique({ where: { userId: w.userId } });
-        if (!wallet) throw new Error(`Wallet missing for ${w.username} (${w.label})`);
-
-        await tx.wallet.update({
-          where: { id: wallet.id },
-          data: { balance: { increment: w.amount } },
+        await tx.tournamentEntry.updateMany({
+          where: {
+            tournamentId: tournament.id,
+            team: { members: { some: { userId: w.userId } } },
+          },
+          data: { placement: w.placement },
         });
-        await tx.transaction.create({
-          data: {
-            walletId: wallet.id,
-            userId: w.userId,
-            type: TransactionType.PRIZE,
-            status: TransactionStatus.COMPLETED,
-            amount: new Decimal(w.amount),
-            description: `${w.label} prize — ${tournament.title}`,
-            reference: `DIST-${tournament.id.slice(0, 8)}-P${w.placement}-${w.userId.slice(-4)}`,
+      }
+
+      // 2. Award leaderboard points & ensure individual entries exist for each winning player / team member
+      for (const w of winnerPayouts) {
+        const isWinner = w.placement === 1;
+        const pointsToAdd = isWinner ? winPoints : 0;
+
+        const existingEntry = await tx.tournamentEntry.findUnique({
+          where: {
+            tournamentId_userId: {
+              tournamentId: tournament.id,
+              userId: w.userId,
+            },
           },
         });
+
+        if (existingEntry) {
+          await tx.tournamentEntry.update({
+            where: { id: existingEntry.id },
+            data: {
+              placement: w.placement,
+              ...(pointsToAdd > 0 ? { points: { increment: pointsToAdd } } : {}),
+            },
+          });
+        } else {
+          await tx.tournamentEntry.create({
+            data: {
+              tournamentId: tournament.id,
+              userId: w.userId,
+              placement: w.placement,
+              points: pointsToAdd,
+              isPaid: true,
+            },
+          });
+        }
+      }
+
+      // Winner payouts
+      for (const w of winnerPayouts) {
+        if (w.amount > 0) {
+          const wallet = await tx.wallet.findUnique({ where: { userId: w.userId } });
+          if (!wallet) throw new Error(`Wallet missing for ${w.username} (${w.label})`);
+
+          await tx.wallet.update({
+            where: { id: wallet.id },
+            data: { balance: { increment: w.amount } },
+          });
+          await tx.transaction.create({
+            data: {
+              walletId: wallet.id,
+              userId: w.userId,
+              type: TransactionType.PRIZE,
+              status: TransactionStatus.COMPLETED,
+              amount: new Decimal(w.amount),
+              description: `${w.label} prize — ${tournament.title}`,
+              reference: `DIST-${tournament.id.slice(0, 8)}-P${w.placement}-${w.userId.slice(-4)}`,
+            },
+          });
+        }
       }
 
       // Host commission

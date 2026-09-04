@@ -22,10 +22,10 @@ async function resolveWinners(tournament: {
 }, firstUid: string, secondUid: string | null, thirdUid: string | null): Promise<ResolvedWinner[]> {
   const isTeam = tournament.format === 'DUO' || tournament.format === 'SQUAD';
   const candidates = [
-    { placement: 1, label: isTeam ? '1st Winning Team' : '1st Place', amount: Number(tournament.prizeFirst) || 0, uid: firstUid?.trim() },
-    { placement: 2, label: isTeam ? '2nd Winning Team' : '2nd Place', amount: Number(tournament.prizeSecond) || 0, uid: secondUid?.trim() || null },
-    { placement: 3, label: isTeam ? '3rd Winning Team' : '3rd Place', amount: Number(tournament.prizeThird) || 0, uid: thirdUid?.trim() || null },
-  ].filter((c) => c.amount > 0 && c.uid);
+    { placement: 1, label: isTeam ? '1st Winning Team' : '1st Place', amount: Math.max(0, Number(tournament.prizeFirst) || 0), uid: firstUid?.trim() },
+    { placement: 2, label: isTeam ? '2nd Winning Team' : '2nd Place', amount: Math.max(0, Number(tournament.prizeSecond) || 0), uid: secondUid?.trim() || null },
+    { placement: 3, label: isTeam ? '3rd Winning Team' : '3rd Place', amount: Math.max(0, Number(tournament.prizeThird) || 0), uid: thirdUid?.trim() || null },
+  ].filter((c) => Boolean(c.uid));
 
   const resolved: ResolvedWinner[] = [];
 
@@ -250,8 +250,8 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
     res.status(400).json({ success: false, message: 'Prizes already distributed for this tournament' });
     return;
   }
-  if (t.status !== TournamentStatus.COMPLETED) {
-    res.status(400).json({ success: false, message: 'Mark the tournament completed before approving payouts' });
+  if (t.status !== TournamentStatus.COMPLETED && t.status !== TournamentStatus.ACTIVE) {
+    res.status(400).json({ success: false, message: 'Tournament must be active or completed before approving payouts' });
     return;
   }
 
@@ -297,37 +297,75 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
   const adminWallet = adminUser ? await prisma.wallet.findUnique({ where: { userId: adminUser.id } }) : null;
   const hostWallet = await prisma.wallet.findUnique({ where: { userId: t.creatorId } });
 
+  // Game Mode Points Mapping: Clash Squad Win: +2 points, Full Map Win: +4 points
+  const winPoints = t.gameMode === 'CLASH_SQUAD' ? 2 : 4;
+
   try {
     await prisma.$transaction(async (tx) => {
-      // Stamp placements on the winning entries for record-keeping
+      // 1. Stamp placements on the team entries for record-keeping
       for (const w of winners) {
         await tx.tournamentEntry.updateMany({
           where: {
             tournamentId: t.id,
-            OR: [
-              { userId: w.userId },
-              { team: { members: { some: { userId: w.userId } } } },
-            ],
+            team: { members: { some: { userId: w.userId } } },
           },
           data: { placement: w.placement },
         });
       }
 
+      // 2. Award leaderboard points & ensure individual entries exist for each winning player / team member
       for (const w of winners) {
-        const wallet = await tx.wallet.findUnique({ where: { userId: w.userId } });
-        if (!wallet) throw new Error(`Wallet missing for ${w.username}`);
-        await tx.wallet.update({ where: { id: wallet.id }, data: { balance: { increment: w.amount } } });
-        await tx.transaction.create({
-          data: {
-            walletId: wallet.id,
-            userId: w.userId,
-            type: TransactionType.PRIZE,
-            status: TransactionStatus.COMPLETED,
-            amount: new Decimal(w.amount),
-            description: `${w.label} prize — ${t.title}`,
-            reference: `RESULT-${submission.id.slice(0, 8)}-P${w.placement}`,
+        const isWinner = w.placement === 1;
+        const pointsToAdd = isWinner ? winPoints : 0;
+
+        const existingEntry = await tx.tournamentEntry.findUnique({
+          where: {
+            tournamentId_userId: {
+              tournamentId: t.id,
+              userId: w.userId,
+            },
           },
         });
+
+        if (existingEntry) {
+          await tx.tournamentEntry.update({
+            where: { id: existingEntry.id },
+            data: {
+              placement: w.placement,
+              ...(pointsToAdd > 0 ? { points: { increment: pointsToAdd } } : {}),
+            },
+          });
+        } else {
+          // For Duo/Squad team members who did not have their own TournamentEntry record
+          await tx.tournamentEntry.create({
+            data: {
+              tournamentId: t.id,
+              userId: w.userId,
+              placement: w.placement,
+              points: pointsToAdd,
+              isPaid: true,
+            },
+          });
+        }
+      }
+
+      for (const w of winners) {
+        if (w.amount > 0) {
+          const wallet = await tx.wallet.findUnique({ where: { userId: w.userId } });
+          if (!wallet) throw new Error(`Wallet missing for ${w.username}`);
+          await tx.wallet.update({ where: { id: wallet.id }, data: { balance: { increment: w.amount } } });
+          await tx.transaction.create({
+            data: {
+              walletId: wallet.id,
+              userId: w.userId,
+              type: TransactionType.PRIZE,
+              status: TransactionStatus.COMPLETED,
+              amount: new Decimal(w.amount),
+              description: `${w.label} prize — ${t.title}`,
+              reference: `RESULT-${submission.id.slice(0, 8)}-P${w.placement}-${w.userId.slice(-4)}`,
+            },
+          });
+        }
       }
 
       if (hostAmount > 0 && hostWallet) {

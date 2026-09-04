@@ -370,7 +370,10 @@ export async function getTournamentEntries(req: AuthenticatedRequest, res: Respo
     orderBy: { registeredAt: 'asc' },
   });
 
-  res.json({ success: true, data: entries });
+  const isTeam = tournament.format === 'DUO' || tournament.format === 'SQUAD';
+  const displayEntries = isTeam ? entries.filter((e) => e.teamId !== null) : entries;
+
+  res.json({ success: true, data: displayEntries });
 }
 
 export async function updateRoomDetails(req: AuthenticatedRequest, res: Response): Promise<void> {
