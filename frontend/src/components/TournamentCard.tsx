@@ -75,6 +75,11 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
               {tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad'}
             </span>
           )}
+          {Number(tournament.requiredLevel || tournament.minLevel) > 0 && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+              Lvl {tournament.requiredLevel || tournament.minLevel}+
+            </span>
+          )}
         </div>
         <span className="text-[9px] text-zinc-600 font-mono">{tournament.uid}</span>
       </div>

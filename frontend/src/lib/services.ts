@@ -42,6 +42,7 @@ export interface Tournament {
   roomId: string | null;
   roomPassword?: string | null;
   requiredLevel: number;
+  minLevel?: number;
   rules?: string | null;
   registrationStart?: string;
   startTime: string;
@@ -164,6 +165,10 @@ export const tournamentApi = {
   },
   update: async (id: string, data: Record<string, unknown>) => {
     const res = await api.patch(`/tournaments/${id}`, data);
+    return res.data;
+  },
+  delete: async (id: string) => {
+    const res = await api.delete(`/tournaments/${id}`);
     return res.data;
   },
 };
@@ -558,6 +563,10 @@ export const hostApi = {
   },
   updateRoomDetails: async (id: string, data: { roomId: string; roomPassword?: string }) => {
     const res = await api.patch(`/host/tournaments/${id}/room`, data);
+    return res.data;
+  },
+  deleteTournament: async (id: string) => {
+    const res = await api.delete(`/host/tournaments/${id}`);
     return res.data;
   },
 };

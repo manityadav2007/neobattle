@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Trophy, AlertCircle, RefreshCw, Loader2, Users, DollarSign, MapPin, Clock,
-  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X, Copy, Check,
+  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X, Copy, Check, Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentApi, adminApi, formatCurrency, formatDate, getStatusColor, type Tournament } from '@/lib/services';
@@ -92,6 +92,7 @@ export default function AdminTournamentsPage() {
   const [matchDetails, setMatchDetails] = useState<Record<string, { roomId: string; roomPassword: string }>>({});
   const [savingMatch, setSavingMatch] = useState<string | null>(null);
   const [matchMsg, setMatchMsg] = useState<Record<string, string>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [awardModal, setAwardModal] = useState<{ tournamentId: string; tournamentTitle: string; winnerId: string; winnerName: string } | null>(null);
   const [prizeAmount, setPrizeAmount] = useState('');
@@ -237,6 +238,8 @@ export default function AdminTournamentsPage() {
       const prizePoolTotal = totalPrizes;
       const payload: any = {
         ...form,
+        requiredLevel: Number(form.requiredLevel) || 0,
+        minLevel: Number(form.requiredLevel) || 0,
         format: isClashSquad ? (clashFormatMap[form.teamSize] || 'SQUAD') : form.format,
         platform: form.platform,
         gameMode: form.gameMode,
@@ -264,6 +267,29 @@ export default function AdminTournamentsPage() {
       setCreateErr(getErrorMessage(err));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDeleteTournament = async (t: Tournament) => {
+    const isConfirmed = confirm(
+      `Are you sure you want to permanently delete "${t.title}"?\n\n` +
+      `• Any held player entry fees will be automatically refunded to their wallets.\n` +
+      `• This tournament will be permanently removed from the database.\n\n` +
+      `This action cannot be undone.`
+    );
+    if (!isConfirmed) return;
+
+    setDeletingId(t.id);
+    setError('');
+    setSuccessMsg('');
+    try {
+      await tournamentApi.delete(t.id);
+      setTournaments((prev) => prev.filter((item) => item.id !== t.id));
+      setSuccessMsg(`Tournament "${t.title}" deleted successfully.`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -838,6 +864,11 @@ export default function AdminTournamentsPage() {
                         {isFreeTournament && (
                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-500/10 text-green-400">FREE</span>
                         )}
+                        {Number(t.requiredLevel || t.minLevel) > 0 && (
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                            Lvl {t.requiredLevel || t.minLevel}+
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -847,29 +878,46 @@ export default function AdminTournamentsPage() {
                       <span className="flex items-center gap-1 text-zinc-400"><MapPin className="w-3 h-3 text-fire-400" /> {t.mapName || 'TBA'}</span>
                       <span className="flex items-center gap-1 text-zinc-400"><Clock className="w-3 h-3 text-yellow-400" /> {formatDate(t.startTime)}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-xs flex-wrap">
                       <span className="text-zinc-500">Fee:</span>
                       <span className="text-fire-400 font-semibold">{isFreeTournament ? 'FREE' : formatCurrency(entryFee)}</span>
                       <span className="text-zinc-500 ml-2">Format:</span>
                       <span className="text-purple-400 font-semibold">{t.format}</span>
+                      {Number(t.requiredLevel || t.minLevel) > 0 ? (
+                        <span className="text-emerald-400 font-semibold ml-2">
+                          Req: Lvl {t.requiredLevel || t.minLevel}+
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500 ml-2">No Lvl Req</span>
+                      )}
                     </div>
 
-                    {/* Action buttons: View Full Details & Quick Players view */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
+                    {/* Action buttons: View Full Details, Quick Players view & Delete */}
+                    <div className="flex items-center gap-2 pt-1">
                       <Link
                         href={`/tournaments/${t.id}`}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-fire-500/20 to-neo-500/20 hover:from-fire-500/30 hover:to-neo-500/30 text-fire-400 border border-fire-500/30 text-xs font-semibold transition-all hover:scale-[1.02]"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-fire-500/20 to-neo-500/20 hover:from-fire-500/30 hover:to-neo-500/30 text-fire-400 border border-fire-500/30 text-xs font-semibold transition-all hover:scale-[1.02]"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" /> Full Details
+                        <ExternalLink className="w-3.5 h-3.5" /> Details
                       </Link>
 
                       <button
                         type="button"
                         onClick={() => toggleExpand(t.id, t)}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 border border-white/10 text-xs font-medium transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 border border-white/10 text-xs font-medium transition-colors"
                       >
                         <Users className="w-3.5 h-3.5" />
-                        {expandedTournament === t.id ? 'Hide Players' : `Players (${entryCount})`}
+                        {expandedTournament === t.id ? 'Hide' : `Players (${entryCount})`}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTournament(t)}
+                        disabled={deletingId === t.id}
+                        className="px-3 py-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/25 text-xs font-semibold transition-all disabled:opacity-50 shrink-0"
+                        title="Delete Tournament"
+                      >
+                        {deletingId === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                       </button>
                     </div>
 

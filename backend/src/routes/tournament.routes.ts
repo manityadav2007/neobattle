@@ -21,7 +21,7 @@ router.get('/:id', optionalAuth, tournamentController.getTournament);
 
 router.post('/', authenticate, hostOrSuper, validate(createTournamentSchema), tournamentController.createTournament);
 router.patch('/:id', authenticate, validate(updateTournamentSchema), tournamentController.updateTournament);
-router.delete('/:id', authenticate, adminCheck, tournamentController.deleteTournament);
+router.delete('/:id', authenticate, tournamentController.deleteTournament);
 
 router.post(
   '/register',

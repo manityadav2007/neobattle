@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   Trophy, Users, Shield, ArrowRight, Loader2, CheckCircle, AlertCircle,
   Upload, DollarSign, MapPin, Clock, Plus, Smartphone, Monitor, Gamepad2, Globe,
-  ToggleLeft, ToggleRight, Key, KeyRound, X, Image as ImageIcon,
+  ToggleLeft, ToggleRight, Key, KeyRound, X, Image as ImageIcon, Trash2,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
@@ -56,6 +56,7 @@ interface Entry {
 
 interface Tournament {
   id: string;
+  uid?: string;
   title: string;
   status: string;
   format: string;
@@ -64,6 +65,8 @@ interface Tournament {
   entryFee: number | string;
   prizePool: number | string;
   maxParticipants: number;
+  requiredLevel?: number;
+  minLevel?: number;
   startTime: string;
   mapName: string | null;
   roomId?: string | null;
@@ -95,7 +98,7 @@ export default function HostDashboardPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '' as string, format: 'SOLO' as string, platform: 'MOBILE' as string, gameMode: 'FULL_MAP' as string, mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+  const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '' as string, format: 'SOLO' as string, platform: 'MOBILE' as string, gameMode: 'FULL_MAP' as string, mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '', requiredLevel: 0 });
   const [prizes, setPrizes] = useState({ first: 0, second: 0, third: 0 });
   const [prizeCount, setPrizeCount] = useState(3);
   const [breakdown, setBreakdown] = useState<CommissionBreakdown | null>(null);
@@ -103,6 +106,7 @@ export default function HostDashboardPage() {
   const [creating, setCreating] = useState(false);
   const [completing, setCompleting] = useState<string | null>(null);
   const [completeMsg, setCompleteMsg] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Room ID & Password Modal State
   const [roomModalTournament, setRoomModalTournament] = useState<Tournament | null>(null);
@@ -173,6 +177,8 @@ export default function HostDashboardPage() {
       const clashFormatMap: Record<string, string> = { '1v1': 'SOLO', '2v2': 'DUO', '4v4': 'SQUAD', '6v6': 'SQUAD' };
       const data: any = {
         ...form,
+        requiredLevel: Number(form.requiredLevel) || 0,
+        minLevel: Number(form.requiredLevel) || 0,
         format: isClashSquad ? (clashFormatMap[form.teamSize] || 'SQUAD') : form.format,
         platform: form.platform,
         gameMode: form.gameMode,
@@ -190,7 +196,7 @@ export default function HostDashboardPage() {
 
       await hostApi.createTournament(data);
       setShowCreate(false);
-      setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+      setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '', requiredLevel: 0 });
       setPrizes({ first: 0, second: 0, third: 0 });
       setPrizeCount(3);
       const res = await hostApi.getMyTournaments();
@@ -199,6 +205,27 @@ export default function HostDashboardPage() {
       setCreateErr(getErrorMessage(err));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDeleteTournament = async (t: Tournament) => {
+    const isConfirmed = confirm(
+      `Are you sure you want to permanently delete "${t.title}"?\n\n` +
+      `• Any held player entry fees will be automatically refunded to their wallets.\n` +
+      `• This tournament will be permanently removed from the database.\n\n` +
+      `This action cannot be undone.`
+    );
+    if (!isConfirmed) return;
+
+    setDeletingId(t.id);
+    setError(null);
+    try {
+      await hostApi.deleteTournament(t.id);
+      setTournaments((prev) => prev.filter((item) => item.id !== t.id));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -629,6 +656,22 @@ export default function HostDashboardPage() {
                 <label className="text-xs text-zinc-400 mb-1 block">Tournament Start Date/Time</label>
                 <input type="datetime-local" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" required />
               </div>
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">Min Free Fire Level <span className="text-zinc-600">(0 = No Restriction)</span></label>
+                <input
+                  type="number"
+                  value={form.requiredLevel === 0 ? '' : form.requiredLevel}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                    const v = raw === '' ? 0 : Number(raw);
+                    setForm({ ...form, requiredLevel: isNaN(v) ? 0 : v });
+                  }}
+                  placeholder="e.g. 50 (0 for no restriction)"
+                  className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm"
+                  min={0}
+                  max={100}
+                />
+              </div>
               <div className="sm:col-span-2">
                 <label className="text-xs text-zinc-400 mb-1 block">Description <span className="text-zinc-600">(optional)</span></label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Tournament rules, prize distribution, schedule notes, or any additional info for participants" className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm" rows={3} />
@@ -688,9 +731,19 @@ export default function HostDashboardPage() {
                 <div className="p-6">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="text-lg font-bold text-white">{t.title}</h3>
+                        {t.uid && (
+                          <span className="text-xs font-mono font-bold text-fire-400 bg-fire-500/10 border border-fire-500/20 px-2 py-0.5 rounded">
+                            UID: {t.uid}
+                          </span>
+                        )}
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStatusColor(t.status)}`}>{t.status}</span>
+                        {Number(t.requiredLevel || t.minLevel) > 0 && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                            Lvl {t.requiredLevel || t.minLevel}+
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-zinc-400">
                         {t.format}{t.platform ? ` | ${t.platform === 'MOBILE' ? 'Mobile' : 'PC'}` : ''}{t.gameMode ? ` | ${t.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad'}` : ''} — {t.mapName || 'TBD'} — {formatCurrency(typeof t.entryFee === 'string' ? parseFloat(t.entryFee) : t.entryFee)} entry
@@ -699,6 +752,12 @@ export default function HostDashboardPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 mb-4">
+                    {Number(t.requiredLevel || t.minLevel) > 0 && (
+                      <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded">
+                        <Shield className="w-3 h-3 inline mr-1" />
+                        Lvl {t.requiredLevel || t.minLevel}+
+                      </span>
+                    )}
                     <span className="text-xs text-zinc-500 bg-white/5 px-2 py-1 rounded">
                       <Users className="w-3 h-3 inline mr-1" />
                       {t._count.entries}/{t.maxParticipants} registered
@@ -908,6 +967,16 @@ export default function HostDashboardPage() {
                     <Link href={`/tournaments/${t.id}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-zinc-400 text-sm font-medium hover:bg-white/10 transition-colors">
                       View <ArrowRight className="w-4 h-4" />
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTournament(t)}
+                      disabled={deletingId === t.id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/20 text-sm font-medium transition-colors disabled:opacity-50 ml-auto"
+                      title="Delete Tournament"
+                    >
+                      {deletingId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      {deletingId === t.id ? 'Deleting...' : 'Delete'}
+                    </button>
                   </div>
                   {completeMsg && <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> {completeMsg}</div>}
 

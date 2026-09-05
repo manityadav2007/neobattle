@@ -62,6 +62,9 @@ export const createTournamentSchema = z.object({
   registrationStart: z.string().datetime(),
   registrationEnd: z.string().datetime(),
   startTime: z.string().datetime(),
+  requiredLevel: z.number().int().min(0).max(100).optional().default(0),
+  minLevel: z.number().int().min(0).max(100).optional(),
+  isFree: z.boolean().optional(),
 });
 
 export const updateTournamentSchema = createTournamentSchema.partial().extend({

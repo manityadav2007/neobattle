@@ -34,11 +34,14 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
     const lastTourNum = lastTour?.uid ? parseInt(lastTour.uid.replace('T-', '')) || 9000 : 9000;
     const tourUid = `T-${lastTourNum + 1}`;
 
+    const { minLevel: _minLevel, isFree: _isFree, ...cleanData } = data;
+    const reqLevel = parseInt(String(data.requiredLevel ?? data.minLevel ?? 0), 10) || 0;
+
     const tournament = await prisma.tournament.create({
       data: {
-        ...data,
+        ...cleanData,
         uid: tourUid,
-        requiredLevel: parseInt(String(data.requiredLevel || 0), 10) || 0,
+        requiredLevel: reqLevel,
         entryFee: new Decimal(entryFeeNum),
         prizePool: new Decimal(prizePoolNum),
         creatorId: req.user!.id,
@@ -72,11 +75,14 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   const lastTourNum = lastTour?.uid ? parseInt(lastTour.uid.replace('T-', '')) || 9000 : 9000;
   const tourUid = `T-${lastTourNum + 1}`;
 
+  const { minLevel: _minLevel, isFree: _isFree, ...cleanFreeData } = data;
+  const reqFreeLevel = parseInt(String(data.requiredLevel ?? data.minLevel ?? 0), 10) || 0;
+
   const tournament = await prisma.tournament.create({
     data: {
-      ...data,
+      ...cleanFreeData,
       uid: tourUid,
-      requiredLevel: parseInt(String(data.requiredLevel || 0), 10) || 0,
+      requiredLevel: reqFreeLevel,
       entryFee: new Decimal(0),
       prizePool: new Decimal(Number(data.prizePool) || 0),
       creatorId: req.user!.id,
@@ -328,6 +334,8 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
     success: true,
     data: {
       ...rest,
+      requiredLevel: rest.requiredLevel || 0,
+      minLevel: rest.requiredLevel || 0,
       entries: displayEntries,
       isRegistered,
       canSeeRoom,
@@ -689,18 +697,39 @@ export async function deleteTournament(req: AuthenticatedRequest, res: Response)
     return;
   }
 
-  if (tournament.status === TournamentStatus.ACTIVE) {
-    res.status(400).json({ success: false, message: 'Cannot delete active tournament' });
+  const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'SUPER_ADMIN';
+  const isCreator = tournament.creatorId === req.user!.id;
+  if (!isAdmin && !isCreator) {
+    res.status(403).json({ success: false, message: 'Only the tournament host or an admin can delete this tournament' });
     return;
   }
 
-  await prisma.tournament.update({
+  if (tournament.status === TournamentStatus.ACTIVE) {
+    res.status(400).json({ success: false, message: 'Cannot delete an active tournament in progress. Please complete or cancel it first.' });
+    return;
+  }
+
+  // 1. Refund any held player escrows before deleting from database
+  try {
+    const escrows = await escrowService.getTournamentEscrows(req.params.id);
+    for (const escrow of escrows) {
+      if (escrow.status === 'HELD' && escrow.wallet?.user?.id) {
+        await escrowService.refundEscrow(escrow.id, escrow.wallet.user.id);
+      }
+    }
+  } catch (escrowErr) {
+    console.error('[Tournament] Failed to refund escrows during tournament deletion:', escrowErr);
+  }
+
+  // 2. Permanently remove the tournament from the database
+  await prisma.tournament.delete({
     where: { id: req.params.id },
-    data: { status: TournamentStatus.CANCELLED },
   });
 
   await cacheDelPattern('tournaments:list*');
-  res.json({ success: true, message: 'Tournament cancelled' });
+  await cacheDel(`tournament:${req.params.id}`);
+
+  res.json({ success: true, message: 'Tournament deleted successfully' });
 }
 
 export async function completeTournament(req: AuthenticatedRequest, res: Response): Promise<void> {

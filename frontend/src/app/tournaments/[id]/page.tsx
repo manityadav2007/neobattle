@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, IndianRupee,
-  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Shield, Wallet,
+  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Shield, Wallet, Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
@@ -32,6 +32,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [copied, setCopied] = useState(false);
   const [endingTournament, setEndingTournament] = useState(false);
   const [distributing, setDistributing] = useState(false);
+  const [deletingTournament, setDeletingTournament] = useState(false);
 
   // Host result submission
   const [mySubmission, setMySubmission] = useState<ResultSubmission | null>(null);
@@ -81,6 +82,32 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   };
 
   const isHostCreator = user?.id === tournament?.creatorId;
+  const isAdminUser = Boolean(isAdmin || isSuperAdmin);
+  const canDeleteTournament = tournament != null && user != null && (isHostCreator || isAdminUser);
+
+  const handleDeleteTournament = async () => {
+    if (!tournament) return;
+    const isConfirmed = confirm(
+      `Are you sure you want to permanently delete "${tournament.title}"?\n\n` +
+      `• Any held player entry fees will be automatically refunded to their wallets.\n` +
+      `• This tournament will be permanently removed from the database.\n\n` +
+      `This action cannot be undone.`
+    );
+    if (!isConfirmed) return;
+
+    setDeletingTournament(true);
+    setRegisterError('');
+    setMessage('');
+    try {
+      await tournamentApi.delete(tournament.id);
+      alert('Tournament deleted successfully.');
+      router.push(isAdmin ? '/admin/tournaments' : '/tournaments');
+    } catch (err) {
+      setRegisterError(getErrorMessage(err));
+      setDeletingTournament(false);
+    }
+  };
+
   const canSubmitResults =
     isHostCreator &&
     tournament != null &&
@@ -166,7 +193,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
     setTeammateStatus((prev) => ({ ...prev, [index]: { loading: true } }));
     try {
-      const res = await tournamentApi.checkPlayer(trimmed, tournament?.requiredLevel || 0);
+      const res = await tournamentApi.checkPlayer(trimmed, tournament?.requiredLevel || tournament?.minLevel || 0);
       if (res.success && res.data) {
         setTeammateStatus((prev) => ({
           ...prev,
@@ -353,7 +380,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               <h1 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)]">
                 {tournament.title}
               </h1>
-              <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-zinc-300">
+              <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-zinc-300 flex-wrap">
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(tournament.uid);
@@ -370,6 +397,17 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   <span className="text-zinc-400">Host:</span>
                   <span className="text-white font-semibold">{tournament.creator?.username || tournament.creatorId}</span>
                 </div>
+                {canDeleteTournament && (
+                  <button
+                    onClick={handleDeleteTournament}
+                    disabled={deletingTournament}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 hover:text-white backdrop-blur-md transition-all text-xs font-semibold disabled:opacity-50 ml-auto"
+                    title="Delete Tournament"
+                  >
+                    {deletingTournament ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 text-rose-400" />}
+                    <span>{deletingTournament ? 'Deleting...' : 'Delete Tournament'}</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -487,9 +525,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   {
                     icon: Shield,
                     label: 'Min Level Required',
-                    value: Number(tournament.requiredLevel) > 0 ? `Level ${tournament.requiredLevel}+` : 'No Restriction',
-                    iconBg: Number(tournament.requiredLevel) > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
-                    gradientClass: Number(tournament.requiredLevel) > 0
+                    value: Number(tournament.requiredLevel || tournament.minLevel) > 0 ? `Level ${tournament.requiredLevel || tournament.minLevel}+` : 'No Restriction',
+                    iconBg: Number(tournament.requiredLevel || tournament.minLevel) > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+                    gradientClass: Number(tournament.requiredLevel || tournament.minLevel) > 0
                       ? 'bg-gradient-to-r from-emerald-300 via-teal-300 to-green-400 bg-clip-text text-transparent font-black text-base'
                       : 'text-zinc-400 font-semibold text-sm',
                   },
@@ -732,6 +770,17 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </button>
             )}
 
+            {canDeleteTournament && (
+              <button
+                onClick={handleDeleteTournament}
+                disabled={deletingTournament}
+                className="w-full py-3 rounded-xl text-sm font-bold text-rose-300 hover:text-white flex items-center justify-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 backdrop-blur-md transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(244,63,94,0.1)]"
+              >
+                {deletingTournament ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-rose-400" />}
+                {deletingTournament ? 'Deleting Tournament...' : 'Delete Tournament'}
+              </button>
+            )}
+
             {/* Host Result Submission Glass Card */}
             {isHostCreator && mySubmission?.status === 'PENDING' && (
               <div className="w-full p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 text-sm text-amber-300 flex items-center gap-2 backdrop-blur-md">
@@ -882,19 +931,19 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               >
                 <Trophy className="w-5 h-5 text-yellow-300" /> Login to Register
               </button>
-            ) : tournament.requiredLevel > 0 && !user.isVerified ? (
+            ) : (Number(tournament.requiredLevel || tournament.minLevel) > 0) && !user.isVerified ? (
               <button
                 disabled
                 className="w-full py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2 bg-zinc-800/80 border border-white/5 text-zinc-400 cursor-not-allowed opacity-60 backdrop-blur-md"
               >
                 <AlertCircle className="w-5 h-5 text-rose-400" /> Please verify your Free Fire ID first
               </button>
-            ) : tournament.requiredLevel > 0 && user.gameLevel < tournament.requiredLevel ? (
+            ) : (Number(tournament.requiredLevel || tournament.minLevel) > 0) && user.gameLevel < Number(tournament.requiredLevel || tournament.minLevel) ? (
               <button
                 disabled
                 className="w-full py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2 bg-zinc-800/80 border border-white/5 text-zinc-400 cursor-not-allowed opacity-60 backdrop-blur-md"
               >
-                <AlertCircle className="w-5 h-5 text-rose-400" /> Level too low (Required: Level {tournament.requiredLevel}, Yours: Level {user.gameLevel})
+                <AlertCircle className="w-5 h-5 text-rose-400" /> Level too low (Required: Level {tournament.requiredLevel || tournament.minLevel}, Yours: Level {user.gameLevel})
               </button>
             ) : totalTeamEntryFee > 0 && !hasSufficientBalance ? (
               <div className="space-y-3">
