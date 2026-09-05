@@ -14,8 +14,8 @@ const socialLinks = [
     ),
   },
   {
-    label: 'Instagram',
-    href: 'https://instagram.com',
+    label: 'Instagram (@neobattlee)',
+    href: 'https://www.instagram.com/neobattlee/',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
         <rect x="3.5" y="3.5" width="17" height="17" rx="5" />

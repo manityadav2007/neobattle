@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, Lock, User, AlertCircle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, AlertCircle, CheckCircle, XCircle, Loader2, Instagram } from 'lucide-react';
 import LogoAsset from '@/components/LogoAsset';
 import AuthSocialButtons from '@/components/AuthSocialButtons';
 import { authApi } from '@/lib/services';
@@ -177,6 +177,19 @@ export default function RegisterPage() {
               Sign in
             </Link>
           </p>
+
+          <div className="pt-4 border-t border-white/5 flex items-center justify-center gap-1.5 text-xs text-zinc-400">
+            <span>Follow us on Instagram:</span>
+            <a
+              href="https://www.instagram.com/neobattlee/"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-semibold text-pink-400 hover:text-pink-300 transition-colors"
+            >
+              <Instagram className="w-3.5 h-3.5" />
+              @neobattlee
+            </a>
+          </div>
         </form>
       </motion.div>
     </div>

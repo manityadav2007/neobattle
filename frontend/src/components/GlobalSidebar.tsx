@@ -43,8 +43,8 @@ const socialLinks = [
     className: 'text-indigo-300 hover:bg-indigo-500/12 hover:text-indigo-200',
   },
   {
-    href: 'https://instagram.com',
-    label: 'Instagram',
+    href: 'https://www.instagram.com/neobattlee/',
+    label: 'Instagram (@neobattlee)',
     icon: InstagramIcon,
     className: 'text-pink-300 hover:bg-pink-500/12 hover:text-pink-200',
   },
@@ -214,6 +214,19 @@ export default function GlobalSidebar() {
                     </span>
                   </span>
                 </button>
+                <div className="pt-3 mt-1 border-t border-white/5 flex items-center justify-between px-2 text-xs">
+                  <span className="text-zinc-500 font-medium">Follow Us</span>
+                  <a
+                    href="https://www.instagram.com/neobattlee/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border border-pink-500/20 bg-pink-500/10 text-pink-300 hover:bg-pink-500/20 hover:text-pink-200 transition-colors font-medium"
+                    title="Follow @neobattlee on Instagram"
+                  >
+                    <InstagramIcon className="w-3.5 h-3.5" />
+                    <span>@neobattlee</span>
+                  </a>
+                </div>
               </div>
             </motion.div>
           </>

@@ -17,6 +17,7 @@ import {
   User,
   Wallet,
   X,
+  Instagram,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
@@ -86,6 +87,18 @@ export default function Navbar() {
 
           {/* Right cluster — notification bell + auth actions, visible on all screen sizes */}
           <div className="flex items-center gap-1 sm:gap-3">
+            <a
+              href="https://www.instagram.com/neobattlee/"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Follow @neobattlee on Instagram"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-pink-500/20 bg-pink-500/10 text-pink-400 hover:bg-pink-500/20 hover:text-pink-300 transition-all text-xs font-semibold"
+              title="Follow @neobattlee on Instagram"
+            >
+              <Instagram className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">@neobattlee</span>
+            </a>
+
             {loading ? (
               <div className="w-24 h-8 bg-white/5 rounded-lg animate-pulse" />
             ) : user ? (
@@ -217,6 +230,19 @@ export default function Navbar() {
               </button>
             </div>
           )}
+
+          <div className="pt-2 border-t border-white/5">
+            <a
+              href="https://www.instagram.com/neobattlee/"
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-pink-400 hover:bg-pink-500/10 transition-colors text-sm font-medium"
+            >
+              <Instagram className="w-5 h-5 text-pink-400" />
+              Follow @neobattlee on Instagram
+            </a>
+          </div>
         </motion.div>
       )}
     </nav>

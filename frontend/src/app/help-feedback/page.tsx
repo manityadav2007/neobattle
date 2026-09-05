@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bug, LifeBuoy, MessageSquareMore, X, Send, CheckCircle } from 'lucide-react';
+import { Bug, LifeBuoy, MessageSquareMore, X, Send, CheckCircle, Instagram } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
@@ -139,6 +139,32 @@ export default function HelpFeedbackPage() {
                 <Send className="h-3.5 w-3.5" />
               </span>
             </motion.button>
+
+            {/* Instagram Support & Community */}
+            <motion.a
+              href="https://www.instagram.com/neobattlee/"
+              target="_blank"
+              rel="noreferrer"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.24 }}
+              className="glass-card rounded-3xl p-6 text-left transition-all hover:border-pink-500/40 hover:shadow-lg cursor-pointer flex flex-col justify-between"
+            >
+              <div>
+                <div className="mb-4 inline-flex rounded-2xl bg-pink-500/12 p-3 text-pink-400">
+                  <Instagram className="h-5 w-5" />
+                </div>
+                <h2 className="text-lg font-semibold text-white">Instagram Community</h2>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  Follow @neobattlee for match updates, announcements, and direct community DM support.
+                </p>
+              </div>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-pink-400">
+                @neobattlee
+                <Send className="h-3.5 w-3.5" />
+              </span>
+            </motion.a>
           </div>
         </div>
       </section>
