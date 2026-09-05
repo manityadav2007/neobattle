@@ -344,6 +344,10 @@ export interface CommissionBreakdown {
   hostCommission: number;
   remainingPool: number;
   maxPrizePool: number;
+  platformRate: number;
+  hostRate: number;
+  prizePoolRate: number;
+  totalDeductionRate: number;
 }
 
 export const adminApi = {
@@ -602,6 +606,7 @@ export interface ResultSubmission {
   tournament?: {
     id: string; uid: string; title: string; status: string;
     format?: string;
+    gameMode?: string;
     prizePool: number;
     prizeFirst: number; prizeSecond: number | null; prizeThird: number | null;
     platformCommission: number; hostCommission: number;

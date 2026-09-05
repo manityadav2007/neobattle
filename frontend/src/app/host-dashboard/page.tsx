@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
-import { hostApi, winnerProofApi, uploadApi, formatDate, formatCurrency, getStatusColor, CommissionBreakdown } from '@/lib/services';
+import { hostApi, winnerProofApi, uploadApi, formatDate, formatCurrency, getStatusColor } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
-import { calculateCommission } from '@/lib/commission';
+import { calculateCommission, type CommissionBreakdown } from '@/lib/commission';
 
 interface TeamMember {
   id: string;
@@ -131,14 +131,19 @@ export default function HostDashboardPage() {
     ? ({ '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 }[form.teamSize] || 0)
     : form.maxParticipants;
 
-  // Max Prize Pool is display/validation only — prize fields are 100% manual
+  // Max Prize Pool is display/validation only — prize fields are 100% manual (auto-allocated for Clash Squad)
   useEffect(() => {
     if (Number(effectiveMaxParticipants) > 0 && Number(form.entryFee) > 0) {
-      setBreakdown(calculateCommission(Number(form.entryFee), Number(effectiveMaxParticipants)));
+      const b = calculateCommission(Number(form.entryFee), Number(effectiveMaxParticipants), form.gameMode);
+      setBreakdown(b);
+      if (form.gameMode === 'CLASH_SQUAD') {
+        setPrizes({ first: b.maxPrizePool, second: 0, third: 0 });
+        setPrizeCount(1);
+      }
     } else {
       setBreakdown(null);
     }
-  }, [form.entryFee, effectiveMaxParticipants]);
+  }, [form.entryFee, effectiveMaxParticipants, form.gameMode]);
 
   // Clean & Direct Prize Calculation and Validation
   const prize1Num = Number(prizes.first) || 0;
@@ -369,7 +374,7 @@ export default function HostDashboardPage() {
                   }}
                   className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm"
                 >
-                  <option value="FULL_MAP" className="bg-gray-800 text-white">Full Map</option>
+                  <option value="FULL_MAP" className="bg-gray-800 text-white">Battle Royale (Full Map)</option>
                   <option value="CLASH_SQUAD" className="bg-gray-800 text-white">Clash Squad</option>
                 </select>
               </div>
@@ -450,6 +455,38 @@ export default function HostDashboardPage() {
                 <div className="space-y-2">
                   {(() => {
                     const isCreatingTeam = form.gameMode === 'CLASH_SQUAD' ? form.teamSize !== '1v1' : form.format !== 'SOLO';
+                    if (form.gameMode === 'CLASH_SQUAD') {
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">
+                                {isCreatingTeam ? '1st Winning Team (Winner-Takes-All)' : '1st Place (Winner-Takes-All)'}
+                              </label>
+                              <input
+                                type="number"
+                                value={prizes.first === 0 ? '' : prizes.first}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                                  const num = raw === '' ? 0 : Number(raw);
+                                  setPrizes({ first: isNaN(num) ? 0 : num, second: 0, third: 0 });
+                                }}
+                                placeholder="0"
+                                className="input-field w-full px-3 py-2 rounded-lg bg-fire-500/10 border border-fire-500/30 text-fire-400 text-sm font-bold"
+                                min={0}
+                                required
+                              />
+                            </div>
+                            <div className="pt-5">
+                              <span className="text-fire-400 text-lg">🥇</span>
+                            </div>
+                          </div>
+                          <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-300">
+                            🏆 <strong>Clash Squad Winner-Takes-All:</strong> 100% of the prize pool ({formatCurrency(maxPool)}, 88% of total collection) is allocated directly to the winning team.
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
                       <>
                         <div className="flex items-center gap-2">
@@ -600,22 +637,31 @@ export default function HostDashboardPage() {
 
             {breakdown && (
               <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                <p className="text-sm font-semibold text-white mb-3">Commission Breakdown</p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-white">Commission Breakdown</p>
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
+                    form.gameMode === 'CLASH_SQUAD'
+                      ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                      : 'bg-fire-500/10 text-fire-400 border border-fire-500/20'
+                  }`}>
+                    {form.gameMode === 'CLASH_SQUAD' ? 'Clash Squad (12% Total Deduction)' : 'Battle Royale (28% Total Deduction)'}
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                   <div>
                     <p className="text-zinc-500">Total Collection</p>
                     <p className="text-white font-bold">{formatCurrency(breakdown.totalCollection)}</p>
                   </div>
                   <div>
-                    <p className="text-zinc-500">Platform (20%)</p>
+                    <p className="text-zinc-500">Platform ({Math.round(breakdown.platformRate * 100)}%)</p>
                     <p className="text-fire-400 font-bold">{formatCurrency(breakdown.platformCommission)}</p>
                   </div>
                   <div>
-                    <p className="text-zinc-500">Host (8%)</p>
+                    <p className="text-zinc-500">Host ({Math.round(breakdown.hostRate * 100)}%)</p>
                     <p className="text-green-400 font-bold">{formatCurrency(breakdown.hostCommission)}</p>
                   </div>
                   <div>
-                    <p className="text-zinc-500">Max Prize Pool (72%)</p>
+                    <p className="text-zinc-500">Max Prize Pool ({Math.round(breakdown.prizePoolRate * 100)}%)</p>
                     <p className="font-bold text-yellow-400">{formatCurrency(breakdown.maxPrizePool)}</p>
                   </div>
                 </div>

@@ -11,7 +11,11 @@ export default function PrizePolicyPage() {
         <h2 className="text-2xl font-bold text-white mt-8">Prize Distribution</h2>
         <p>Tournament prizes are distributed based on the prize breakdown specified at the time of tournament creation. Prizes are credited to the winner&apos;s wallet within 7 business days after tournament completion.</p>
         <h2 className="text-2xl font-bold text-white mt-8">Platform Commission</h2>
-        <p>A 20% platform share and 8% host commission (28% total deduction) are deducted from the total entry fee collection. The remaining 72% forms the prize pool.</p>
+        <p>Commission rates depend on the game mode:</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>Battle Royale (Full Map):</strong> A 20% platform share and 8% host commission (28% combined total deduction) are deducted from the total entry fee collection. The remaining 72% forms the prize pool.</li>
+          <li><strong>Clash Squad:</strong> A dedicated low-cut commission system with an 8% platform share and 4% host commission (12% combined total deduction) is deducted from the total collection. The remaining massive 88% is allocated directly to the 1st winning team.</li>
+        </ul>
         <h2 className="text-2xl font-bold text-white mt-8">Taxes</h2>
         <p>Winners are responsible for any applicable taxes on their winnings as per local laws. NEOBATTLE may issue tax forms where required.</p>
         <h2 className="text-2xl font-bold text-white mt-8">Disputes</h2>

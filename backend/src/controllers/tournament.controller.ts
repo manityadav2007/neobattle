@@ -24,7 +24,7 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   const prizePoolNum = isFree ? 0 : Number(data.prizePool);
 
   if (!isFree) {
-    const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum);
+    const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum, data.gameMode);
     if (!validation.valid) {
       res.status(400).json({ success: false, message: validation.message, breakdown: validation.breakdown });
       return;

@@ -181,7 +181,7 @@ export async function listPendingResults(_req: AuthenticatedRequest, res: Respon
       host: { select: { id: true, username: true, email: true } },
       tournament: {
         select: {
-          id: true, uid: true, title: true, status: true, format: true, entryFee: true, prizePool: true,
+          id: true, uid: true, title: true, status: true, format: true, gameMode: true, entryFee: true, prizePool: true,
           prizeFirst: true, prizeSecond: true, prizeThird: true,
           platformCommission: true, hostCommission: true, maxParticipants: true,
           creator: { select: { id: true, username: true } },
