@@ -93,6 +93,7 @@ export default function AdminTournamentsPage() {
   const [savingMatch, setSavingMatch] = useState<string | null>(null);
   const [matchMsg, setMatchMsg] = useState<Record<string, string>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [endingId, setEndingId] = useState<string | null>(null);
 
   const [awardModal, setAwardModal] = useState<{ tournamentId: string; tournamentTitle: string; winnerId: string; winnerName: string } | null>(null);
   const [prizeAmount, setPrizeAmount] = useState('');
@@ -290,6 +291,29 @@ export default function AdminTournamentsPage() {
       setError(getErrorMessage(err));
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleEndTournament = async (t: Tournament) => {
+    const isConfirmed = confirm(
+      `Are you sure you want to end active tournament "${t.title}"?\n\n` +
+      `• Status will be marked as COMPLETED.\n` +
+      `• Match ends and prize distribution or winner submission can take place.\n\n` +
+      `Do you want to proceed?`
+    );
+    if (!isConfirmed) return;
+
+    setEndingId(t.id);
+    setError('');
+    setSuccessMsg('');
+    try {
+      await tournamentApi.complete(t.id);
+      setTournaments((prev) => prev.map((item) => (item.id === t.id ? { ...item, status: 'COMPLETED' } : item)));
+      setSuccessMsg(`Tournament "${t.title}" ended and marked as COMPLETED.`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setEndingId(null);
     }
   };
 
@@ -910,15 +934,28 @@ export default function AdminTournamentsPage() {
                         {expandedTournament === t.id ? 'Hide' : `Players (${entryCount})`}
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteTournament(t)}
-                        disabled={deletingId === t.id}
-                        className="px-3 py-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/25 text-xs font-semibold transition-all disabled:opacity-50 shrink-0"
-                        title="Delete Tournament"
-                      >
-                        {deletingId === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                      </button>
+                      {t.status === 'ACTIVE' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEndTournament(t)}
+                          disabled={endingId === t.id}
+                          className="flex items-center gap-1 px-3 py-2 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 border border-amber-500/25 text-xs font-semibold transition-all disabled:opacity-50 shrink-0"
+                          title="End Tournament"
+                        >
+                          {endingId === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                          <span>End</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTournament(t)}
+                          disabled={deletingId === t.id}
+                          className="px-3 py-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/25 text-xs font-semibold transition-all disabled:opacity-50 shrink-0"
+                          title="Delete Tournament"
+                        >
+                          {deletingId === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
                     </div>
 
                     {expandedTournament === t.id && (

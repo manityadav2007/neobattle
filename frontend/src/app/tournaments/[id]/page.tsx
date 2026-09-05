@@ -32,7 +32,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [copied, setCopied] = useState(false);
   const [endingTournament, setEndingTournament] = useState(false);
   const [distributing, setDistributing] = useState(false);
-  const [deletingTournament, setDeletingTournament] = useState(false);
 
   // Host result submission
   const [mySubmission, setMySubmission] = useState<ResultSubmission | null>(null);
@@ -83,30 +82,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
   const isHostCreator = user?.id === tournament?.creatorId;
   const isAdminUser = Boolean(isAdmin || isSuperAdmin);
-  const canDeleteTournament = tournament != null && user != null && (isHostCreator || isAdminUser);
-
-  const handleDeleteTournament = async () => {
-    if (!tournament) return;
-    const isConfirmed = confirm(
-      `Are you sure you want to permanently delete "${tournament.title}"?\n\n` +
-      `• Any held player entry fees will be automatically refunded to their wallets.\n` +
-      `• This tournament will be permanently removed from the database.\n\n` +
-      `This action cannot be undone.`
-    );
-    if (!isConfirmed) return;
-
-    setDeletingTournament(true);
-    setRegisterError('');
-    setMessage('');
-    try {
-      await tournamentApi.delete(tournament.id);
-      alert('Tournament deleted successfully.');
-      router.push(isAdmin ? '/admin/tournaments' : '/tournaments');
-    } catch (err) {
-      setRegisterError(getErrorMessage(err));
-      setDeletingTournament(false);
-    }
-  };
 
   const canSubmitResults =
     isHostCreator &&
@@ -307,7 +282,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const isCompletedState = isEnded || effectiveStatus === 'Ended' || oneHourPastStart;
   const isLiveAndPlaying = !isCompletedState && (tournament.status === 'ACTIVE' || effectiveStatus === 'Playing' || effectiveStatus === 'Live' || startTimeReached);
   const isRegistrationClosed = !isCompletedState && !isLiveAndPlaying && (isSlotsFull || registrationEndReached || tournament.status !== 'REGISTRATION');
-  const canEndTournament = !isEnded && startTimeReached && (isSuperAdmin || isAdmin || user?.id === tournament.creatorId);
+  const canEndTournament = !isEnded && (tournament.status === 'ACTIVE' || startTimeReached || isSuperAdmin || isAdmin) && (isSuperAdmin || isAdmin || user?.id === tournament.creatorId);
 
   console.log('[TournamentView] status:', tournament.status, 'effectiveStatus:', effectiveStatus, 'isSlotsFull:', isSlotsFull, 'isCompletedState:', isCompletedState, 'isLiveAndPlaying:', isLiveAndPlaying, 'isRegistrationClosed:', isRegistrationClosed);
 
@@ -397,17 +372,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   <span className="text-zinc-400">Host:</span>
                   <span className="text-white font-semibold">{tournament.creator?.username || tournament.creatorId}</span>
                 </div>
-                {canDeleteTournament && (
-                  <button
-                    onClick={handleDeleteTournament}
-                    disabled={deletingTournament}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 hover:text-white backdrop-blur-md transition-all text-xs font-semibold disabled:opacity-50 ml-auto"
-                    title="Delete Tournament"
-                  >
-                    {deletingTournament ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 text-rose-400" />}
-                    <span>{deletingTournament ? 'Deleting...' : 'Delete Tournament'}</span>
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -770,16 +734,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </button>
             )}
 
-            {canDeleteTournament && (
-              <button
-                onClick={handleDeleteTournament}
-                disabled={deletingTournament}
-                className="w-full py-3 rounded-xl text-sm font-bold text-rose-300 hover:text-white flex items-center justify-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 backdrop-blur-md transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(244,63,94,0.1)]"
-              >
-                {deletingTournament ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-rose-400" />}
-                {deletingTournament ? 'Deleting Tournament...' : 'Delete Tournament'}
-              </button>
-            )}
+
 
             {/* Host Result Submission Glass Card */}
             {isHostCreator && mySubmission?.status === 'PENDING' && (

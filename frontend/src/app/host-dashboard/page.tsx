@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
-import { hostApi, winnerProofApi, uploadApi, formatDate, formatCurrency, getStatusColor } from '@/lib/services';
+import { hostApi, tournamentApi, winnerProofApi, uploadApi, formatDate, formatCurrency, getStatusColor } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 import { calculateCommission, type CommissionBreakdown } from '@/lib/commission';
 
@@ -107,6 +107,7 @@ export default function HostDashboardPage() {
   const [completing, setCompleting] = useState<string | null>(null);
   const [completeMsg, setCompleteMsg] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [endingId, setEndingId] = useState<string | null>(null);
 
   // Room ID & Password Modal State
   const [roomModalTournament, setRoomModalTournament] = useState<Tournament | null>(null);
@@ -226,6 +227,29 @@ export default function HostDashboardPage() {
       setError(getErrorMessage(err));
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleEndTournament = async (t: Tournament) => {
+    const isConfirmed = confirm(
+      `Are you sure you want to end active tournament "${t.title}"?\n\n` +
+      `• The match will be marked as COMPLETED.\n` +
+      `• The room will close and you can submit winner proof for prize distribution.\n\n` +
+      `Do you want to proceed?`
+    );
+    if (!isConfirmed) return;
+
+    setEndingId(t.id);
+    setError(null);
+    try {
+      await tournamentApi.complete(t.id);
+      const res = await hostApi.getMyTournaments();
+      setTournaments(res.data || []);
+      setCompleteMsg(`Tournament "${t.title}" ended and marked as COMPLETED.`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setEndingId(null);
     }
   };
 
@@ -967,16 +991,29 @@ export default function HostDashboardPage() {
                     <Link href={`/tournaments/${t.id}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-zinc-400 text-sm font-medium hover:bg-white/10 transition-colors">
                       View <ArrowRight className="w-4 h-4" />
                     </Link>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteTournament(t)}
-                      disabled={deletingId === t.id}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/20 text-sm font-medium transition-colors disabled:opacity-50 ml-auto"
-                      title="Delete Tournament"
-                    >
-                      {deletingId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      {deletingId === t.id ? 'Deleting...' : 'Delete'}
-                    </button>
+                    {t.status === 'ACTIVE' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleEndTournament(t)}
+                        disabled={endingId === t.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 hover:text-amber-300 border border-amber-500/25 text-sm font-medium transition-colors disabled:opacity-50 ml-auto"
+                        title="End Tournament"
+                      >
+                        {endingId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                        {endingId === t.id ? 'Ending...' : 'End Tournament'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTournament(t)}
+                        disabled={deletingId === t.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/20 text-sm font-medium transition-colors disabled:opacity-50 ml-auto"
+                        title="Delete Tournament"
+                      >
+                        {deletingId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        {deletingId === t.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    )}
                   </div>
                   {completeMsg && <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> {completeMsg}</div>}
 

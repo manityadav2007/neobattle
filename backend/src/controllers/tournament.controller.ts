@@ -752,7 +752,7 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
     return;
   }
 
-  if (new Date(tournament.startTime).getTime() > Date.now()) {
+  if (tournament.status !== TournamentStatus.ACTIVE && new Date(tournament.startTime).getTime() > Date.now() && !isAdmin) {
     res.status(400).json({ success: false, message: 'Tournament has not started yet — it can only be ended after its start time' });
     return;
   }
