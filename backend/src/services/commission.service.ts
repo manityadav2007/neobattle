@@ -6,9 +6,9 @@ export interface CommissionBreakdown {
   maxPrizePool: number;
 }
 
-const PLATFORM_RATE = 0.16; // 16% Platform share
-const HOST_RATE = 0.04;     // 4% Host commission (20% total deduction)
-const REMAINING_RATE = 1 - PLATFORM_RATE - HOST_RATE; // 0.80 (80% Max prize pool)
+const PLATFORM_RATE = 0.20; // 20% Platform share
+const HOST_RATE = 0.08;     // 8% Host commission (28% total deduction)
+const REMAINING_RATE = 1 - PLATFORM_RATE - HOST_RATE; // 0.72 (72% Max prize pool)
 
 export function calculateCommission(entryFee: number, maxPlayers: number): CommissionBreakdown {
   const totalCollection = Math.round(entryFee * maxPlayers);
