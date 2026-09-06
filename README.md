@@ -96,8 +96,8 @@ Open **http://localhost:3000**
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | admin@firearena.gg | Admin@123456 |
-| Player | player1@firearena.gg | Player@123456 |
+| Admin | admin@example.gg | Admin@*** |
+| Player | player1@example.gg | Player@**** |
 
 ## API Endpoints
 
