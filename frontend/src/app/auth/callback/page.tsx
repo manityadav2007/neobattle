@@ -24,7 +24,8 @@ function CallbackContent() {
     const refreshToken = searchParams.get('refreshToken');
 
     if (!accessToken || !refreshToken) {
-      setError(searchParams.get('error') ? 'Google authentication failed. Please try again.' : 'Invalid authentication response.');
+      const authError = searchParams.get('error');
+      setError(authError ? `Authentication failed (${authError}). Please try again.` : 'Invalid authentication response.');
       return;
     }
 
