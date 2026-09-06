@@ -7,14 +7,16 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, IndianRupee,
-  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Shield, Wallet, Trash2,
+  CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Shield, Wallet, Trash2, UserPlus, Settings, Check, BadgeCheck,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
 import TournamentTags, { tagColorMap, tagIcons } from '@/components/TournamentTags';
-import { tournamentApi, gameApi, userApi, adminApi, uploadApi, resultApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, TOURNAMENT_PLAY_GRACE_MS, type UserStats, type ResultSubmission } from '@/lib/services';
+import { tournamentApi, teamApi, type Team, resolveAssetUrl, gameApi, userApi, adminApi, uploadApi, resultApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, TOURNAMENT_PLAY_GRACE_MS, type UserStats, type ResultSubmission } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
+import TeamManagementModal from '@/components/TeamManagementModal';
+import Avatar from '@/components/Avatar';
 
 export default function TournamentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -32,6 +34,27 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [copied, setCopied] = useState(false);
   const [endingTournament, setEndingTournament] = useState(false);
   const [distributing, setDistributing] = useState(false);
+
+  // Dual Registration Mode ('team' | 'manual')
+  const [regMode, setRegMode] = useState<'team' | 'manual'>('team');
+  const [myTeam, setMyTeam] = useState<Team | null>(null);
+  const [loadingMyTeam, setLoadingMyTeam] = useState(false);
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
+
+  const fetchMyTeam = () => {
+    if (!user) return;
+    setLoadingMyTeam(true);
+    teamApi.my()
+      .then((res) => setMyTeam(res.data || null))
+      .catch(() => {})
+      .finally(() => setLoadingMyTeam(false));
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchMyTeam();
+    }
+  }, [user]);
 
   // Host result submission
   const [mySubmission, setMySubmission] = useState<ResultSubmission | null>(null);
@@ -203,25 +226,62 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
       const isDuoFormat = tournament?.format === 'DUO';
       const isSquadFormat = tournament?.format === 'SQUAD';
       const isTeam = isDuoFormat || isSquadFormat;
+      const requiredSlots = isDuoFormat ? 2 : (isSquadFormat ? 4 : 1);
       const slots = isDuoFormat ? 1 : (isSquadFormat ? 3 : 0);
+      const reqLevel = Number(tournament?.requiredLevel || tournament?.minLevel) || 0;
 
       if (isTeam) {
-        const activeTeammates = teammateUids.slice(0, slots).map((u) => u.trim());
-        if (activeTeammates.some((u) => !u)) {
-          setRegisterError(`Please enter Free Fire IDs for all ${slots} teammate slot(s).`);
-          setRegistering(false);
-          return;
-        }
-        for (let i = 0; i < slots; i++) {
-          const st = teammateStatus[i];
-          if (!st?.valid) {
-            setRegisterError(`Slot #${i + 2} (${activeTeammates[i]}) is not verified or does not meet requirements.`);
+        if (regMode === 'team') {
+          if (!myTeam) {
+            setRegisterError('You are not currently in a team. Create or join a team, or switch to Manual UID mode.');
             setRegistering(false);
             return;
           }
+          if (myTeam.members.length < requiredSlots) {
+            setRegisterError(`Your team "${myTeam.name}" has ${myTeam.members.length} members, but ${tournament?.format} requires ${requiredSlots} players. Add more members or switch to Manual UID mode.`);
+            setRegistering(false);
+            return;
+          }
+
+          const activeMembers = myTeam.members.slice(0, requiredSlots);
+          for (const m of activeMembers) {
+            if (!m.user.freeFireId) {
+              setRegisterError(`Player "${m.user.username}" has not linked their Free Fire ID.`);
+              setRegistering(false);
+              return;
+            }
+            if (!m.user.isVerified) {
+              setRegisterError(`Player "${m.user.username}" (UID: ${m.user.freeFireId}) is not verified. All teammates must be verified.`);
+              setRegistering(false);
+              return;
+            }
+            if ((m.user.gameLevel ?? 0) < reqLevel) {
+              setRegisterError(`Player "${m.user.username}" (Level ${m.user.gameLevel ?? 0}) does not meet the required Level ${reqLevel}.`);
+              setRegistering(false);
+              return;
+            }
+          }
+
+          await tournamentApi.register(id, myTeam.id, undefined, myTeam.name, 'TEAM');
+        } else {
+          // MANUAL UID MODE
+          const activeTeammates = teammateUids.slice(0, slots).map((u) => u.trim());
+          if (activeTeammates.some((u) => !u)) {
+            setRegisterError(`Please enter Free Fire IDs for all ${slots} teammate slot(s).`);
+            setRegistering(false);
+            return;
+          }
+          for (let i = 0; i < slots; i++) {
+            const st = teammateStatus[i];
+            if (!st?.valid) {
+              setRegisterError(st?.error || `Slot #${i + 2} (${activeTeammates[i]}) is not verified or does not meet requirements.`);
+              setRegistering(false);
+              return;
+            }
+          }
+          const teamUids = [user.freeFireId || '', ...activeTeammates];
+          await tournamentApi.register(id, undefined, teamUids, teamName.trim() || undefined, 'MANUAL');
         }
-        const teamUids = [user.freeFireId || '', ...activeTeammates];
-        await tournamentApi.register(id, undefined, teamUids, teamName.trim() || undefined);
       } else {
         await tournamentApi.register(id);
       }
@@ -267,9 +327,23 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const prizePool = typeof tournament.prizePool === 'string' ? parseFloat(tournament.prizePool) : tournament.prizePool;
   const entryCount = tournament._count?.entries ?? 0;
   const isSlotsFull = tournament.maxParticipants > 0 && entryCount >= tournament.maxParticipants;
+  const reqLevel = Number(tournament.requiredLevel || tournament.minLevel) || 0;
+  const requiredSlots = isDuo ? 2 : (isSquad ? 4 : 1);
+  const teamHasEnoughMembers = Boolean(myTeam && myTeam.members && myTeam.members.length >= requiredSlots);
+  const teamMembersSlice = myTeam?.members?.slice(0, requiredSlots) || [];
+  const failingTeamMember = teamMembersSlice.find((m) => {
+    if (!m.user?.freeFireId) return true;
+    if (!m.user?.isVerified) return true;
+    if ((m.user?.gameLevel ?? 0) < reqLevel) return true;
+    return false;
+  });
+  const isTeamReady = Boolean(myTeam && teamHasEnoughMembers && !failingTeamMember);
   const allTeammatesValid = !isTeam || (
     teammateUids.slice(0, teammateCount).every((u, idx) => u.trim().length >= 3 && teammateStatus[idx]?.valid === true)
   );
+  const isRegistrationReady = isTeam
+    ? (regMode === 'team' ? isTeamReady : allTeammatesValid)
+    : true;
   const mapTheme = getMapTheme(tournament.mapName);
   const isEnded = tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED' || tournament.status === 'PAID';
   const effectiveStatus = getEffectiveStatus(tournament);
@@ -512,110 +586,309 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </div>
             </div>
 
-            {/* Team Registration Box for DUO & SQUAD */}
+            {/* Dual Mode Team Registration Box for DUO & SQUAD */}
             {isTeam && tournament.status === 'REGISTRATION' && !isRegistrationClosed && !isCompletedState && !isLiveAndPlaying && !tournament.isRegistered && (
-              <div className="p-6 rounded-2xl bg-zinc-900/70 backdrop-blur-xl border border-blue-500/30 shadow-[0_0_25px_rgba(59,130,246,0.12)] space-y-4">
+              <div className="p-6 rounded-2xl bg-zinc-900/70 backdrop-blur-xl border border-blue-500/30 shadow-[0_0_25px_rgba(59,130,246,0.12)] space-y-5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Gamepad2 className="w-5 h-5 text-fire-400" />
-                    <span>{isDuo ? 'Duo' : 'Squad'} Team Registration</span>
-                    <span className="text-xs font-normal text-zinc-400">({isDuo ? '2 Players' : '4 Players'})</span>
+                    <span>{isDuo ? 'Duo' : 'Squad'} Registration</span>
+                    <span className="text-xs font-normal text-zinc-400">({requiredSlots} Players)</span>
                   </h3>
-                  {Number(tournament.requiredLevel) > 0 && (
+                  {reqLevel > 0 && (
                     <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-                      Min Level: {tournament.requiredLevel}+
+                      Min Level: {reqLevel}+
                     </span>
                   )}
                 </div>
 
-                <p className="text-xs text-zinc-400">
-                  Enter pre-verified Free Fire IDs for your teammates. All teammates must be registered on Neobattle, verified, and meet the tournament&apos;s level requirement.
-                </p>
-
-                {/* Team Name Input */}
-                <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
-                    Team Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={teamName}
-                    onChange={(e) => setTeamName(e.target.value)}
-                    placeholder={`e.g., ${user?.username}'s Team`}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-fire-500/50 transition-all"
-                  />
+                {/* Mode Selector Tabs */}
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-black/40 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setRegMode('team')}
+                    className={`py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      regMode === 'team'
+                        ? 'bg-gradient-to-r from-fire-500 to-amber-500 text-white shadow-lg'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Team Mode (1-Click)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegMode('manual')}
+                    className={`py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      regMode === 'manual'
+                        ? 'bg-gradient-to-r from-fire-500 to-amber-500 text-white shadow-lg'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Gamepad2 className="w-4 h-4" />
+                    <span>Manual UID Mode</span>
+                  </button>
                 </div>
 
-                <div className="space-y-3">
-                  {/* Slot #1: Captain (You) */}
-                  <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-                        Captain
-                      </span>
-                      <span className="text-sm font-semibold text-white truncate">{user?.username}</span>
-                      {user?.ign && (
-                        <span className="text-xs font-mono text-zinc-400 truncate">({user.ign})</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded">
-                        UID: {user?.freeFireId || '—'}
-                      </span>
-                      <span className="text-[11px] text-zinc-400 font-semibold">Lvl {user?.gameLevel ?? 0}</span>
-                    </div>
-                  </div>
-
-                  {/* Teammate Slots */}
-                  {Array.from({ length: teammateCount }).map((_, i) => {
-                    const status = teammateStatus[i];
-                    return (
-                      <div key={i} className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-zinc-500 w-16 shrink-0">Slot #{i + 2}</span>
-                          <input
-                            type="text"
-                            value={teammateUids[i]}
-                            onChange={(e) => updateTeammateUid(i, e.target.value)}
-                            onBlur={() => checkTeammateUid(i, teammateUids[i])}
-                            placeholder={`Teammate ${i + 1} Free Fire ID`}
-                            className={`flex-1 px-3.5 py-2.5 rounded-xl bg-black/40 border text-white text-sm font-mono focus:outline-none transition-all ${
-                              status?.valid === true
-                                ? 'border-emerald-500/50 focus:border-emerald-400'
-                                : status?.valid === false
-                                ? 'border-rose-500/50 focus:border-rose-400'
-                                : 'border-white/10 focus:border-fire-500/50'
-                            }`}
-                          />
+                {/* 1. TEAM REGISTRATION MODE VIEW */}
+                {regMode === 'team' ? (
+                  <div className="space-y-4">
+                    {loadingMyTeam ? (
+                      <div className="py-8 flex justify-center">
+                        <Loader2 className="w-6 h-6 animate-spin text-fire-400" />
+                      </div>
+                    ) : !myTeam ? (
+                      <div className="p-5 rounded-xl bg-white/5 border border-white/10 text-center space-y-3">
+                        <Users className="w-8 h-8 mx-auto text-zinc-500" />
+                        <div>
+                          <p className="text-sm font-bold text-white">No Team Created</p>
+                          <p className="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
+                            You don&apos;t have an active team. Create or join a team to register your entire roster in one click, or use Manual UID mode.
+                          </p>
+                        </div>
+                        <div className="flex justify-center gap-3 pt-1">
                           <button
                             type="button"
-                            onClick={() => checkTeammateUid(i, teammateUids[i])}
-                            disabled={status?.loading || !teammateUids[i]?.trim()}
-                            className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold border border-white/10 disabled:opacity-40 transition-all shrink-0"
+                            onClick={() => setTeamModalOpen(true)}
+                            className="px-4 py-2 rounded-xl bg-fire-500 text-white text-xs font-bold hover:bg-fire-400 transition-all flex items-center gap-1.5"
                           >
-                            {status?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
+                            <UserPlus className="w-3.5 h-3.5" />
+                            Create or Join Team
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRegMode('manual')}
+                            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-zinc-300 text-xs font-semibold transition-all"
+                          >
+                            Use Manual UID Mode
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3.5">
+                        {/* Team Banner */}
+                        <div className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {myTeam.logoUrl ? (
+                              <img
+                                src={resolveAssetUrl(myTeam.logoUrl)}
+                                alt={myTeam.name}
+                                className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-fire-500/20 border border-fire-500/30 flex items-center justify-center shrink-0">
+                                <Users className="w-5 h-5 text-fire-400" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-white text-sm truncate">{myTeam.name}</span>
+                                <span className="px-1.5 py-0.2 rounded bg-fire-500/20 text-fire-400 font-mono text-[10px] font-bold">
+                                  [{myTeam.tag}]
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-zinc-400">
+                                {myTeam.members?.length || 0} Members Total • Need {requiredSlots} for {tournament.format}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setTeamModalOpen(true)}
+                            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-xs font-semibold transition-all shrink-0 flex items-center gap-1"
+                          >
+                            <Settings className="w-3 h-3" />
+                            Manage Team
                           </button>
                         </div>
 
-                        {/* Status Feedback */}
-                        {status?.valid === true && status.info && (
-                          <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
-                            <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span className="font-semibold">{status.info.username}</span>
-                            {status.info.ign && <span className="font-mono text-zinc-400">({status.info.ign})</span>}
-                            <span className="ml-auto font-semibold text-emerald-300">Level {status.info.gameLevel}</span>
+                        {/* Roster Cards */}
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                            Active Roster ({teamMembersSlice.length} / {requiredSlots})
+                          </p>
+                          <div className="grid sm:grid-cols-2 gap-2.5">
+                            {teamMembersSlice.map((m: any, idx: number) => {
+                              const p = m.user;
+                              const isSlotCaptain = p.id === myTeam.leader?.id;
+                              const isLvlOk = (p.gameLevel ?? 0) >= reqLevel;
+                              const isUidOk = Boolean(p.freeFireId);
+                              const isVerOk = Boolean(p.isVerified);
+                              const allOk = isLvlOk && isUidOk && isVerOk;
+
+                              return (
+                                <div
+                                  key={p.id}
+                                  className={`p-3 rounded-xl border transition-all flex items-center gap-3 ${
+                                    allOk
+                                      ? 'bg-white/5 border-white/10'
+                                      : 'bg-rose-500/10 border-rose-500/30'
+                                  }`}
+                                >
+                                  <Avatar src={resolveAssetUrl(p.avatarUrl)} alt={p.username} size={36} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-bold text-white truncate">{p.username}</span>
+                                      {isSlotCaptain && (
+                                        <span className="px-1.5 py-0.2 rounded bg-yellow-500/20 text-yellow-400 text-[9px] font-bold uppercase">
+                                          Captain
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5">
+                                      <span className="font-mono">{p.freeFireId ? `UID: ${p.freeFireId}` : 'No UID'}</span>
+                                      <span>•</span>
+                                      <span className={`font-semibold ${isLvlOk ? 'text-zinc-300' : 'text-rose-400 font-bold'}`}>
+                                        Lvl {p.gameLevel ?? 0}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0">
+                                    {allOk ? (
+                                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                                        <Check className="w-3 h-3" /> Ready
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[10px] font-bold">
+                                        {!isUidOk ? 'No UID' : !isVerOk ? 'Unverified' : 'Low Lvl'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        )}
-                        {status?.valid === false && status.error && (
-                          <div className="flex items-center gap-2 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span>{status.error}</span>
+                        </div>
+
+                        {/* Team Eligibility Status Banner */}
+                        {myTeam.members.length < requiredSlots ? (
+                          <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs gap-2">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                              <span>Your team has only {myTeam.members.length} member(s). You need {requiredSlots} players for {tournament.format}.</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setTeamModalOpen(true)}
+                              className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-bold transition-all shrink-0"
+                            >
+                              Add Members
+                            </button>
+                          </div>
+                        ) : failingTeamMember ? (
+                          <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-300 text-xs">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                            <span>
+                              Registration blocked:{' '}
+                              <strong>{failingTeamMember.user.username}</strong>{' '}
+                              {!failingTeamMember.user.freeFireId
+                                ? 'has not linked their Free Fire ID.'
+                                : !failingTeamMember.user.isVerified
+                                ? `(UID: ${failingTeamMember.user.freeFireId}) is not verified.`
+                                : `(Level ${failingTeamMember.user.gameLevel ?? 0}) does not meet the tournament requirement of Level ${reqLevel}.`}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
+                            <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+                            <span>All {requiredSlots} teammates verified &amp; meet Level {reqLevel}+ requirement. Ready for 1-click registration!</span>
                           </div>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                  </div>
+                ) : (
+                  /* 2. MANUAL UID MODE VIEW */
+                  <div className="space-y-4">
+                    <p className="text-xs text-zinc-400">
+                      Enter pre-verified Free Fire IDs for your teammates. All teammates must be registered on Neobattle, verified, and meet the Level {reqLevel}+ requirement.
+                    </p>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
+                        Team Name (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={teamName}
+                        onChange={(e) => setTeamName(e.target.value)}
+                        placeholder={`e.g., ${user?.username}'s Team`}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-fire-500/50 transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      {/* Slot #1: Captain (You) */}
+                      <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                            Captain
+                          </span>
+                          <span className="text-sm font-semibold text-white truncate">{user?.username}</span>
+                          {user?.ign && (
+                            <span className="text-xs font-mono text-zinc-400 truncate">({user.ign})</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded">
+                            UID: {user?.freeFireId || '—'}
+                          </span>
+                          <span className="text-[11px] text-zinc-400 font-semibold">Lvl {user?.gameLevel ?? 0}</span>
+                        </div>
+                      </div>
+
+                      {/* Teammate Slots */}
+                      {Array.from({ length: teammateCount }).map((_, i) => {
+                        const status = teammateStatus[i];
+                        return (
+                          <div key={i} className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-bold text-zinc-500 w-16 shrink-0">Slot #{i + 2}</span>
+                              <input
+                                type="text"
+                                value={teammateUids[i]}
+                                onChange={(e) => updateTeammateUid(i, e.target.value)}
+                                onBlur={() => checkTeammateUid(i, teammateUids[i])}
+                                placeholder={`Teammate ${i + 1} Free Fire ID`}
+                                className={`flex-1 px-3.5 py-2.5 rounded-xl bg-black/40 border text-white text-sm font-mono focus:outline-none transition-all ${
+                                  status?.valid === true
+                                    ? 'border-emerald-500/50 focus:border-emerald-400'
+                                    : status?.valid === false
+                                    ? 'border-rose-500/50 focus:border-rose-400'
+                                    : 'border-white/10 focus:border-fire-500/50'
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => checkTeammateUid(i, teammateUids[i])}
+                                disabled={status?.loading || !teammateUids[i]?.trim()}
+                                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold border border-white/10 disabled:opacity-40 transition-all shrink-0"
+                              >
+                                {status?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
+                              </button>
+                            </div>
+
+                            {/* Status Feedback */}
+                            {status?.valid === true && status.info && (
+                              <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                                <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                                <span className="font-semibold">{status.info.username}</span>
+                                {status.info.ign && <span className="font-mono text-zinc-400">({status.info.ign})</span>}
+                                <span className="ml-auto font-semibold text-emerald-300">Level {status.info.gameLevel}</span>
+                              </div>
+                            )}
+                            {status?.valid === false && status.error && (
+                              <div className="flex items-center gap-2 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                <span>{status.error}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -918,7 +1191,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             ) : totalTeamEntryFee > 0 ? (
               <button
                 onClick={handleRegister}
-                disabled={registering || (isTeam && !allTeammatesValid)}
+                disabled={registering || (isTeam && !isRegistrationReady)}
                 className="w-full py-4 rounded-2xl text-base font-black text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
               >
                 {registering ? (
@@ -930,7 +1203,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             ) : (
               <button
                 onClick={handleRegister}
-                disabled={registering || (isTeam && !allTeammatesValid)}
+                disabled={registering || (isTeam && !isRegistrationReady)}
                 className="w-full py-4 rounded-2xl text-base font-black text-white disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 via-neo-500 to-orange-500 hover:from-blue-500 hover:to-orange-400 transition-all shadow-[0_0_30px_rgba(59,130,246,0.35)] hover:scale-[1.01]"
               >
                 {registering ? (
@@ -943,6 +1216,16 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
       </motion.div>
+
+      {user && (
+        <TeamManagementModal
+          open={teamModalOpen}
+          onClose={() => setTeamModalOpen(false)}
+          myTeam={myTeam}
+          userId={user.id}
+          onTeamChange={fetchMyTeam}
+        />
+      )}
     </div>
   );
 }

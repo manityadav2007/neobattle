@@ -46,6 +46,12 @@ enum TeamMemberRole {
   MEMBER
 }
 
+enum TeamRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 enum TransactionType {
   DEPOSIT
   WITHDRAWAL
@@ -101,6 +107,7 @@ model User {
   wallet              Wallet?
   teamMemberships     TeamMember[]
   ledTeams            Team[]              @relation("TeamLeader")
+  teamJoinRequests    TeamJoinRequest[]
   tournamentEntries   TournamentEntry[]
   transactions        Transaction[]
   verifications       VerificationRequest[]
@@ -179,6 +186,7 @@ model Team {
 
   leader   User         @relation("TeamLeader", fields: [leaderId], references: [id])
   members  TeamMember[]
+  joinRequests TeamJoinRequest[]
   entries  TournamentEntry[]
 
   @@index([leaderId])
@@ -195,6 +203,21 @@ model TeamMember {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model TeamJoinRequest {
+  id        String            @id @default(cuid())
+  teamId    String
+  userId    String
+  status    TeamRequestStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
   @@index([userId])
 }
 

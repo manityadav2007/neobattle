@@ -45,6 +45,14 @@ export const joinTeamSchema = z.object({
   teamId: z.string().cuid(),
 });
 
+export const requestJoinTeamSchema = z.object({
+  teamCode: z.string().min(1).max(50),
+});
+
+export const reviewJoinRequestSchema = z.object({
+  action: z.enum(['ACCEPT', 'REJECT']),
+});
+
 export const createTournamentSchema = z.object({
   title: z.string().min(5).max(100),
   description: z.string().max(2000).optional(),

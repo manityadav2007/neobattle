@@ -102,7 +102,7 @@ export default function GlobalSidebar() {
         icon: CircleHelp,
       },
     ],
-    [user, isHostOrSuper]
+    [user, isHostOrAdmin]
   );
 
   return (

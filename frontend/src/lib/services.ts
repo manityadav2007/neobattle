@@ -76,17 +76,47 @@ export interface Transaction {
   createdAt: string;
 }
 
+export interface TeamMemberUser {
+  id: string;
+  username: string;
+  displayName?: string | null;
+  avatarUrl: string | null;
+  freeFireId?: string | null;
+  ign?: string | null;
+  gameLevel?: number;
+  isVerified?: boolean;
+}
+
 export interface Team {
   id: string;
   name: string;
   tag: string;
   logoUrl: string | null;
   members: Array<{
-    user: { id: string; username: string; avatarUrl: string | null };
+    user: TeamMemberUser;
     role: string;
   }>;
   leader: { id: string; username: string };
   _count?: { members: number };
+}
+
+export interface TeamJoinRequest {
+  id: string;
+  teamId: string;
+  userId: string;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  createdAt: string;
+  user: {
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+    freeFireId?: string | null;
+    ign?: string | null;
+    gameLevel: number;
+    isVerified: boolean;
+    createdAt?: string;
+  };
 }
 
 export const authApi = {
@@ -147,8 +177,8 @@ export const tournamentApi = {
     }>('/tournaments/check-player', { params: { uid, requiredLevel } });
     return res.data;
   },
-  register: async (tournamentId: string, teamId?: string, teamUids?: string[], teamName?: string) => {
-    const res = await api.post('/tournaments/register', { tournamentId, teamId, teamUids, squadUids: teamUids, teamName });
+  register: async (tournamentId: string, teamId?: string, teamUids?: string[], teamName?: string, registrationMode?: 'TEAM' | 'MANUAL') => {
+    const res = await api.post('/tournaments/register', { tournamentId, teamId, teamUids, squadUids: teamUids, teamName, registrationMode });
     return res.data;
   },
   my: async () => {
@@ -210,12 +240,28 @@ export const teamApi = {
     const res = await api.get<ApiResponse<Team | null>>('/teams/my');
     return res.data;
   },
+  get: async (id: string) => {
+    const res = await api.get<ApiResponse<Team>>(`/teams/${id}`);
+    return res.data;
+  },
   create: async (data: { name: string; tag: string; logoUrl?: string }) => {
     const res = await api.post('/teams', data);
     return res.data;
   },
   join: async (teamId: string) => {
     const res = await api.post('/teams/join', { teamId });
+    return res.data;
+  },
+  requestJoin: async (teamCode: string) => {
+    const res = await api.post<ApiResponse<TeamJoinRequest>>('/teams/request-join', { teamCode });
+    return res.data;
+  },
+  getRequests: async (teamId: string) => {
+    const res = await api.get<ApiResponse<TeamJoinRequest[]>>(`/teams/${teamId}/requests`);
+    return res.data;
+  },
+  reviewRequest: async (requestId: string, action: 'ACCEPT' | 'REJECT') => {
+    const res = await api.post<ApiResponse<Team>>(`/teams/requests/${requestId}/review`, { action });
     return res.data;
   },
   leave: async () => {

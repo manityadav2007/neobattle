@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { adminApi, verificationApi, formatDate } from '@/lib/services';
-import { getErrorMessage } from '@/lib/api';
+import { getErrorMessage, isAuthenticated } from '@/lib/api';
 
 interface VerificationItem {
   id: string;

@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { adminApi, formatCurrency } from '@/lib/services';
-import { getErrorMessage } from '@/lib/api';
+import { getErrorMessage, isAuthenticated } from '@/lib/api';
 
 interface RedeemRequestItem {
   id: string;

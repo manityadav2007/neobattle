@@ -439,22 +439,171 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
 
   if (tournament.format === TournamentFormat.DUO || tournament.format === TournamentFormat.SQUAD) {
     const requiredSlots = tournament.format === TournamentFormat.DUO ? 2 : 4;
-    const { teamName, teamId } = req.body;
+    const { teamName, teamId, registrationMode } = req.body;
     let inputUids: string[] = Array.isArray(req.body.teamUids)
       ? req.body.teamUids
       : (Array.isArray(req.body.squadUids) ? req.body.squadUids : []);
 
-    // If teamId provided and no UIDs, look up existing team members
-    if (inputUids.length === 0 && teamId) {
+    // 1. TEAM REGISTRATION MODE
+    if ((registrationMode === 'TEAM' || (teamId && inputUids.length === 0)) && teamId) {
       const existingTeam = await prisma.team.findUnique({
         where: { id: teamId },
-        include: { members: { include: { user: true } } },
+        include: {
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  ign: true,
+                  freeFireId: true,
+                  gameLevel: true,
+                  isVerified: true,
+                },
+              },
+            },
+            orderBy: { joinedAt: 'asc' },
+          },
+        },
       });
-      if (existingTeam) {
-        inputUids = existingTeam.members.map((m) => m.user?.freeFireId).filter(Boolean) as string[];
+
+      if (!existingTeam || !existingTeam.isActive) {
+        res.status(404).json({ success: false, message: 'Team not found or is inactive.' });
+        return;
       }
+
+      const isMember = existingTeam.members.some((m) => m.userId === userId);
+      if (!isMember) {
+        res.status(403).json({ success: false, message: 'You are not a member of this team.' });
+        return;
+      }
+
+      if (existingTeam.members.length < requiredSlots) {
+        res.status(400).json({
+          success: false,
+          message: `Team "${existingTeam.name}" has only ${existingTeam.members.length} member(s), but ${tournament.format} requires exactly ${requiredSlots} players. Please invite more teammates to your team or use Manual UID mode.`,
+        });
+        return;
+      }
+
+      // Check if team is already registered in this tournament
+      const alreadyTeamEntry = await prisma.tournamentEntry.findFirst({
+        where: { tournamentId, teamId: existingTeam.id },
+      });
+      if (alreadyTeamEntry) {
+        res.status(409).json({
+          success: false,
+          message: `Team "${existingTeam.name}" is already registered in this tournament.`,
+        });
+        return;
+      }
+
+      const activeMembers = existingTeam.members.slice(0, requiredSlots);
+
+      // Strict validation for every team member
+      for (const m of activeMembers) {
+        const p = m.user;
+        if (!p) continue;
+
+        if (!p.freeFireId) {
+          res.status(400).json({
+            success: false,
+            message: `Player "${p.username}" has not linked a Free Fire ID in their profile.`,
+          });
+          return;
+        }
+
+        if (!p.isVerified) {
+          res.status(400).json({
+            success: false,
+            message: `Player "${p.username}" (UID: ${p.freeFireId}) does not have a verified Free Fire ID. All team members must be verified.`,
+          });
+          return;
+        }
+
+        if (p.gameLevel < tournament.requiredLevel) {
+          res.status(400).json({
+            success: false,
+            message: `Player "${p.username}" (Level ${p.gameLevel}) does not meet the tournament requirement of Level ${tournament.requiredLevel}.`,
+          });
+          return;
+        }
+
+        const alreadyInTournament = await prisma.tournamentEntry.findFirst({
+          where: {
+            tournamentId,
+            OR: [
+              { userId: p.id },
+              { team: { members: { some: { userId: p.id } } } },
+            ],
+          },
+        });
+
+        if (alreadyInTournament) {
+          res.status(409).json({
+            success: false,
+            message: `Player "${p.username}" (${p.freeFireId}) is already registered in this tournament.`,
+          });
+          return;
+        }
+      }
+
+      // Total entry fee for the entire team
+      const totalTeamFee = Number(tournament.entryFee) * requiredSlots;
+      let isPaid = totalTeamFee === 0;
+
+      if (totalTeamFee > 0) {
+        const wallet = await prisma.wallet.findUnique({ where: { userId } });
+        if (!wallet || Number(wallet.balance) < totalTeamFee) {
+          res.status(400).json({
+            success: false,
+            message: `Insufficient wallet balance. Team registration requires ₹${totalTeamFee} (${requiredSlots} × ₹${Number(tournament.entryFee)}).`,
+          });
+          return;
+        }
+
+        const holdResult = await escrowService.holdFunds(wallet.id, userId, tournamentId, totalTeamFee);
+        if (!holdResult.success) {
+          res.status(400).json({ success: false, message: holdResult.message });
+          return;
+        }
+        isPaid = true;
+      }
+
+      const entry = await prisma.tournamentEntry.create({
+        data: {
+          tournamentId,
+          userId,
+          teamId: existingTeam.id,
+          isPaid,
+        },
+        include: {
+          tournament: { select: { title: true, startTime: true } },
+          user: { select: { id: true, username: true } },
+          team: {
+            select: {
+              id: true,
+              name: true,
+              tag: true,
+              members: {
+                include: {
+                  user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        data: entry,
+        message: `Team "${existingTeam.name}" [${existingTeam.tag}] registered successfully with ${requiredSlots} verified players!`,
+      });
+      return;
     }
 
+    // 2. MANUAL UID MODE
     // If user provided (requiredSlots - 1) UIDs, prepend current user's Free Fire ID
     const currentUid = (currentUser as any).freeFireId || '';
     if (inputUids.length === requiredSlots - 1 && currentUid) {
