@@ -15,7 +15,7 @@ interface Props {
   onClose: () => void;
   myTeam: Team | null;
   userId: string;
-  onTeamChange: () => void;
+  onTeamChange: (updatedTeam?: Team | null) => void;
 }
 
 export default function TeamManagementModal({ open, onClose, myTeam, userId, onTeamChange }: Props) {
@@ -54,10 +54,15 @@ export default function TeamManagementModal({ open, onClose, myTeam, userId, onT
   };
 
   useEffect(() => {
-    if (open && myTeam && isLeader) {
-      fetchRequests(myTeam.id);
+    if (open) {
+      setError('');
+      setSuccess('');
+      onTeamChange();
+      if (myTeam && isLeader) {
+        fetchRequests(myTeam.id);
+      }
     }
-  }, [open, myTeam?.id, isLeader]);
+  }, [open]);
 
   const resetForm = () => {
     setName('');
@@ -86,13 +91,17 @@ export default function TeamManagementModal({ open, onClose, myTeam, userId, onT
     setError('');
     setSuccess('');
     try {
-      await teamApi.create({ name: name.trim(), tag: tag.trim() });
+      const res = await teamApi.create({ name: name.trim(), tag: tag.trim() });
       setSuccess(`Team "${name.trim()}" created successfully!`);
-      setTimeout(() => {
+      if (res.data) {
+        onTeamChange(res.data);
+      } else {
         onTeamChange();
+      }
+      setTimeout(() => {
         onClose();
         resetForm();
-      }, 1200);
+      }, 600);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -141,15 +150,17 @@ export default function TeamManagementModal({ open, onClose, myTeam, userId, onT
   };
 
   const handleLeave = async () => {
+    if (!confirm('Are you sure you want to leave this team?')) return;
     setLoading(true);
     setError('');
     try {
       await teamApi.leave();
       setSuccess('Left team successfully');
+      onTeamChange(null);
       setTimeout(() => {
-        onTeamChange();
         onClose();
-      }, 1000);
+        resetForm();
+      }, 400);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -158,16 +169,17 @@ export default function TeamManagementModal({ open, onClose, myTeam, userId, onT
   };
 
   const handleDisband = async () => {
-    if (!confirm('Are you sure you want to disband the team? This cannot be undone.')) return;
+    if (!confirm('Are you sure you want to permanently disband this team? All members will be removed.')) return;
     setLoading(true);
     setError('');
     try {
       await teamApi.disband(myTeam!.id);
-      setSuccess('Team disbanded');
+      setSuccess('Team disbanded successfully');
+      onTeamChange(null);
       setTimeout(() => {
-        onTeamChange();
         onClose();
-      }, 1000);
+        resetForm();
+      }, 400);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -299,7 +311,10 @@ export default function TeamManagementModal({ open, onClose, myTeam, userId, onT
                           <Avatar src={resolveAssetUrl(m.user.avatarUrl)} alt={m.user.username} size={36} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-semibold text-white truncate">{m.user.username}</span>
+                              <span className="text-sm font-semibold text-white truncate">{m.user.displayName || m.user.username}</span>
+                              {m.user.displayName && m.user.displayName !== m.user.username && (
+                                <span className="text-[11px] text-zinc-400 font-normal truncate">(@{m.user.username})</span>
+                              )}
                               {m.user.isVerified && (
                                 <span title="Verified">
                                   <BadgeCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
@@ -308,12 +323,18 @@ export default function TeamManagementModal({ open, onClose, myTeam, userId, onT
                             </div>
                             <div className="flex items-center gap-2 text-[11px] text-zinc-400">
                               {m.user.freeFireId ? (
-                                <span className="font-mono">UID: {m.user.freeFireId}</span>
+                                <span className="font-mono text-zinc-300">UID: <strong className="text-fire-400 font-bold">{m.user.freeFireId}</strong></span>
                               ) : (
                                 <span className="text-zinc-500">No UID</span>
                               )}
                               <span>•</span>
-                              <span>Lvl {m.user.gameLevel ?? 0}</span>
+                              <span className="text-zinc-300">Lvl <strong className="text-neo-400 font-bold">{m.user.gameLevel ?? 0}</strong></span>
+                              {m.user.ign && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-zinc-400 truncate max-w-[100px]" title={`IGN: ${m.user.ign}`}>IGN: {m.user.ign}</span>
+                                </>
+                              )}
                             </div>
                           </div>
                           {m.role === 'LEADER' && (

@@ -96,7 +96,7 @@ export interface Team {
     user: TeamMemberUser;
     role: string;
   }>;
-  leader: { id: string; username: string };
+  leader: { id: string; username: string; displayName?: string | null; avatarUrl?: string | null; freeFireId?: string | null; gameLevel?: number };
   _count?: { members: number };
 }
 

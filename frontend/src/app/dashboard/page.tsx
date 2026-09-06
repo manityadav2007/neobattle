@@ -218,7 +218,10 @@ export default function DashboardPage() {
               label: 'Team',
               value: myTeam ? myTeam.name : 'No Team',
               href: '#',
-              onClick: () => setTeamModalOpen(true),
+              onClick: () => {
+                teamApi.my().then((res) => setMyTeam(res.data || null)).catch(() => {});
+                setTeamModalOpen(true);
+              },
               color: 'text-blue-400',
             },
             {
@@ -394,8 +397,14 @@ export default function DashboardPage() {
         onClose={() => setTeamModalOpen(false)}
         myTeam={myTeam}
         userId={user.id}
-        onTeamChange={() => {
-          teamApi.my().then((res) => setMyTeam(res.data || null)).catch(() => {});
+        onTeamChange={(updated) => {
+          if (updated === null) {
+            setMyTeam(null);
+          } else if (updated) {
+            setMyTeam(updated);
+          } else {
+            teamApi.my().then((res) => setMyTeam(res.data || null)).catch(() => {});
+          }
         }}
       />
     </div>

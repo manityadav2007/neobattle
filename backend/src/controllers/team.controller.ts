@@ -3,11 +3,40 @@ import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { TeamMemberRole, TeamRequestStatus } from '@prisma/client';
 
+const teamMemberUserSelect = {
+  id: true,
+  username: true,
+  displayName: true,
+  avatarUrl: true,
+  freeFireId: true,
+  ign: true,
+  gameLevel: true,
+  isVerified: true,
+};
+
+const teamLeaderUserSelect = {
+  id: true,
+  username: true,
+  displayName: true,
+  avatarUrl: true,
+  freeFireId: true,
+  ign: true,
+  gameLevel: true,
+};
+
 export async function createTeam(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { name, tag, logoUrl } = req.body;
   const userId = req.user!.id;
 
-  const existingMembership = await prisma.teamMember.findFirst({ where: { userId } });
+  try {
+    await prisma.teamMember.deleteMany({
+      where: { userId, team: { isActive: false } },
+    });
+  } catch (err) {}
+
+  const existingMembership = await prisma.teamMember.findFirst({
+    where: { userId, team: { isActive: true } },
+  });
   if (existingMembership) {
     res.status(409).json({ success: false, message: 'You are already in a team' });
     return;
@@ -22,8 +51,8 @@ export async function createTeam(req: AuthenticatedRequest, res: Response): Prom
       members: { create: { userId, role: TeamMemberRole.LEADER } },
     },
     include: {
-      members: { include: { user: { select: { id: true, username: true, avatarUrl: true } } } },
-      leader: { select: { id: true, username: true } },
+      members: { include: { user: { select: teamMemberUserSelect } } },
+      leader: { select: teamLeaderUserSelect },
     },
   });
 
@@ -37,11 +66,11 @@ export async function getTeam(req: AuthenticatedRequest, res: Response): Promise
       members: {
         include: {
           user: {
-            select: { id: true, username: true, displayName: true, avatarUrl: true, freeFireId: true },
+            select: teamMemberUserSelect,
           },
         },
       },
-      leader: { select: { id: true, username: true } },
+      leader: { select: teamLeaderUserSelect },
     },
   });
 
@@ -54,25 +83,31 @@ export async function getTeam(req: AuthenticatedRequest, res: Response): Promise
 }
 
 export async function getMyTeam(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    await prisma.teamMember.deleteMany({
+      where: { userId: req.user!.id, team: { isActive: false } },
+    });
+  } catch (err) {}
+
   const membership = await prisma.teamMember.findFirst({
-    where: { userId: req.user!.id },
+    where: { userId: req.user!.id, team: { isActive: true } },
     include: {
       team: {
         include: {
           members: {
             include: {
               user: {
-                select: { id: true, username: true, displayName: true, avatarUrl: true },
+                select: teamMemberUserSelect,
               },
             },
           },
-          leader: { select: { id: true, username: true } },
+          leader: { select: teamLeaderUserSelect },
         },
       },
     },
   });
 
-  if (!membership) {
+  if (!membership || !membership.team || !membership.team.isActive) {
     res.json({ success: true, data: null });
     return;
   }
@@ -84,7 +119,15 @@ export async function joinTeam(req: AuthenticatedRequest, res: Response): Promis
   const { teamId } = req.body;
   const userId = req.user!.id;
 
-  const existing = await prisma.teamMember.findFirst({ where: { userId } });
+  try {
+    await prisma.teamMember.deleteMany({
+      where: { userId, team: { isActive: false } },
+    });
+  } catch (err) {}
+
+  const existing = await prisma.teamMember.findFirst({
+    where: { userId, team: { isActive: true } },
+  });
   if (existing) {
     res.status(409).json({ success: false, message: 'Already in a team' });
     return;
@@ -112,7 +155,8 @@ export async function joinTeam(req: AuthenticatedRequest, res: Response): Promis
   const updated = await prisma.team.findUnique({
     where: { id: teamId },
     include: {
-      members: { include: { user: { select: { id: true, username: true, avatarUrl: true } } } },
+      members: { include: { user: { select: teamMemberUserSelect } } },
+      leader: { select: teamLeaderUserSelect },
     },
   });
 
@@ -123,7 +167,7 @@ export async function leaveTeam(req: AuthenticatedRequest, res: Response): Promi
   const userId = req.user!.id;
 
   const membership = await prisma.teamMember.findFirst({
-    where: { userId },
+    where: { userId, team: { isActive: true } },
     include: { team: true },
   });
 
@@ -154,7 +198,7 @@ export async function listTeams(req: AuthenticatedRequest, res: Response): Promi
       where: { isActive: true },
       include: {
         _count: { select: { members: true } },
-        leader: { select: { id: true, username: true } },
+        leader: { select: teamLeaderUserSelect },
       },
       skip,
       take: limit,
@@ -178,13 +222,19 @@ export async function disbandTeam(req: AuthenticatedRequest, res: Response): Pro
     return;
   }
 
-  if (team.leaderId !== req.user!.id && req.user!.role !== 'ADMIN') {
-    res.status(403).json({ success: false, message: 'Only team leader can disband' });
+  if (team.leaderId !== req.user!.id && req.user!.role !== 'ADMIN' && req.user!.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ success: false, message: 'Only team leader can disband the team' });
     return;
   }
 
-  await prisma.team.update({ where: { id: team.id }, data: { isActive: false } });
-  res.json({ success: true, message: 'Team disbanded' });
+  // Delete all join requests and team members so no users remain bound to this team, then delete the team
+  await prisma.$transaction([
+    prisma.teamJoinRequest.deleteMany({ where: { teamId: team.id } }),
+    prisma.teamMember.deleteMany({ where: { teamId: team.id } }),
+    prisma.team.delete({ where: { id: team.id } }),
+  ]);
+
+  res.json({ success: true, message: 'Team disbanded successfully' });
 }
 
 export async function requestJoinTeam(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -196,7 +246,15 @@ export async function requestJoinTeam(req: AuthenticatedRequest, res: Response):
     return;
   }
 
-  const existing = await prisma.teamMember.findFirst({ where: { userId } });
+  try {
+    await prisma.teamMember.deleteMany({
+      where: { userId, team: { isActive: false } },
+    });
+  } catch (err) {}
+
+  const existing = await prisma.teamMember.findFirst({
+    where: { userId, team: { isActive: true } },
+  });
   if (existing) {
     res.status(409).json({ success: false, message: 'You are already in a team. Leave your current team first.' });
     return;
@@ -392,8 +450,14 @@ export async function reviewJoinRequest(req: AuthenticatedRequest, res: Response
     return;
   }
 
+  try {
+    await prisma.teamMember.deleteMany({
+      where: { userId: request.userId, team: { isActive: false } },
+    });
+  } catch (err) {}
+
   const existingMembership = await prisma.teamMember.findFirst({
-    where: { userId: request.userId },
+    where: { userId: request.userId, team: { isActive: true } },
   });
 
   if (existingMembership) {
@@ -445,11 +509,11 @@ export async function reviewJoinRequest(req: AuthenticatedRequest, res: Response
       members: {
         include: {
           user: {
-            select: { id: true, username: true, displayName: true, avatarUrl: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true },
+            select: teamMemberUserSelect,
           },
         },
       },
-      leader: { select: { id: true, username: true } },
+      leader: { select: teamLeaderUserSelect },
     },
   });
 
