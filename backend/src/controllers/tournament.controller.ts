@@ -291,7 +291,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
       creator: { select: { id: true, username: true } },
       entries: {
         include: {
-          user: { select: { id: true, uid: true, username: true, avatarUrl: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true } },
+          user: { select: { id: true, uid: true, username: true, avatarUrl: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true, verificationScreenshotUrl: true } },
           team: {
             select: {
               id: true,
@@ -299,7 +299,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
               tag: true,
               members: {
                 include: {
-                  user: { select: { id: true, uid: true, username: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true, avatarUrl: true } },
+                  user: { select: { id: true, uid: true, username: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true, avatarUrl: true, verificationScreenshotUrl: true } },
                 },
               },
             },
