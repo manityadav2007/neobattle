@@ -14,13 +14,13 @@ import { getErrorMessage } from '@/lib/api';
 
 export default function AdminEsportsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, isSuperAdmin } = useAuth();
+  const { user, loading: authLoading, isAdmin, isSuperAdmin } = useAuth();
   const [season, setSeason] = useState<EsportsSeason | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
 
-  const [newSeasonNumber, setNewSeasonNumber] = useState('');
+  const [newSeasonNumber, setNewSeasonNumber] = useState('1');
   const [regDeadline, setRegDeadline] = useState('');
   const [nextDate, setNextDate] = useState('');
   const [matchDate, setMatchDate] = useState('');
@@ -33,8 +33,8 @@ export default function AdminEsportsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || !isSuperAdmin)) router.push('/dashboard');
-  }, [user, authLoading, isSuperAdmin, router]);
+    if (!authLoading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
+  }, [user, authLoading, isAdmin, isSuperAdmin, router]);
 
   const loadData = async () => {
     setLoading(true);
@@ -63,8 +63,8 @@ export default function AdminEsportsPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadData();
+  }, [isAdmin, isSuperAdmin]);
 
   const handleUpdateConfig = async () => {
     setSaving(true);

@@ -13,15 +13,15 @@ import { getErrorMessage } from '@/lib/api';
 
 export default function AdminDepositsPage() {
   const router = useRouter();
-  const { user, loading, isSuperAdmin } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin } = useAuth();
   const [deposits, setDeposits] = useState<DepositRequest[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
 
   useEffect(() => {
-    if (!loading && (!user || !isSuperAdmin)) router.push('/dashboard');
-  }, [user, loading, isSuperAdmin, router]);
+    if (!loading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
+  }, [user, loading, isAdmin, isSuperAdmin, router]);
 
   const loadData = async () => {
     setLoadingData(true);
@@ -37,8 +37,8 @@ export default function AdminDepositsPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadData();
+  }, [isAdmin, isSuperAdmin]);
 
   const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     try {
@@ -50,7 +50,7 @@ export default function AdminDepositsPage() {
     }
   };
 
-  if (loading || !isSuperAdmin) return null;
+  if (loading || (!isSuperAdmin && !isAdmin)) return null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

@@ -12,7 +12,7 @@ import { getErrorMessage } from '@/lib/api';
 
 export default function AdminPendingResultsPage() {
   const router = useRouter();
-  const { user, loading, isSuperAdmin } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin } = useAuth();
   const [results, setResults] = useState<ResultSubmission[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState('');
@@ -23,8 +23,8 @@ export default function AdminPendingResultsPage() {
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && (!user || !isSuperAdmin)) router.push('/dashboard');
-  }, [user, loading, isSuperAdmin, router]);
+    if (!loading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
+  }, [user, loading, isAdmin, isSuperAdmin, router]);
 
   const loadData = async () => {
     setLoadingData(true);
@@ -40,8 +40,8 @@ export default function AdminPendingResultsPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadData();
+  }, [isAdmin, isSuperAdmin]);
 
   const handleApprove = async (sub: ResultSubmission) => {
     const t = sub.tournament;
@@ -89,7 +89,7 @@ export default function AdminPendingResultsPage() {
     }
   };
 
-  if (loading || !isSuperAdmin) return null;
+  if (loading || (!isSuperAdmin && !isAdmin)) return null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

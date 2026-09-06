@@ -14,7 +14,7 @@ import { getErrorMessage } from '@/lib/api';
 
 export default function AdminEsportsBansPage() {
   const router = useRouter();
-  const { user, loading: authLoading, isSuperAdmin } = useAuth();
+  const { user, loading: authLoading, isAdmin, isSuperAdmin } = useAuth();
   const [bans, setBans] = useState<EsportsBan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,8 +25,8 @@ export default function AdminEsportsBansPage() {
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || !isSuperAdmin)) router.push('/dashboard');
-  }, [user, authLoading, isSuperAdmin, router]);
+    if (!authLoading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
+  }, [user, authLoading, isAdmin, isSuperAdmin, router]);
 
   const loadData = async () => {
     setLoading(true);
@@ -41,8 +41,8 @@ export default function AdminEsportsBansPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadData();
+  }, [isAdmin, isSuperAdmin]);
 
   const handleAddBan = async () => {
     if (!newUid.trim()) return;

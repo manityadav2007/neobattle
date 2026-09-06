@@ -52,14 +52,14 @@ const socialLinks = [
 
 export default function GlobalSidebar() {
   const pathname = usePathname();
-  const { user, logout, isHost, isSuperAdmin } = useAuth();
+  const { user, logout, isHost, isAdmin, isSuperAdmin } = useAuth();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
 
-  const isHostOrSuper = user && (user.role === 'HOST' || isSuperAdmin);
+  const isHostOrAdmin = user && (user.role === 'HOST' || isAdmin || isSuperAdmin);
 
   const menuItems = useMemo(
     () => [
@@ -69,7 +69,7 @@ export default function GlobalSidebar() {
         description: user ? 'Open your player dashboard' : 'Sign in to view your profile',
         icon: UserRound,
       },
-      ...(isHostOrSuper
+      ...(isHostOrAdmin
         ? [
             {
               href: user?.role === 'HOST' ? '/host-dashboard' : '/admin',

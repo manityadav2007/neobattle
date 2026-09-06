@@ -13,7 +13,7 @@ import { getErrorMessage } from '@/lib/api';
 
 export default function AdminGiftCardsPage() {
   const router = useRouter();
-  const { user, loading, isSuperAdmin } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin } = useAuth();
   const [cards, setCards] = useState<GiftCard[]>([]);
   const [redemptions, setRedemptions] = useState<GiftCardRedemption[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -28,8 +28,8 @@ export default function AdminGiftCardsPage() {
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
-    if (!loading && user && !isSuperAdmin) router.push('/dashboard');
-  }, [user, loading, isSuperAdmin, router]);
+    if (!loading && user && !isAdmin && !isSuperAdmin) router.push('/dashboard');
+  }, [user, loading, isAdmin, isSuperAdmin, router]);
 
   const loadData = async () => {
     setLoadingData(true);
@@ -48,8 +48,8 @@ export default function AdminGiftCardsPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadData();
+  }, [isAdmin, isSuperAdmin]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -90,7 +90,7 @@ export default function AdminGiftCardsPage() {
     }
   };
 
-  if (loading || !isSuperAdmin) return null;
+  if (loading || (!isSuperAdmin && !isAdmin)) return null;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

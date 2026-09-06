@@ -11,7 +11,7 @@ import { getErrorMessage } from '@/lib/api';
 
 export default function AdminStorePage() {
   const router = useRouter();
-  const { user, loading: authLoading, isSuperAdmin } = useAuth();
+  const { user, loading: authLoading, isAdmin, isSuperAdmin } = useAuth();
   const [codes, setCodes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
@@ -22,8 +22,8 @@ export default function AdminStorePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || !isSuperAdmin)) router.push('/dashboard');
-  }, [user, authLoading, isSuperAdmin, router]);
+    if (!authLoading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
+  }, [user, authLoading, isAdmin, isSuperAdmin, router]);
 
   const loadCodes = async () => {
     try {
@@ -37,8 +37,8 @@ export default function AdminStorePage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadCodes();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadCodes();
+  }, [isAdmin, isSuperAdmin]);
 
   const handleAdd = async () => {
     if (!form.code || !form.type || !form.amount) return;

@@ -26,7 +26,7 @@ interface RedeemRequestItem {
 
 export default function AdminRedeemsPage() {
   const router = useRouter();
-  const { user, loading, isSuperAdmin } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin } = useAuth();
   const [requests, setRequests] = useState<RedeemRequestItem[]>([]);
   const [filter, setFilter] = useState('PENDING');
   const [error, setError] = useState('');
@@ -35,9 +35,9 @@ export default function AdminRedeemsPage() {
   const [approving, setApproving] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && !user) router.push('/login');
-    if (!loading && user && !isSuperAdmin) router.push('/dashboard');
-  }, [user, loading, isSuperAdmin, router]);
+    if (!loading && !user && !isAuthenticated()) router.push('/login');
+    if (!loading && user && !isAdmin && !isSuperAdmin) router.push('/dashboard');
+  }, [user, loading, isAdmin, isSuperAdmin, router]);
 
   const loadData = async () => {
     try {
@@ -50,8 +50,8 @@ export default function AdminRedeemsPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin, filter]);
+    if (isAdmin || isSuperAdmin) loadData();
+  }, [isAdmin, isSuperAdmin, filter]);
 
   const handleComplete = async (id: string) => {
     const code = giftCodeInput[id]?.trim();
@@ -84,7 +84,7 @@ export default function AdminRedeemsPage() {
     }
   };
 
-  if (loading || !isSuperAdmin) return null;
+  if (loading || (!isSuperAdmin && !isAdmin)) return null;
 
   const statusColor = (s: string) => {
     switch (s) {

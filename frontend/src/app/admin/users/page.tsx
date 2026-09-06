@@ -26,7 +26,7 @@ interface UserRow {
 export default function AdminUsersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading: authLoading, isSuperAdmin } = useAuth();
+  const { user, loading: authLoading, isAdmin, isSuperAdmin } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,8 +41,8 @@ export default function AdminUsersPage() {
   const [sendingWarning, setSendingWarning] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || !isSuperAdmin)) router.push('/dashboard');
-  }, [user, authLoading, isSuperAdmin, router]);
+    if (!authLoading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
+  }, [user, authLoading, isAdmin, isSuperAdmin, router]);
 
   const loadUsers = async (p = 1) => {
     setLoading(true);
@@ -59,8 +59,8 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadUsers();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadUsers();
+  }, [isAdmin, isSuperAdmin]);
 
   const handlePromote = async (userId: string) => {
     try {

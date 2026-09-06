@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart3,
@@ -35,10 +35,18 @@ const navLinks = [
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, loading, logout, isSuperAdmin, isHost } = useAuth();
+  const router = useRouter();
+  const { user, loading, logout, isAdmin, isSuperAdmin, isHost } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+  const handleAdminNav = (e: React.MouseEvent<HTMLAnchorElement>, targetHref: string) => {
+    e.preventDefault();
+    if (pathname !== targetHref) {
+      router.push(targetHref);
+    }
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b border-white/5">
@@ -69,9 +77,10 @@ export default function Navbar() {
                 </Link>
               );
             })}
-            {user && (isSuperAdmin || isHost) && (
+            {user && (isAdmin || isSuperAdmin || isHost) && (
               <Link
                 href={isHost ? '/host-dashboard' : '/admin'}
+                onClick={(e) => handleAdminNav(e, isHost ? '/host-dashboard' : '/admin')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isActive(isHost ? '/host-dashboard' : '/admin')
                     ? 'text-fire-400 bg-fire-500/10'
@@ -169,10 +178,13 @@ export default function Navbar() {
                 </Link>
               )}
 
-              {(user.role === 'ADMIN' || isSuperAdmin) && (
+              {(isAdmin || isSuperAdmin) && (
                 <Link
                   href="/admin"
-                  onClick={() => setMobileOpen(false)}
+                  onClick={(e) => {
+                    setMobileOpen(false);
+                    handleAdminNav(e, '/admin');
+                  }}
                   className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5"
                 >
                   <Shield className="w-5 h-5 text-fire-400" />

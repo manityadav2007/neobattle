@@ -23,7 +23,7 @@ interface VerificationItem {
 
 export default function AdminVerifyPage() {
   const router = useRouter();
-  const { user, loading, isSuperAdmin } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin } = useAuth();
   const [verifications, setVerifications] = useState<VerificationItem[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState('');
@@ -35,9 +35,9 @@ export default function AdminVerifyPage() {
   const [levelInputOpen, setLevelInputOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (!loading && !user) router.push('/login');
-    if (!loading && user && !isSuperAdmin) router.push('/dashboard');
-  }, [user, loading, isSuperAdmin, router]);
+    if (!loading && !user && !isAuthenticated()) router.push('/login');
+    if (!loading && user && !isAdmin && !isSuperAdmin) router.push('/dashboard');
+  }, [user, loading, isAdmin, isSuperAdmin, router]);
 
   const loadData = async () => {
     setLoadingData(true);
@@ -52,8 +52,8 @@ export default function AdminVerifyPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadData();
+  }, [isAdmin, isSuperAdmin]);
 
   const handleApprove = async (id: string) => {
     const raw = (gameLevels[id] ?? '').trim();
@@ -96,7 +96,7 @@ export default function AdminVerifyPage() {
     }
   };
 
-  if (loading || !isSuperAdmin) return null;
+  if (loading || (!isSuperAdmin && !isAdmin)) return null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

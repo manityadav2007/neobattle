@@ -24,7 +24,7 @@ interface VerificationRequest {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { user, loading, isSuperAdmin } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
   const [pendingPayouts, setPendingPayouts] = useState<WinnerProof[]>([]);
@@ -34,9 +34,14 @@ export default function AdminPage() {
   const [actionMsg, setActionMsg] = useState('');
 
   useEffect(() => {
-    if (!loading && !user) router.push('/login');
-    if (!loading && user && !isSuperAdmin) router.push('/dashboard');
-  }, [user, loading, isSuperAdmin, router]);
+    if (!loading && !user && !isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+    if (!loading && user && !isAdmin && !isSuperAdmin) {
+      router.push('/dashboard');
+    }
+  }, [user, loading, isAdmin, isSuperAdmin, router]);
 
   const loadData = async () => {
     try {
@@ -61,8 +66,8 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) loadData();
-  }, [isSuperAdmin]);
+    if (isAdmin || isSuperAdmin) loadData();
+  }, [isAdmin, isSuperAdmin]);
 
   const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     try {
@@ -104,7 +109,13 @@ export default function AdminPage() {
     }
   };
 
-  if (loading || !isSuperAdmin) return null;
+  if (loading || (!isSuperAdmin && !isAdmin)) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-fire-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
