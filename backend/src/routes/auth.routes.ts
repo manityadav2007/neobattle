@@ -23,4 +23,7 @@ router.get(
   authController.googleCallback
 );
 
+router.get('/discord', authController.discordAuth);
+router.get('/discord/callback', authController.discordCallback);
+
 export default router;

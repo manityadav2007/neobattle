@@ -205,3 +205,135 @@ export async function googleCallback(req: AuthenticatedRequest, res: Response): 
     `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`
   );
 }
+
+export function discordAuth(req: Request, res: Response): void {
+  const clientId =
+    process.env.DISCORD_CLIENT_ID ||
+    process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID ||
+    '1344586908581728347';
+  const baseUrl = process.env.BASE_URL || 'http://localhost:4000';
+  const redirectUri = `${baseUrl}/api/auth/discord/callback`;
+  const discordUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&scope=identify%20email&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  res.redirect(discordUrl);
+}
+
+export async function discordCallback(req: Request, res: Response): Promise<void> {
+  const { code, error } = req.query;
+  const frontendUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
+
+  if (error || !code || typeof code !== 'string') {
+    res.redirect(`${frontendUrl}/login?error=discord_auth_failed`);
+    return;
+  }
+
+  const clientId =
+    process.env.DISCORD_CLIENT_ID ||
+    process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID ||
+    '1344586908581728347';
+  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+  const baseUrl = process.env.BASE_URL || 'http://localhost:4000';
+  const redirectUri = `${baseUrl}/api/auth/discord/callback`;
+
+  try {
+    if (!clientSecret) {
+      res.redirect(`${frontendUrl}/login?error=discord_client_secret_missing`);
+      return;
+    }
+
+    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      res.redirect(`${frontendUrl}/login?error=discord_token_failed`);
+      return;
+    }
+
+    const tokenData = (await tokenResponse.json()) as { access_token?: string };
+    if (!tokenData.access_token) {
+      res.redirect(`${frontendUrl}/login?error=discord_token_failed`);
+      return;
+    }
+
+    const userResponse = await fetch('https://discord.com/api/users/@me', {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+      },
+    });
+
+    if (!userResponse.ok) {
+      res.redirect(`${frontendUrl}/login?error=discord_user_failed`);
+      return;
+    }
+
+    const discordUser = (await userResponse.json()) as {
+      id: string;
+      username: string;
+      email?: string;
+      avatar?: string;
+      global_name?: string;
+    };
+
+    const email = discordUser.email || `discord_${discordUser.id}@firearena.gg`;
+    const displayName = discordUser.global_name || discordUser.username;
+    const avatarUrl = discordUser.avatar
+      ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
+      : null;
+
+    let user = await prisma.user.findFirst({
+      where: { email },
+    });
+
+    if (user) {
+      if (!user.displayName && displayName) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { displayName, avatarUrl: user.avatarUrl || avatarUrl },
+        });
+      }
+    } else {
+      const lastUser = await prisma.user.findFirst({ orderBy: { uid: 'desc' }, select: { uid: true } });
+      const lastNum = lastUser?.uid ? parseInt(lastUser.uid.replace('FA-', '')) || 1000 : 1000;
+      const uid = `FA-${lastNum + 1}`;
+      const username = `dc_${discordUser.username.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 15)}_${discordUser.id.slice(-4)}`;
+
+      user = await prisma.user.create({
+        data: {
+          uid,
+          email,
+          username,
+          passwordHash: '',
+          displayName,
+          avatarUrl,
+          wallet: { create: {} },
+        },
+      });
+    }
+
+    const updatedRole = await enforceSuperAdmin(user.id, user.email, user.role);
+    if (updatedRole !== user.role) {
+      user = await prisma.user.findUnique({ where: { id: user.id } });
+      if (!user) {
+        res.redirect(`${frontendUrl}/login?error=server_error`);
+        return;
+      }
+    }
+
+    const tokens = await generateTokenPair(user);
+    res.redirect(
+      `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`
+    );
+  } catch (err) {
+    res.redirect(`${frontendUrl}/login?error=discord_auth_error`);
+  }
+}

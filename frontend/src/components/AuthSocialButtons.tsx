@@ -26,66 +26,37 @@ const providerMeta: Record<Provider, ProviderMeta> = {
 
 /**
  * Returns the public OAuth URL for the given provider.
- * Supports explicit URLs or client ID configuration.
+ * Guaranteed to return a valid URL (backend auth route or configured public OAuth URL).
  */
-export function getProviderOAuthUrl(provider: Provider): string | undefined {
+export function getProviderOAuthUrl(provider: Provider): string {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+
   if (provider === 'google') {
-    if (process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL) {
-      return process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL;
-    }
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      return `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
-    }
-    return undefined;
+    return process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL || `${apiUrl}/auth/google`;
   }
 
   if (provider === 'discord') {
-    // 1. Check direct Discord OAuth or custom auth URL
-    if (process.env.NEXT_PUBLIC_DISCORD_AUTH_URL) {
-      return process.env.NEXT_PUBLIC_DISCORD_AUTH_URL;
+    // 1. Explicit Discord Auth URL configured in env
+    if (process.env.NEXT_PUBLIC_DISCORD_AUTH_URL && process.env.NEXT_PUBLIC_DISCORD_AUTH_URL.trim() !== '') {
+      return process.env.NEXT_PUBLIC_DISCORD_AUTH_URL.trim();
     }
 
-    // 2. Build URL from Discord Client ID if available
-    const clientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
-    if (clientId && clientId.trim() !== '') {
-      const redirectUri =
-        process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI ||
-        (typeof window !== 'undefined' && window.location.origin
-          ? `${window.location.origin}/auth/callback`
-          : '');
-
-      const params = new URLSearchParams({
-        client_id: clientId.trim(),
-        response_type: 'code',
-        scope: 'identify email',
-      });
-
-      if (redirectUri) {
-        params.set('redirect_uri', redirectUri);
-      }
-
-      return `https://discord.com/oauth2/authorize?${params.toString()}`;
-    }
-
-    return undefined;
+    // 2. Default cleanly to backend Discord auth route
+    return `${apiUrl}/auth/discord`;
   }
 
-  return undefined;
+  return `${apiUrl}/auth/${provider}`;
 }
 
 export default function AuthSocialButtons() {
   const [error, setError] = useState('');
 
   const handleProviderClick = (provider: Provider) => {
-    const meta = providerMeta[provider];
     const targetUrl = getProviderOAuthUrl(provider);
 
     if (!targetUrl) {
-      const envHint =
-        provider === 'discord'
-          ? 'NEXT_PUBLIC_DISCORD_CLIENT_ID or NEXT_PUBLIC_DISCORD_AUTH_URL'
-          : 'NEXT_PUBLIC_GOOGLE_AUTH_URL';
-      setError(`${meta.label} is not configured yet. Add ${envHint} to your frontend environment to enable it.`);
+      const meta = providerMeta[provider];
+      setError(`${meta.label} is not configured yet.`);
       return;
     }
 
@@ -99,15 +70,13 @@ export default function AuthSocialButtons() {
         {(['google', 'discord'] as Provider[]).map((provider) => {
           const meta = providerMeta[provider];
           const Icon = meta.icon;
-          const url = getProviderOAuthUrl(provider);
-          const isConfigured = Boolean(url);
 
           return (
             <button
               key={provider}
               type="button"
               onClick={() => handleProviderClick(provider)}
-              title={isConfigured ? meta.label : `${meta.label} (Not configured)`}
+              title={meta.label}
               className={`flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-200 transition-all ${meta.accentClass}`}
             >
               <Icon className="h-4 w-4" />
