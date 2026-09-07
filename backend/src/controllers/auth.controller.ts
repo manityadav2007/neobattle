@@ -183,28 +183,39 @@ export async function updateIgn(req: AuthenticatedRequest, res: Response): Promi
   res.json({ success: true, data: { ign: user.ign } });
 }
 
-export async function googleCallback(req: AuthenticatedRequest, res: Response): Promise<void> {
-  let user = req.user as any;
-  if (!user) {
-    res.redirect(`${process.env.CORS_ORIGIN || 'http://localhost:3000'}/login?error=auth_failed`);
-    return;
-  }
+function getFrontendBaseUrl(): string {
+  const origin = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+  return origin.split(',')[0].trim().replace(/\/+$/, '');
+}
 
-  const updatedRole = await enforceSuperAdmin(user.id, user.email, user.role);
-  if (updatedRole !== user.role) {
-    user = await prisma.user.findUnique({ where: { id: user.id } });
+export async function googleCallback(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const frontendUrl = getFrontendBaseUrl();
+  try {
+    let user = req.user as any;
     if (!user) {
-      res.redirect(`${process.env.CORS_ORIGIN || 'http://localhost:3000'}/login?error=server_error`);
+      res.redirect(`${frontendUrl}/login?error=auth_failed`);
       return;
     }
-  }
 
-  const tokens = await generateTokenPair(user);
-  const frontendUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
-  res.redirect(
-    `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`
-  );
+    const updatedRole = await enforceSuperAdmin(user.id, user.email, user.role);
+    if (updatedRole !== user.role) {
+      user = await prisma.user.findUnique({ where: { id: user.id } });
+      if (!user) {
+        res.redirect(`${frontendUrl}/login?error=server_error`);
+        return;
+      }
+    }
+
+    const tokens = await generateTokenPair(user);
+    res.redirect(
+      `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`
+    );
+  } catch (error) {
+    console.error('[GoogleCallback Error]', error);
+    res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
+  }
 }
+
 
 export function discordAuth(req: Request, res: Response): void {
   const clientId =
@@ -219,7 +230,7 @@ export function discordAuth(req: Request, res: Response): void {
 
 export async function discordCallback(req: Request, res: Response): Promise<void> {
   const { code, error } = req.query;
-  const frontendUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
+  const frontendUrl = getFrontendBaseUrl();
 
   if (error || !code || typeof code !== 'string') {
     res.redirect(`${frontendUrl}/login?error=discord_auth_failed`);

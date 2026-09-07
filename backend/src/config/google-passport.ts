@@ -3,13 +3,14 @@ import { prisma } from './db';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const BASE_URL = process.env.BASE_URL || 'http://localhost:4000';
+const cleanBaseUrl = (process.env.BASE_URL || 'http://localhost:4000').trim().replace(/\/+$/, '');
+const callbackURL = process.env.GOOGLE_CALLBACK_URL || `${cleanBaseUrl}/api/auth/google/callback`;
 
 export const googleStrategy = new GoogleStrategy(
   {
     clientID: GOOGLE_CLIENT_ID,
     clientSecret: GOOGLE_CLIENT_SECRET,
-    callbackURL: `${BASE_URL}/api/auth/google/callback`,
+    callbackURL,
     scope: ['profile', 'email'],
   },
   async (_accessToken: string, _refreshToken: string, profile: any, done: VerifyCallback) => {
@@ -37,8 +38,19 @@ export const googleStrategy = new GoogleStrategy(
       } else {
         const lastUser = await prisma.user.findFirst({ orderBy: { uid: 'desc' }, select: { uid: true } });
         const lastNum = lastUser?.uid ? parseInt(lastUser.uid.replace('FA-', '')) || 1000 : 1000;
-        const uid = `FA-${lastNum + 1}`;
-        const username = `google_${googleId.slice(-12)}`;
+        let uid = `FA-${lastNum + 1}`;
+        let attempts = 0;
+        while (await prisma.user.findUnique({ where: { uid } })) {
+          attempts++;
+          uid = `FA-${lastNum + 1 + attempts}`;
+        }
+
+        let username = `google_${googleId.slice(-12)}`;
+        const existingUsername = await prisma.user.findUnique({ where: { username } });
+        if (existingUsername) {
+          username = `google_${googleId.slice(-8)}_${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+
         user = await prisma.user.create({
           data: {
             uid,

@@ -18,7 +18,28 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated()) router.replace('/dashboard');
+    if (isAuthenticated()) {
+      router.replace('/dashboard');
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlError = params.get('error');
+      if (urlError) {
+        if (urlError === 'google_auth_failed') {
+          setError('Google authentication failed. Please try signing in again.');
+        } else if (urlError === 'access_denied') {
+          setError('Google sign-in was cancelled.');
+        } else if (urlError === 'discord_auth_failed') {
+          setError('Discord authentication failed. Please try signing in again.');
+        } else if (urlError === 'auth_failed') {
+          setError('Authentication failed. Please try again.');
+        } else {
+          setError(`Login failed (${urlError}). Please try again.`);
+        }
+      }
+    }
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {

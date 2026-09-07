@@ -16,12 +16,31 @@ router.post('/logout', authController.logout);
 router.get('/me', authenticate, authController.me);
 router.patch('/ign', authenticate, authController.updateIgn);
 
+const getFrontendUrl = (): string => {
+  const origin = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+  return origin.split(',')[0].trim().replace(/\/+$/, '');
+};
+
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
 router.get(
   '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: `${process.env.CORS_ORIGIN || 'http://localhost:3000'}/login?error=google_auth_failed` }),
+  (req, res, next) => {
+    if (req.query.error) {
+      const errorMsg = encodeURIComponent(String(req.query.error));
+      res.redirect(`${getFrontendUrl()}/login?error=${errorMsg}`);
+      return;
+    }
+    next();
+  },
+  (req, res, next) => {
+    passport.authenticate('google', {
+      session: false,
+      failureRedirect: `${getFrontendUrl()}/login?error=google_auth_failed`,
+    })(req, res, next);
+  },
   authController.googleCallback
 );
+
 
 router.get('/discord', authController.discordAuth);
 router.get('/discord/callback', authController.discordCallback);
