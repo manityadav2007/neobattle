@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import mongoSanitize from 'express-mongo-sanitize';
+import hpp from 'hpp';
 import passport from './config/passport';
 import { connectDatabase, disconnectDatabase } from './config/db';
 import { connectRedis, disconnectRedis } from './config/redis';
@@ -16,10 +18,15 @@ import authRoutes from './routes/auth.routes';
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000', 10);
 
+// Trust the first proxy hop — required for correct IP on Render
+app.set('trust proxy', 1);
+
+// ── Security headers ────────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
+// ── CORS — strict whitelist only ────────────────────────────────────────────
 const configuredCors = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
   : [];
@@ -34,18 +41,26 @@ const allowedOrigins = Array.from(new Set([...defaultOrigins, ...configuredCors]
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-        callback(null, true);
-      } else {
-        callback(null, true);
-      }
+      // Allow server-to-server / curl requests that send no Origin header
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      // Reject every other origin with a clear error
+      callback(new Error(`CORS: origin '${origin}' is not allowed`));
     },
     credentials: true,
   })
 );
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// ── Body parsers — 10 kb cap to block large-payload attacks ────────────────
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+// ── NoSQL injection sanitisation ───────────────────────────────────────────
+app.use(mongoSanitize());
+
+// ── HTTP Parameter Pollution prevention ────────────────────────────────────
+app.use(hpp());
+
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use(globalLimiter);
 app.use(passport.initialize());
