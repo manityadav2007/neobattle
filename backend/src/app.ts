@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import passport from './config/passport';
 import { connectDatabase, disconnectDatabase } from './config/db';
 import { connectRedis, disconnectRedis } from './config/redis';
-import { globalLimiter } from './middleware/rateLimiter';
+import { globalLimiter, apiLimiter } from './middleware/rateLimiter';
 import routes from './routes';
 import { startTournamentNotifier } from './jobs/tournament-notifier';
 import { startTournamentCompleter } from './jobs/tournament-completer';
@@ -54,7 +54,7 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ success: true, message: 'NEOBATTLE API is running', version: '1.0.0' });
 });
 
-app.use('/api', routes);
+app.use('/api', apiLimiter, routes);
 app.use('/auth', authRoutes);
 
 
