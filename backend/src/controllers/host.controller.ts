@@ -15,7 +15,7 @@ export async function getMyTournaments(req: AuthenticatedRequest, res: Response)
       _count: { select: { entries: true } },
       entries: {
         include: {
-          user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+          user: { select: { id: true, username: true, ign: true, inGameNickname: true, freeFireId: true, gameLevel: true, isVerified: true } },
           team: {
             select: {
               id: true,
@@ -23,7 +23,7 @@ export async function getMyTournaments(req: AuthenticatedRequest, res: Response)
               tag: true,
               members: {
                 include: {
-                  user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+                  user: { select: { id: true, username: true, ign: true, inGameNickname: true, freeFireId: true, gameLevel: true, isVerified: true } },
                 },
               },
             },

@@ -242,6 +242,7 @@ export async function checkPlayerEligibility(req: AuthenticatedRequest, res: Res
       id: true,
       username: true,
       ign: true,
+      inGameNickname: true,
       freeFireId: true,
       gameLevel: true,
       isVerified: true,
@@ -291,7 +292,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
       creator: { select: { id: true, username: true } },
       entries: {
         include: {
-          user: { select: { id: true, uid: true, username: true, avatarUrl: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true, verificationScreenshotUrl: true } },
+          user: { select: { id: true, uid: true, username: true, avatarUrl: true, freeFireId: true, ign: true, inGameNickname: true, gameLevel: true, isVerified: true, verificationScreenshotUrl: true } },
           team: {
             select: {
               id: true,
@@ -299,7 +300,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
               tag: true,
               members: {
                 include: {
-                  user: { select: { id: true, uid: true, username: true, freeFireId: true, ign: true, gameLevel: true, isVerified: true, avatarUrl: true, verificationScreenshotUrl: true } },
+                  user: { select: { id: true, uid: true, username: true, freeFireId: true, ign: true, inGameNickname: true, gameLevel: true, isVerified: true, avatarUrl: true, verificationScreenshotUrl: true } },
                 },
               },
             },

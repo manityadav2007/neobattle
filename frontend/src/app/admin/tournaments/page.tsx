@@ -20,6 +20,7 @@ interface TournamentMember {
     id: string;
     username: string;
     ign: string | null;
+    inGameNickname?: string | null;
     freeFireId: string | null;
     gameLevel?: number;
     isVerified?: boolean;
@@ -43,6 +44,7 @@ interface TournamentEntry {
     uid?: string;
     username: string;
     ign?: string | null;
+    inGameNickname?: string | null;
     freeFireId?: string | null;
     gameLevel?: number;
     isVerified?: boolean;
@@ -1024,12 +1026,18 @@ export default function AdminTournamentsPage() {
                                           className="flex items-center justify-between p-1.5 rounded-lg bg-white/[0.03] text-[11px]"
                                         >
                                           <div className="flex items-center gap-1.5 min-w-0">
-                                            <span className={`text-[9px] px-1 py-0.2 rounded font-semibold ${mIdx === 0 || m.role === 'LEADER' ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                                            <span className={`text-[9px] px-1 py-0.2 rounded font-semibold shrink-0 ${mIdx === 0 || m.role === 'LEADER' ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
                                               {mIdx === 0 || m.role === 'LEADER' ? 'C' : `#${mIdx + 1}`}
                                             </span>
                                             <span className="text-white font-medium truncate">{m.user?.username || '—'}</span>
-                                            {m.user?.ign && (
-                                              <span className="text-fire-400 font-mono text-[10px] truncate">({m.user.ign})</span>
+                                            {(m.user?.inGameNickname || m.user?.ign) && (
+                                              <span
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-fire-500/10 border border-fire-500/20 text-fire-300 text-[10px] font-normal truncate max-w-[140px]"
+                                                title={`Free Fire In-Game Nickname: ${m.user.inGameNickname || m.user.ign}`}
+                                              >
+                                                <span className="text-[9px] uppercase tracking-wider text-fire-400/70 font-semibold shrink-0">IGN</span>
+                                                <span className="truncate">{m.user.inGameNickname || m.user.ign}</span>
+                                              </span>
                                             )}
                                           </div>
                                           <div className="flex items-center gap-1.5 shrink-0">
@@ -1072,13 +1080,19 @@ export default function AdminTournamentsPage() {
                                 <div key={entry.id} className="flex items-center justify-between p-2 rounded-lg bg-white/3 border border-white/5 text-xs">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className="text-white font-medium truncate">{entry.user?.username || 'Unknown'}</span>
-                                    {entry.user?.ign && (
-                                      <span className="text-fire-400 font-mono text-[11px]">({entry.user.ign})</span>
+                                    {(entry.user?.inGameNickname || entry.user?.ign) && (
+                                      <span
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-fire-500/10 border border-fire-500/20 text-fire-300 text-[11px] font-normal truncate max-w-[180px]"
+                                        title={`Free Fire In-Game Nickname: ${entry.user.inGameNickname || entry.user.ign}`}
+                                      >
+                                        <span className="text-[9px] uppercase tracking-wider text-fire-400/70 font-semibold shrink-0">IGN</span>
+                                        <span className="truncate">{entry.user.inGameNickname || entry.user.ign}</span>
+                                      </span>
                                     )}
                                     {entry.user?.freeFireId && (
                                       <span className="font-mono text-zinc-500 text-[11px] bg-white/5 px-1.5 py-0.5 rounded">{entry.user.freeFireId}</span>
                                     )}
-                                    {entry.placement === 1 && <Trophy className="w-3.5 h-3.5 text-yellow-400" />}
+                                    {entry.placement === 1 && <Trophy className="w-3.5 h-3.5 text-yellow-400 shrink-0" />}
                                   </div>
                                   <div className="flex items-center gap-2 shrink-0">
                                     {entry.user?.gameLevel != null && (

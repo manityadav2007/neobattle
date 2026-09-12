@@ -69,6 +69,7 @@ export async function linkFreeFireId(req: AuthenticatedRequest, res: Response): 
       freeFireUid: trimmedUid,
       freeFireRegion: 'IND',
       inGameNickname: playerInfo.nickname,
+      ign: playerInfo.nickname,
       inGameLevel: playerInfo.level,
       gameLevel: playerInfo.level,
       isVerified: true,
@@ -164,6 +165,7 @@ export async function refreshPlayerInfo(req: AuthenticatedRequest, res: Response
     data: {
       freeFireRegion: 'IND',
       inGameNickname: playerInfo.nickname,
+      ign: playerInfo.nickname,
       inGameLevel: playerInfo.level,
       gameLevel: playerInfo.level,
       lastSyncedAt: now,
