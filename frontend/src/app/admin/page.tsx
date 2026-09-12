@@ -10,7 +10,7 @@ import {
   MessageSquareMore, Eye, Smartphone, Wallet, Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { adminApi, winnerProofApi, WinnerProof, DepositRequest, RedeemRequest, AdminStats, formatCurrency } from '@/lib/services';
+import { adminApi, winnerProofApi, WinnerProof, DepositRequest, AdminStats, formatCurrency } from '@/lib/services';
 import { getErrorMessage, isAuthenticated } from '@/lib/api';
 
 
@@ -20,7 +20,6 @@ export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [pendingPayouts, setPendingPayouts] = useState<WinnerProof[]>([]);
   const [deposits, setDeposits] = useState<DepositRequest[]>([]);
-  const [redeems, setRedeems] = useState<RedeemRequest[]>([]);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
 
@@ -38,14 +37,13 @@ export default function AdminPage() {
     try {
       const calls: any[] = [adminApi.stats()];
       if (isSuperAdmin) {
-        calls.push(winnerProofApi.pending(), adminApi.pendingDeposits(), adminApi.pendingRedeems());
+        calls.push(winnerProofApi.pending(), adminApi.pendingDeposits());
       }
       const [statsRes, ...rest] = await Promise.all(calls);
       setStats(statsRes.data);
       if (isSuperAdmin) {
         setPendingPayouts(Array.isArray(rest[0]?.data) ? rest[0].data : []);
         setDeposits(Array.isArray(rest[1]?.data) ? rest[1].data : []);
-        setRedeems(Array.isArray(rest[2]?.data) ? rest[2].data : []);
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -71,16 +69,6 @@ export default function AdminPage() {
     try {
       await adminApi.reviewDeposit(id, status, status === 'REJECTED' ? 'Screenshot invalid' : undefined);
       setActionMsg(`Deposit ${status.toLowerCase()}`);
-      await loadData();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
-  };
-
-  const handleRedeemReview = async (id: string, status: 'APPROVED' | 'COMPLETED' | 'REJECTED') => {
-    try {
-      await adminApi.reviewRedeem(id, status, status === 'REJECTED' ? { rejectionReason: 'Request denied' } : undefined);
-      setActionMsg(`Redeem ${status.toLowerCase()}`);
       await loadData();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -267,36 +255,6 @@ export default function AdminPage() {
                           <CheckCircle className="w-3.5 h-3.5" /> Approve
                         </button>
                         <button onClick={() => handleDepositReview(d.id, 'REJECTED')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20">
-                          <XCircle className="w-3.5 h-3.5" /> Reject
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {redeems.length > 0 && (
-              <div className="glass-card rounded-2xl p-6 mb-6">
-                <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                  <Gift className="w-5 h-5 text-purple-400" />
-                  Pending Redeem Requests ({redeems.length})
-                </h2>
-                <div className="space-y-4">
-                  {redeems.map((r) => (
-                    <div key={r.id} className="p-4 rounded-xl bg-white/3 border border-purple-500/20">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <p className="font-medium text-white">{r.user?.username || 'Unknown'}</p>
-                          <p className="text-sm text-purple-400 font-semibold">{formatCurrency(r.amount)} — {r.type}</p>
-                          {r.accountDetails && <p className="text-xs text-zinc-500 mt-1">{r.accountDetails}</p>}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleRedeemReview(r.id, 'APPROVED')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20">
-                          <CheckCircle className="w-3.5 h-3.5" /> Approve
-                        </button>
-                        <button onClick={() => handleRedeemReview(r.id, 'REJECTED')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20">
                           <XCircle className="w-3.5 h-3.5" /> Reject
                         </button>
                       </div>
