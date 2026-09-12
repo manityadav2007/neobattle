@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Users, Trophy, AlertCircle, CheckCircle, XCircle,
   Activity, RefreshCw, DollarSign, Banknote, Gift, Ban, ShoppingBag,
-  MessageSquareMore, Eye, Smartphone, Wallet, Loader2, Gamepad2,
+  MessageSquareMore, Eye, Smartphone, Wallet, Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { adminApi, winnerProofApi, WinnerProof, DepositRequest, RedeemRequest, AdminStats, formatCurrency } from '@/lib/services';
@@ -155,13 +155,12 @@ export default function AdminPage() {
 
         {stats && (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {[
                 { icon: Users, label: 'Total Users', value: stats.totalUsers, color: 'text-blue-400', href: '/admin/users' },
                 { icon: Shield, label: 'Total Hosts', value: stats.totalHosts, color: 'text-green-400', href: '/admin/users?role=HOST' },
                 { icon: Trophy, label: 'Tournaments', value: stats.totalTournaments, color: 'text-fire-400', href: '/admin/tournaments' },
                 { icon: Activity, label: 'Active Tournaments', value: stats.activeTournaments, color: 'text-green-400', href: '/admin/tournaments?status=ACTIVE' },
-                { icon: Gamepad2, label: 'Linked Players', value: (stats as any).linkedPlayers ?? stats.pendingVerifications, color: 'text-fire-400', href: '/admin/verify' },
                 { icon: Activity, label: 'Transactions', value: stats.totalTransactions, color: 'text-purple-400', href: '/admin/transactions' },
               ].map((s) => (
                 <Link key={s.label} href={s.href} className="glass-card rounded-xl p-5 block hover:bg-white/[0.04] transition-colors">
