@@ -353,7 +353,7 @@ export async function getTournamentEntries(req: AuthenticatedRequest, res: Respo
   const entries = await prisma.tournamentEntry.findMany({
     where: { tournamentId: req.params.id },
     include: {
-      user: { select: { id: true, username: true, ign: true, freeFireId: true, displayName: true, gameLevel: true, isVerified: true } },
+      user: { select: { id: true, username: true, ign: true, inGameNickname: true, freeFireId: true, displayName: true, gameLevel: true, isVerified: true } },
       team: {
         select: {
           id: true,
@@ -361,7 +361,7 @@ export async function getTournamentEntries(req: AuthenticatedRequest, res: Respo
           tag: true,
           members: {
             include: {
-              user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+              user: { select: { id: true, username: true, ign: true, inGameNickname: true, freeFireId: true, gameLevel: true, isVerified: true } },
             },
           },
         },

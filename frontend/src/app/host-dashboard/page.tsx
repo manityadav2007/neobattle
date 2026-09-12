@@ -22,6 +22,7 @@ interface TeamMember {
     id: string;
     username: string;
     ign: string | null;
+    inGameNickname?: string | null;
     freeFireId: string | null;
     gameLevel?: number;
     isVerified?: boolean;
@@ -43,6 +44,7 @@ interface Entry {
     id: string;
     username: string;
     ign: string | null;
+    inGameNickname?: string | null;
     freeFireId: string | null;
     gameLevel?: number;
     isVerified?: boolean;
@@ -868,8 +870,10 @@ export default function HostDashboardPage() {
                                           {mIdx === 0 || m.role === 'LEADER' ? 'C' : `#${mIdx + 1}`}
                                         </span>
                                         <span className="text-white font-medium truncate">{m.user?.username || '—'}</span>
-                                        {m.user?.ign && (
-                                          <span className="text-fire-400 font-mono text-[11px] truncate">({m.user.ign})</span>
+                                        {(m.user?.inGameNickname || m.user?.ign) && (
+                                          <span className="text-fire-400 text-[11px] truncate font-medium" title={`Free Fire Nickname: ${m.user.inGameNickname || m.user.ign}`}>
+                                            ({m.user.inGameNickname || m.user.ign})
+                                          </span>
                                         )}
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
@@ -909,7 +913,15 @@ export default function HostDashboardPage() {
                               {t.entries.map((e) => (
                                 <tr key={e.id} className="border-b border-white/5 last:border-0 text-xs">
                                   <td className="px-3 py-2 text-white font-medium">{e.user?.username || '—'}</td>
-                                  <td className="px-3 py-2 text-fire-400 font-mono">{e.user?.ign || '—'}</td>
+                                  <td className="px-3 py-2 text-fire-400 font-medium">
+                                    {(e.user?.inGameNickname || e.user?.ign) ? (
+                                      <span title={`In-Game Nickname: ${e.user.inGameNickname || e.user.ign}`}>
+                                        {e.user.inGameNickname || e.user.ign}
+                                      </span>
+                                    ) : (
+                                      <span className="text-zinc-500 font-mono">—</span>
+                                    )}
+                                  </td>
                                   <td className="px-3 py-2 text-zinc-400 font-mono">{e.user?.freeFireId || '—'}</td>
                                   <td className="px-3 py-2 text-blue-300 font-mono">{e.user?.gameLevel ? `Lv. ${e.user.gameLevel}` : '—'}</td>
                                   <td className="px-3 py-2">
