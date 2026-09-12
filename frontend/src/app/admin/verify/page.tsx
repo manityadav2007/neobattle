@@ -4,35 +4,30 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import {
-  ArrowLeft, Shield, CheckCircle, XCircle, AlertCircle, Loader2, Eye, RefreshCw, MessageSquareMore,
-} from 'lucide-react';
+import { ArrowLeft, Shield, Loader2, RefreshCw, Gamepad2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { adminApi, verificationApi, formatDate } from '@/lib/services';
+import { verificationApi, formatDate } from '@/lib/services';
 import { getErrorMessage, isAuthenticated } from '@/lib/api';
 
-interface VerificationItem {
+interface LinkedPlayer {
   id: string;
-  freeFireId: string;
-  screenshotUrl: string;
-  status: string;
-  rejectionReason: string | null;
-  createdAt: string;
-  user: { id: string; username: string; email: string };
+  username: string;
+  email: string;
+  freeFireUid: string;
+  freeFireRegion: string | null;
+  inGameNickname: string | null;
+  inGameLevel: number | null;
+  isVerified: boolean;
+  lastSyncedAt: string | null;
 }
 
-export default function AdminVerifyPage() {
+export default function AdminLinkedPlayersPage() {
   const router = useRouter();
   const { user, loading, isAdmin, isSuperAdmin } = useAuth();
-  const [verifications, setVerifications] = useState<VerificationItem[]>([]);
+  const [players, setPlayers] = useState<LinkedPlayer[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState('');
-  const [actionMsg, setActionMsg] = useState('');
-  const [rejectReason, setRejectReason] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [processing, setProcessing] = useState<string | null>(null);
-  const [gameLevels, setGameLevels] = useState<Record<string, string>>({});
-  const [levelInputOpen, setLevelInputOpen] = useState<Record<string, boolean>>({});
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     if (!loading && !user && !isAuthenticated()) router.push('/login');
@@ -42,8 +37,9 @@ export default function AdminVerifyPage() {
   const loadData = async () => {
     setLoadingData(true);
     try {
-      const res = await verificationApi.listPending();
-      setVerifications(res.data || []);
+      const res = await verificationApi.listLinked();
+      setPlayers(res.data || []);
+      setTotal(res.pagination?.total ?? (res.data?.length ?? 0));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -55,59 +51,23 @@ export default function AdminVerifyPage() {
     if (isAdmin || isSuperAdmin) loadData();
   }, [isAdmin, isSuperAdmin]);
 
-  const handleApprove = async (id: string) => {
-    const raw = (gameLevels[id] ?? '').trim();
-    const level = Number(raw);
-    if (raw === '' || !Number.isFinite(level) || level < 0) {
-      setError("Enter the player's current Level to approve");
-      return;
-    }
-    setProcessing(id);
-    setError('');
-    setActionMsg('');
-    try {
-      const res = await adminApi.reviewVerification(id, 'APPROVED', undefined, Math.round(level));
-      setActionMsg(res.message || `Approved — verified with Level ${Math.round(level)}`);
-      setVerifications((prev) => prev.filter((x) => x.id !== id));
-      setGameLevels((prev) => ({ ...prev, [id]: '' }));
-      setLevelInputOpen((prev) => ({ ...prev, [id]: false }));
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setProcessing(null);
-    }
-  };
-
-  const handleReject = async (id: string) => {
-    if (!rejectReason.trim()) return;
-    setProcessing(id);
-    setError('');
-    setActionMsg('');
-    try {
-      await adminApi.reviewVerification(id, 'REJECTED', rejectReason.trim());
-      setActionMsg('Verification rejected');
-      setVerifications((prev) => prev.filter((v) => v.id !== id));
-      setSelectedId(null);
-      setRejectReason('');
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setProcessing(null);
-    }
-  };
-
   if (loading || (!isSuperAdmin && !isAdmin)) return null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex items-center justify-between mb-8">
           <div>
+            <Link href="/admin" className="flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-3 transition-colors">
+              <ArrowLeft className="w-4 h-4" /> Admin Panel
+            </Link>
             <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
               <Shield className="w-8 h-8 text-fire-400" />
-              Verification Queue
+              Linked Players
             </h1>
-            <p className="text-zinc-400 mt-1">Review Free Fire ID submissions & set game level</p>
+            <p className="text-zinc-400 mt-1">
+              Players who have linked their Free Fire account ({total} total) — read-only view
+            </p>
           </div>
           <button onClick={loadData} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-zinc-300">
             <RefreshCw className="w-4 h-4" /> Refresh
@@ -115,135 +75,58 @@ export default function AdminVerifyPage() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm mb-6">
-            <AlertCircle className="w-4 h-4" /> {error}
-          </div>
-        )}
-        {actionMsg && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm mb-6">
-            <CheckCircle className="w-4 h-4" /> {actionMsg}
-          </div>
+          <div className="p-3 rounded-lg bg-red-500/10 text-red-400 text-sm mb-6">{error}</div>
         )}
 
-        <div className="glass-card rounded-2xl p-6">
-          <h2 className="text-lg font-bold text-white mb-4">
-            Pending Reviews ({verifications.length})
-          </h2>
-
+        <div className="glass-card rounded-2xl overflow-hidden">
           {loadingData ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-16">
               <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
             </div>
-          ) : verifications.length === 0 ? (
-            <p className="text-zinc-500 text-sm text-center py-8">No pending verifications</p>
+          ) : players.length === 0 ? (
+            <div className="py-16 text-center">
+              <Gamepad2 className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+              <p className="text-zinc-500 text-sm">No players have linked their Free Fire account yet</p>
+            </div>
           ) : (
-            <div className="space-y-4">
-              {verifications.map((v) => (
-                <div key={v.id} className="p-5 rounded-xl bg-white/3 border border-white/5">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="font-medium text-white">{v.user.username}</p>
-                        <span className="text-xs text-zinc-500">{formatDate(v.createdAt)}</span>
-                      </div>
-                      <p className="text-xs text-zinc-500">{v.user.email}</p>
-                      <p className="text-sm font-mono text-fire-400 mt-2">UID: {v.freeFireId}</p>
-                      <div className="mt-3">
-                        {v.screenshotUrl ? (
-                          <a
-                            href={v.screenshotUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-fire-400 hover:text-fire-300"
-                          >
-                            <Eye className="w-3.5 h-3.5" /> View Screenshot
-                          </a>
-                        ) : (
-                          <span className="text-xs text-zinc-500">No screenshot</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2 sm:min-w-[240px]">
-                      {selectedId === v.id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={rejectReason}
-                            onChange={(e) => setRejectReason(e.target.value)}
-                            placeholder="Reason for rejection..."
-                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:border-yellow-500/50 focus:outline-none resize-none"
-                            rows={2}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleReject(v.id)}
-                              disabled={processing === v.id || !rejectReason.trim()}
-                              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 disabled:opacity-50"
-                            >
-                              {processing === v.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
-                              Confirm Reject
-                            </button>
-                            <button
-                              onClick={() => { setSelectedId(null); setRejectReason(''); }}
-                              className="px-3 py-1.5 rounded-lg bg-white/5 text-zinc-400 text-xs hover:bg-white/10"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : levelInputOpen[v.id] ? (
-                        <div className="space-y-2">
-                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                            Player&apos;s current Level (required)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={gameLevels[v.id] ?? ''}
-                            onChange={(e) => setGameLevels((prev) => ({ ...prev, [v.id]: e.target.value }))}
-                            placeholder="e.g. 65"
-                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm text-center focus:border-green-500/50 focus:outline-none"
-                            autoFocus
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleApprove(v.id)}
-                              disabled={processing === v.id || (gameLevels[v.id] ?? '').trim() === ''}
-                              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20 disabled:opacity-50"
-                            >
-                              {processing === v.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                              Confirm Approval {(gameLevels[v.id] ?? '').trim() !== '' ? `— Lvl ${(gameLevels[v.id] ?? '').trim()}` : ''}
-                            </button>
-                            <button
-                              onClick={() => setLevelInputOpen((prev) => ({ ...prev, [v.id]: false }))}
-                              className="px-3 py-1.5 rounded-lg bg-white/5 text-zinc-400 text-xs hover:bg-white/10"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setLevelInputOpen((prev) => ({ ...prev, [v.id]: true }))}
-                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20"
-                          >
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => { setSelectedId(v.id); setRejectReason(''); }}
-                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/5">
+                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Player</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Free Fire UID</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">In-Game Name</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Level</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Region</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Last Synced</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {players.map((p) => (
+                    <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-5 py-3.5">
+                        <p className="font-medium text-white">{p.username}</p>
+                        <p className="text-xs text-zinc-500">{p.email}</p>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-fire-400">{p.freeFireUid}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-white max-w-[160px] truncate" title={p.inGameNickname || ''}>
+                        {p.inGameNickname || <span className="text-zinc-500">—</span>}
+                      </td>
+                      <td className="px-5 py-3.5 text-white">
+                        {p.inGameLevel ?? <span className="text-zinc-500">—</span>}
+                      </td>
+                      <td className="px-5 py-3.5 text-zinc-300">
+                        {p.freeFireRegion || 'IND'}
+                      </td>
+                      <td className="px-5 py-3.5 text-zinc-400 text-xs">
+                        {p.lastSyncedAt ? formatDate(p.lastSyncedAt) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

@@ -103,6 +103,13 @@ model User {
   notifyTournaments Boolean @default(true)
   notifyResults     Boolean @default(true)
   notifyAlerts      Boolean @default(true)
+  freeFireUid       String?
+  freeFireRegion    String?  @default("IND")
+  inGameNickname    String?
+  inGameLevel       Int?
+  lastSyncedAt      DateTime?
+  lastRefreshAt     DateTime?
+  refreshCountToday Int      @default(0)
 
   wallet              Wallet?
   teamMemberships     TeamMember[]

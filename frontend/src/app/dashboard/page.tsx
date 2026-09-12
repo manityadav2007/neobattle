@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Trophy, Wallet, Users, Shield, CheckCircle, AlertCircle,
-  ArrowRight, Gamepad2, RefreshCw, Pencil, Loader2, X, Save, Eye,
+  ArrowRight, Gamepad2, RefreshCw, Pencil, Loader2, X, Save,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import Avatar from '@/components/Avatar';
@@ -186,13 +186,13 @@ export default function DashboardPage() {
             <Link
               href="/dashboard/verify"
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                user.isVerified
+                (user.freeFireUid || user.freeFireId)
                   ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
                   : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
               }`}
             >
-              {user.isVerified ? <RefreshCw className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-              {user.isVerified ? 'Update Free Fire ID / Level' : 'Verify your Free Fire ID'}
+              {(user.freeFireUid || user.freeFireId) ? <RefreshCw className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+              {(user.freeFireUid || user.freeFireId) ? 'Manage Free Fire ID' : 'Link your Free Fire ID'}
             </Link>
           </div>
         </div>
@@ -227,8 +227,8 @@ export default function DashboardPage() {
             {
               icon: Shield,
               label: 'Verification',
-              value: user.isVerified ? 'Verified' : 'Pending',
-              color: user.isVerified ? 'text-green-400' : 'text-yellow-400',
+              value: (user.freeFireUid || user.freeFireId) ? 'Linked' : (user.isVerified ? 'Verified' : 'Not Linked'),
+              color: (user.freeFireUid || user.freeFireId) ? 'text-green-400' : (user.isVerified ? 'text-green-400' : 'text-yellow-400'),
             },
           ].map((stat: any) => (
             <div
@@ -266,12 +266,19 @@ export default function DashboardPage() {
                 ['Email', user.email],
                 {
                   label: 'Free Fire ID',
-                  value: user.freeFireId || 'Not linked',
+                  value: user.freeFireUid || user.freeFireId || 'Not linked',
                   isFreeFire: true,
-                  verificationScreenshotUrl: user.verificationScreenshotUrl,
-                  isVerified: user.isVerified,
+                  lastSyncedAt: user.lastSyncedAt,
+                  isVerified: !!(user.freeFireUid || user.freeFireId),
                 },
-                ['Verified Level', user.isVerified ? String(user.gameLevel ?? 0) : '—'],
+                {
+                  label: 'In-Game Name',
+                  value: user.inGameNickname || '—',
+                },
+                {
+                  label: 'Level',
+                  value: (user.inGameLevel != null ? String(user.inGameLevel) : (user.gameLevel ? String(user.gameLevel) : '—')),
+                },
                 ['Role', user.role],
               ].map((item: any) => {
                 if (item.editable) {
@@ -316,25 +323,32 @@ export default function DashboardPage() {
                   );
                 }
                 if (item.isFreeFire) {
+                  const syncedAgo = item.lastSyncedAt
+                    ? (() => {
+                        const diff = Date.now() - new Date(item.lastSyncedAt).getTime();
+                        const hrs = Math.floor(diff / 3600000);
+                        if (hrs < 1) return 'synced < 1h ago';
+                        if (hrs < 24) return `synced ${hrs}h ago`;
+                        return `synced ${Math.floor(hrs / 24)}d ago`;
+                      })()
+                    : null;
                   return (
-                    <div key={item.label} className="flex justify-between py-2 border-b border-white/5">
-                      <dt className="text-sm text-zinc-400">{item.label}</dt>
-                      <dd className="text-sm font-medium text-white flex items-center gap-1">
-                        <span>{item.value as string}</span>
-                        {item.isVerified ? (
-                          <CheckCircle className="w-3.5 h-3.5 text-green-400" />
-                        ) : item.value !== 'Not linked' ? (
-                          <Loader2 className="w-3 h-3 text-yellow-400 animate-spin" />
-                        ) : null}
-                        {item.verificationScreenshotUrl && (
-                          <a href={item.verificationScreenshotUrl} target="_blank" rel="noopener noreferrer" className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-fire-400 transition-colors" title="View Screenshot">
-                            <Eye className="w-3 h-3" />
-                          </a>
-                        )}
-                        <Link href="/dashboard/verify" className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-yellow-400 transition-colors" title={item.isVerified ? 'Re-upload' : item.verificationScreenshotUrl ? 'Edit/Re-upload' : 'Upload'}>
-                          {item.isVerified || item.verificationScreenshotUrl ? <RefreshCw className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
-                        </Link>
-                      </dd>
+                    <div key={item.label} className="py-2 border-b border-white/5">
+                      <div className="flex justify-between">
+                        <dt className="text-sm text-zinc-400">{item.label}</dt>
+                        <dd className="text-sm font-medium text-white flex items-center gap-1">
+                          <span className="font-mono">{item.value as string}</span>
+                          {item.isVerified ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                          ) : null}
+                          <Link href="/dashboard/verify" className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-yellow-400 transition-colors" title={item.isVerified ? 'Manage' : 'Link Free Fire ID'}>
+                            {item.isVerified ? <RefreshCw className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
+                          </Link>
+                        </dd>
+                      </div>
+                      {syncedAgo && (
+                        <p className="text-xs text-zinc-500 text-right mt-0.5">{syncedAgo}</p>
+                      )}
                     </div>
                   );
                 }
@@ -373,7 +387,7 @@ export default function DashboardPage() {
               {[
                 { href: '/tournaments', label: 'Browse Tournaments', icon: Trophy },
                 { href: '/wallet', label: 'Manage Wallet', icon: Wallet },
-                { href: '/dashboard/verify', label: 'Verify Free Fire ID', icon: Shield },
+                { href: '/dashboard/verify', label: (user.freeFireUid || user.freeFireId) ? 'Manage Free Fire ID' : 'Link Free Fire ID', icon: Shield },
               ].map((action) => (
                 <Link
                   key={action.href}

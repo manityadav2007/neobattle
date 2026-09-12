@@ -35,7 +35,7 @@ export async function getDashboardStats(_req: AuthenticatedRequest, res: Respons
     totalUsers,
     totalTournaments,
     activeTournaments,
-    pendingVerifications,
+    linkedPlayers,
     totalTransactions,
     recentUsers,
     platformCommissionAgg,
@@ -47,7 +47,7 @@ export async function getDashboardStats(_req: AuthenticatedRequest, res: Respons
     prisma.user.count(),
     prisma.tournament.count(),
     prisma.tournament.count({ where: { status: TournamentStatus.ACTIVE } }),
-    prisma.verificationRequest.count({ where: { status: 'PENDING' } }),
+    prisma.user.count({ where: { freeFireUid: { not: null } } }),
     prisma.transaction.count(),
     prisma.user.findMany({
       select: { id: true, uid: true, username: true, email: true, createdAt: true, role: true },
@@ -67,7 +67,9 @@ export async function getDashboardStats(_req: AuthenticatedRequest, res: Respons
       totalUsers,
       totalTournaments,
       activeTournaments,
-      pendingVerifications,
+      linkedPlayers,
+      // kept for backward compatibility during transition
+      pendingVerifications: 0,
       totalTransactions,
       totalCommissionCollected: Number(platformCommissionAgg._sum.platformCommission || 0),
       pendingPayouts,

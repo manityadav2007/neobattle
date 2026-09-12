@@ -7,26 +7,17 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Users, Trophy, AlertCircle, CheckCircle, XCircle,
   Activity, RefreshCw, DollarSign, Banknote, Gift, Ban, ShoppingBag,
-  MessageSquareMore, Eye, Smartphone, Wallet, Loader2,
+  MessageSquareMore, Eye, Smartphone, Wallet, Loader2, Gamepad2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { adminApi, winnerProofApi, WinnerProof, DepositRequest, RedeemRequest, AdminStats, formatCurrency } from '@/lib/services';
 import { getErrorMessage, isAuthenticated } from '@/lib/api';
 
-interface VerificationRequest {
-  id: string;
-  freeFireId: string;
-  screenshotUrl: string;
-  status: string;
-  user: { id: string; username: string; email: string };
-  createdAt: string;
-}
 
 export default function AdminPage() {
   const router = useRouter();
   const { user, loading, isAdmin, isSuperAdmin } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
   const [pendingPayouts, setPendingPayouts] = useState<WinnerProof[]>([]);
   const [deposits, setDeposits] = useState<DepositRequest[]>([]);
   const [redeems, setRedeems] = useState<RedeemRequest[]>([]);
@@ -45,16 +36,12 @@ export default function AdminPage() {
 
   const loadData = async () => {
     try {
-      const calls: any[] = [
-        adminApi.stats(),
-        adminApi.pendingVerifications(),
-      ];
+      const calls: any[] = [adminApi.stats()];
       if (isSuperAdmin) {
         calls.push(winnerProofApi.pending(), adminApi.pendingDeposits(), adminApi.pendingRedeems());
       }
-      const [statsRes, verRes, ...rest] = await Promise.all(calls);
+      const [statsRes, ...rest] = await Promise.all(calls);
       setStats(statsRes.data);
-      setVerifications(verRes.data || []);
       if (isSuperAdmin) {
         setPendingPayouts(rest[0]?.data || []);
         setDeposits(rest[1]?.data || []);
@@ -69,15 +56,6 @@ export default function AdminPage() {
     if (isAdmin || isSuperAdmin) loadData();
   }, [isAdmin, isSuperAdmin]);
 
-  const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
-    try {
-      await adminApi.reviewVerification(id, status, status === 'REJECTED' ? 'Screenshot does not match profile' : undefined);
-      setActionMsg(`Verification ${status.toLowerCase()}`);
-      await loadData();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
-  };
 
   const handlePayoutReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     try {
@@ -177,13 +155,13 @@ export default function AdminPage() {
 
         {stats && (
           <>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
               {[
                 { icon: Users, label: 'Total Users', value: stats.totalUsers, color: 'text-blue-400', href: '/admin/users' },
                 { icon: Shield, label: 'Total Hosts', value: stats.totalHosts, color: 'text-green-400', href: '/admin/users?role=HOST' },
                 { icon: Trophy, label: 'Tournaments', value: stats.totalTournaments, color: 'text-fire-400', href: '/admin/tournaments' },
                 { icon: Activity, label: 'Active Tournaments', value: stats.activeTournaments, color: 'text-green-400', href: '/admin/tournaments?status=ACTIVE' },
-                { icon: AlertCircle, label: 'Pending ID Verifications', value: stats.pendingVerifications, color: 'text-yellow-400', href: '/admin/verify' },
+                { icon: Gamepad2, label: 'Linked Players', value: (stats as any).linkedPlayers ?? stats.pendingVerifications, color: 'text-fire-400', href: '/admin/verify' },
                 { icon: Activity, label: 'Transactions', value: stats.totalTransactions, color: 'text-purple-400', href: '/admin/transactions' },
               ].map((s) => (
                 <Link key={s.label} href={s.href} className="glass-card rounded-xl p-5 block hover:bg-white/[0.04] transition-colors">
@@ -216,61 +194,25 @@ export default function AdminPage() {
           </>
         )}
 
-        <div className="grid lg:grid-cols-2 gap-6 mb-6">
-          <div className="glass-card rounded-2xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Pending Verifications</h2>
-            {verifications.length > 0 ? (
-              <div className="space-y-4">
-                {verifications.map((v) => (
-                  <div key={v.id} className="p-4 rounded-xl bg-white/3 border border-white/5">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <p className="font-medium text-white">{v.user.username}</p>
-                        <p className="text-xs text-zinc-500">{v.user.email}</p>
-                        <p className="text-sm text-fire-400 font-mono mt-1">ID: {v.freeFireId}</p>
-                        {v.screenshotUrl && (
-                          <a href={v.screenshotUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-fire-400 hover:text-fire-300 mt-1">
-                            <Eye className="w-3 h-3" /> View Screenshot
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <VerificationApproveActions
-                      requestId={v.id}
-                      onDone={(msg) => { setActionMsg(msg); loadData(); }}
-                      onError={setError}
-                    />
-                    <button onClick={() => handleReview(v.id, 'REJECTED')} className="mt-2 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20">
-                      <XCircle className="w-3.5 h-3.5" /> Reject
-                    </button>
+        <div className="glass-card rounded-2xl p-6 mb-6">
+          <h2 className="text-lg font-bold text-white mb-4">Recent Users</h2>
+          {stats?.recentUsers && stats.recentUsers.length > 0 ? (
+            <div className="space-y-3">
+              {stats.recentUsers.map((u) => (
+                <div key={u.id} className="flex items-center justify-between py-2 border-b border-white/5">
+                  <div>
+                    <p className="text-sm font-medium text-white">{u.username}</p>
+                    <p className="text-xs text-zinc-500">{u.email}</p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-zinc-500 text-sm text-center py-8">No pending verifications</p>
-            )}
-          </div>
-
-          <div className="glass-card rounded-2xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Recent Users</h2>
-            {stats?.recentUsers && stats.recentUsers.length > 0 ? (
-              <div className="space-y-3">
-                {stats.recentUsers.map((u) => (
-                  <div key={u.id} className="flex items-center justify-between py-2 border-b border-white/5">
-                    <div>
-                      <p className="text-sm font-medium text-white">{u.username}</p>
-                      <p className="text-xs text-zinc-500">{u.email}</p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${u.role === 'ADMIN' || u.role === 'SUPER_ADMIN' ? 'text-fire-400 bg-fire-400/10' : 'text-zinc-400 bg-zinc-400/10'}`}>
-                      {u.role}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-zinc-500 text-sm text-center py-8">No users yet</p>
-            )}
-          </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${u.role === 'ADMIN' || u.role === 'SUPER_ADMIN' ? 'text-fire-400 bg-fire-400/10' : 'text-zinc-400 bg-zinc-400/10'}`}>
+                    {u.role}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-zinc-500 text-sm text-center py-8">No users yet</p>
+          )}
         </div>
 
         {isSuperAdmin && (

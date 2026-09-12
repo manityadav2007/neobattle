@@ -20,6 +20,14 @@ export interface User {
   notifyAlerts?: boolean;
   createdAt: string;
   wallet?: { balance: number; currency: string } | null;
+  // Auto-linked Free Fire API fields
+  freeFireUid?: string | null;
+  freeFireRegion?: string | null;
+  inGameNickname?: string | null;
+  inGameLevel?: number | null;
+  lastSyncedAt?: string | null;
+  lastRefreshAt?: string | null;
+  refreshCountToday?: number;
 }
 
 export interface Tournament {
@@ -334,20 +342,24 @@ export const uploadApi = {
 };
 
 export const verificationApi = {
-  submit: async (data: { freeFireId: string; screenshotUrl: string }) => {
-    const res = await api.post('/verification/submit', data);
+  /** Link Free Fire UID automatically via API — no screenshot, no admin review */
+  link: async (data: { uid: string; region: string }) => {
+    const res = await api.post('/verification/link', data);
     return res.data;
   },
+  /** Refresh nickname/level from API (max 2/day rolling window) */
+  refresh: async () => {
+    const res = await api.post('/verification/refresh');
+    return res.data;
+  },
+  /** Get current link status + refresh quota */
   my: async () => {
     const res = await api.get('/verification/my');
     return res.data;
   },
-  review: async (id: string, data: { status: string; rejectionReason?: string }) => {
-    const res = await api.patch(`/verification/${id}/review`, data);
-    return res.data;
-  },
-  listPending: async (page = 1) => {
-    const res = await api.get(`/verification/pending?page=${page}`);
+  /** Admin only: read-only list of linked players */
+  listLinked: async (page = 1) => {
+    const res = await api.get('/verification/linked', { params: { page } });
     return res.data;
   },
 };
@@ -379,6 +391,7 @@ export interface AdminStats {
   totalUsers: number;
   totalTournaments: number;
   activeTournaments: number;
+  linkedPlayers?: number;
   pendingVerifications: number;
   totalTransactions: number;
   totalCommissionCollected: number;
