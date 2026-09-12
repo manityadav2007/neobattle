@@ -38,10 +38,12 @@ export default function AdminLinkedPlayersPage() {
     setLoadingData(true);
     try {
       const res = await verificationApi.listLinked();
-      setPlayers(res.data || []);
-      setTotal(res.pagination?.total ?? (res.data?.length ?? 0));
+      const list = Array.isArray(res?.data) ? res.data : [];
+      setPlayers(list);
+      setTotal(res?.pagination?.total ?? list.length);
     } catch (err) {
       setError(getErrorMessage(err));
+      setPlayers([]);
     } finally {
       setLoadingData(false);
     }
@@ -102,7 +104,7 @@ export default function AdminLinkedPlayersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {players.map((p) => (
+                  {(Array.isArray(players) ? players : []).map((p) => (
                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-5 py-3.5">
                         <p className="font-medium text-white">{p.username}</p>

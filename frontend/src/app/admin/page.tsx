@@ -43,9 +43,9 @@ export default function AdminPage() {
       const [statsRes, ...rest] = await Promise.all(calls);
       setStats(statsRes.data);
       if (isSuperAdmin) {
-        setPendingPayouts(rest[0]?.data || []);
-        setDeposits(rest[1]?.data || []);
-        setRedeems(rest[2]?.data || []);
+        setPendingPayouts(Array.isArray(rest[0]?.data) ? rest[0].data : []);
+        setDeposits(Array.isArray(rest[1]?.data) ? rest[1].data : []);
+        setRedeems(Array.isArray(rest[2]?.data) ? rest[2].data : []);
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -196,7 +196,7 @@ export default function AdminPage() {
 
         <div className="glass-card rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-bold text-white mb-4">Recent Users</h2>
-          {stats?.recentUsers && stats.recentUsers.length > 0 ? (
+          {Array.isArray(stats?.recentUsers) && stats.recentUsers.length > 0 ? (
             <div className="space-y-3">
               {stats.recentUsers.map((u) => (
                 <div key={u.id} className="flex items-center justify-between py-2 border-b border-white/5">

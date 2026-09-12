@@ -303,7 +303,7 @@ export default function TeamManagementModal({ open, onClose, myTeam, userId, onT
                       </p>
                     </div>
                     <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                      {myTeam.members?.map((m: any) => (
+                      {(Array.isArray(myTeam.members) ? myTeam.members : []).map((m: any) => (
                         <div
                           key={m.user.id}
                           className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-all"
@@ -376,7 +376,7 @@ export default function TeamManagementModal({ open, onClose, myTeam, userId, onT
                       </div>
                     ) : (
                       <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        {pendingRequests.map((req) => (
+                        {(Array.isArray(pendingRequests) ? pendingRequests : []).map((req) => (
                           <div
                             key={req.id}
                             className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-2.5"

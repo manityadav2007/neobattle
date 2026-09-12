@@ -104,6 +104,13 @@ export function sanitizeUser(user: {
   avatarUrl: string | null;
   verificationScreenshotUrl: string | null;
   createdAt: Date;
+  freeFireUid?: string | null;
+  freeFireRegion?: string | null;
+  inGameNickname?: string | null;
+  inGameLevel?: number | null;
+  lastSyncedAt?: Date | null;
+  lastRefreshAt?: Date | null;
+  refreshCountToday?: number;
 }) {
   return {
     id: user.id,
@@ -119,5 +126,12 @@ export function sanitizeUser(user: {
     avatarUrl: user.avatarUrl,
     verificationScreenshotUrl: user.verificationScreenshotUrl,
     createdAt: user.createdAt,
+    freeFireUid: user.freeFireUid ?? null,
+    freeFireRegion: user.freeFireRegion ?? null,
+    inGameNickname: user.inGameNickname ?? null,
+    inGameLevel: user.inGameLevel ?? null,
+    lastSyncedAt: user.lastSyncedAt ?? null,
+    lastRefreshAt: user.lastRefreshAt ?? null,
+    refreshCountToday: user.refreshCountToday ?? 0,
   };
 }

@@ -30,7 +30,13 @@ export function useTournaments(options: UseTournamentsOptions = {}) {
         platform: overrides?.platform ?? platform,
         gameMode: overrides?.gameMode ?? gameMode,
       });
-      setTournaments(res.data || []);
+      const rawData = res?.data as any;
+      const list = Array.isArray(rawData)
+        ? rawData
+        : Array.isArray(rawData?.tournaments)
+        ? rawData.tournaments
+        : [];
+      setTournaments(list);
       if (res.pagination) setPagination(res.pagination);
     } catch (err) {
       setError(getErrorMessage(err));

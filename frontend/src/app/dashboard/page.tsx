@@ -148,7 +148,7 @@ export default function DashboardPage() {
     );
   }
 
-  const myEntries = tournaments.filter((t) => t.isRegistered);
+  const myEntries = (Array.isArray(tournaments) ? tournaments : []).filter((t) => t?.isRegistered);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -263,7 +263,10 @@ export default function DashboardPage() {
                   value: displayUsername || user.username,
                   editable: true,
                 },
-                ['Email', user.email],
+                {
+                  label: 'Email',
+                  value: user.email,
+                },
                 {
                   label: 'Free Fire ID',
                   value: user.freeFireUid || user.freeFireId || 'Not linked',
@@ -279,8 +282,12 @@ export default function DashboardPage() {
                   label: 'Level',
                   value: (user.inGameLevel != null ? String(user.inGameLevel) : (user.gameLevel ? String(user.gameLevel) : '—')),
                 },
-                ['Role', user.role],
+                {
+                  label: 'Role',
+                  value: user.role,
+                },
               ].map((item: any) => {
+                if (!item) return null;
                 if (item.editable) {
                   return (
                     <div key={item.label} className="flex justify-between py-2 border-b border-white/5">
@@ -352,12 +359,13 @@ export default function DashboardPage() {
                     </div>
                   );
                 }
-                const [label, value] = item;
+                const label = Array.isArray(item) ? item[0] : (item?.label || '');
+                const value = Array.isArray(item) ? item[1] : (item?.value ?? '—');
                 return (
                   <div key={label} className="flex justify-between py-2 border-b border-white/5">
                     <dt className="text-sm text-zinc-400">{label}</dt>
                     <dd className="text-sm font-medium text-white flex items-center gap-1">
-                      {value as string}
+                      {String(value ?? '—')}
                       {label === 'IGN' && user.ign && (
                         <CheckCircle className="w-3.5 h-3.5 text-green-400" />
                       )}
