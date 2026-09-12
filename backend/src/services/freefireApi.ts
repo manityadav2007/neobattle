@@ -101,9 +101,19 @@ async function fetchFromProvider1(uid: string, region: string): Promise<PlayerIn
   }
 
   if (!response.ok) {
-    // 404 or similar often means invalid UID
-    if (response.status === 404 || response.status === 400) {
-      throw new FreefireApiError('UID_NOT_FOUND', 'Player not found — please check your UID and region');
+    let errorMsg = '';
+    try {
+      const errJson = await response.json();
+      errorMsg = String(errJson?.error || errJson?.message || '');
+    } catch {
+      // Ignore json parse error on error response
+    }
+    if (
+      response.status === 404 ||
+      response.status === 400 ||
+      errorMsg.toLowerCase().includes('invalid uid')
+    ) {
+      throw new FreefireApiError('UID_NOT_FOUND', "Couldn't find this UID, please check and try again");
     }
     throw new FreefireApiError('API_ERROR', `Free Fire API returned ${response.status}`);
   }
@@ -115,18 +125,18 @@ async function fetchFromProvider1(uid: string, region: string): Promise<PlayerIn
     throw new FreefireApiError('API_ERROR', 'Free Fire API returned an unexpected response');
   }
 
-  // Extract ONLY the three fields we need; discard the rest of the payload
-  const data = (json as any)?.data?.basicInfo;
+  // Extract ONLY the three fields we need (supports basicInfo at root or nested under data)
+  const data = (json as any)?.basicInfo || (json as any)?.data?.basicInfo;
   if (!data) {
-    throw new FreefireApiError('UID_NOT_FOUND', 'Player not found — please check your UID and region');
+    throw new FreefireApiError('UID_NOT_FOUND', "Couldn't find this UID, please check and try again");
   }
 
   const nickname: string = data.nickname ?? '';
   const level: number = typeof data.level === 'number' ? data.level : parseInt(data.level ?? '0', 10);
   const returnedRegion: string = data.region ?? region;
 
-  if (!nickname && !returnedRegion) {
-    throw new FreefireApiError('UID_NOT_FOUND', 'Could not find this UID — please check and try again');
+  if (!nickname && !level) {
+    throw new FreefireApiError('UID_NOT_FOUND', "Couldn't find this UID, please check and try again");
   }
 
   return { nickname, level, region: returnedRegion };

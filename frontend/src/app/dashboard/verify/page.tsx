@@ -1,27 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Shield, AlertCircle, CheckCircle, Loader2, ArrowLeft, Gamepad2, RefreshCw, Clock } from 'lucide-react';
+import { Shield, AlertCircle, CheckCircle, Loader2, Gamepad2, RefreshCw, Clock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { verificationApi } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
-
-const REGIONS = [
-  { value: 'IND', label: 'India (IND)' },
-  { value: 'BD', label: 'Bangladesh (BD)' },
-  { value: 'SG', label: 'Singapore (SG)' },
-  { value: 'ID', label: 'Indonesia (ID)' },
-  { value: 'TW', label: 'Taiwan (TW)' },
-  { value: 'TH', label: 'Thailand (TH)' },
-  { value: 'VN', label: 'Vietnam (VN)' },
-  { value: 'NA', label: 'North America (NA)' },
-  { value: 'EU', label: 'Europe (EU)' },
-  { value: 'ME', label: 'Middle East (ME)' },
-  { value: 'OT', label: 'Other (OT)' },
-];
 
 function formatSyncTime(iso: string | null | undefined): string {
   if (!iso) return 'Never';
@@ -51,7 +36,6 @@ export default function VerifyPage() {
   const router = useRouter();
   const { user, loading, refreshUser } = useAuth();
   const [uid, setUid] = useState('');
-  const [region, setRegion] = useState('IND');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -102,7 +86,7 @@ export default function VerifyPage() {
     }
     setSubmitting(true);
     try {
-      const res = await verificationApi.link({ uid: trimmedUid, region });
+      const res = await verificationApi.link({ uid: trimmedUid, region: 'IND' });
       setSuccess(res.message || 'Free Fire account linked successfully!');
       await loadStatus();
       await refreshUser();
@@ -151,10 +135,6 @@ export default function VerifyPage() {
       )}
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Link href="/dashboard" className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6 text-sm transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-        </Link>
-
         <div className="text-center mb-8">
           <Shield className="w-10 h-10 text-fire-400 mx-auto mb-4" />
           <h1 className="text-2xl font-display font-bold text-white">
@@ -195,7 +175,7 @@ export default function VerifyPage() {
               </div>
               <div className="flex justify-between py-2 border-b border-white/5">
                 <dt className="text-sm text-zinc-400">Region</dt>
-                <dd className="text-sm text-white">{linkStatus.freeFireRegion || 'IND'}</dd>
+                <dd className="text-sm text-white">{linkStatus.freeFireRegion === 'IND' ? 'India (IND)' : (linkStatus.freeFireRegion || 'India (IND)')}</dd>
               </div>
             </dl>
 
@@ -260,18 +240,6 @@ export default function VerifyPage() {
               <p className="text-xs text-zinc-500 mt-1">Your unique Free Fire player ID (5–12 digits)</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Server / Region</label>
-              <select
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                className="input-field w-full px-4 py-3 rounded-lg text-white bg-transparent"
-              >
-                {REGIONS.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
-            </div>
 
             <button
               type="submit"

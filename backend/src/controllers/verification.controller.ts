@@ -3,7 +3,6 @@ import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { fetchPlayerInfo, FreefireApiError } from '../services/freefireApi';
 
-const VALID_REGIONS = ['IND', 'BD', 'SG', 'ID', 'TW', 'TH', 'VN', 'NA', 'EU', 'ME', 'OT'];
 const MAX_REFRESHES_PER_DAY = 2;
 const ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -26,10 +25,11 @@ function toUserFriendlyError(err: unknown): string {
 /**
  * POST /verification/link
  * Links a Free Fire UID to the user account automatically via the API.
+ * All players are from India, so region is always 'IND'.
  * Does NOT count against the refresh limit.
  */
 export async function linkFreeFireId(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const { uid, region } = req.body;
+  const { uid } = req.body;
   const userId = req.user!.id;
 
   if (!uid || typeof uid !== 'string' || !/^\d{5,12}$/.test(uid.trim())) {
@@ -38,12 +38,7 @@ export async function linkFreeFireId(req: AuthenticatedRequest, res: Response): 
   }
 
   const trimmedUid = uid.trim();
-  const trimmedRegion = (region || 'IND').toUpperCase();
-
-  if (!VALID_REGIONS.includes(trimmedRegion)) {
-    res.status(400).json({ success: false, message: 'Invalid region selected' });
-    return;
-  }
+  const region = 'IND';
 
   // Check if UID is already linked to a different account
   const existingUser = await prisma.user.findFirst({
@@ -59,7 +54,7 @@ export async function linkFreeFireId(req: AuthenticatedRequest, res: Response): 
 
   let playerInfo: { nickname: string; level: number; region: string };
   try {
-    playerInfo = await fetchPlayerInfo(trimmedUid, trimmedRegion);
+    playerInfo = await fetchPlayerInfo(trimmedUid, region);
   } catch (err) {
     console.error('[Verification] linkFreeFireId error:', err);
     res.status(502).json({ success: false, message: toUserFriendlyError(err) });
@@ -72,7 +67,7 @@ export async function linkFreeFireId(req: AuthenticatedRequest, res: Response): 
     data: {
       freeFireId: trimmedUid,
       freeFireUid: trimmedUid,
-      freeFireRegion: trimmedRegion,
+      freeFireRegion: 'IND',
       inGameNickname: playerInfo.nickname,
       inGameLevel: playerInfo.level,
       gameLevel: playerInfo.level,
@@ -148,7 +143,7 @@ export async function refreshPlayerInfo(req: AuthenticatedRequest, res: Response
 
   let playerInfo: { nickname: string; level: number; region: string };
   try {
-    playerInfo = await fetchPlayerInfo(user.freeFireUid, user.freeFireRegion || 'IND');
+    playerInfo = await fetchPlayerInfo(user.freeFireUid, 'IND');
   } catch (err) {
     console.error('[Verification] refreshPlayerInfo error:', err);
     // Return cached data — do NOT overwrite anything
@@ -167,6 +162,7 @@ export async function refreshPlayerInfo(req: AuthenticatedRequest, res: Response
   const updated = await prisma.user.update({
     where: { id: userId },
     data: {
+      freeFireRegion: 'IND',
       inGameNickname: playerInfo.nickname,
       inGameLevel: playerInfo.level,
       gameLevel: playerInfo.level,

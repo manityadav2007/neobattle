@@ -343,8 +343,8 @@ export const uploadApi = {
 
 export const verificationApi = {
   /** Link Free Fire UID automatically via API — no screenshot, no admin review */
-  link: async (data: { uid: string; region: string }) => {
-    const res = await api.post('/verification/link', data);
+  link: async (data: { uid: string; region?: string }) => {
+    const res = await api.post('/verification/link', { ...data, region: 'IND' });
     return res.data;
   },
   /** Refresh nickname/level from API (max 2/day rolling window) */
