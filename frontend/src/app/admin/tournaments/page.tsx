@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Trophy, AlertCircle, RefreshCw, Loader2, Users, DollarSign, MapPin, Clock,
-  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X, Copy, Check, Trash2, Eye,
+  Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X, Copy, Check, Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentApi, adminApi, formatCurrency, formatDate, getStatusColor, resolveAssetUrl, type Tournament } from '@/lib/services';
@@ -1039,27 +1039,6 @@ export default function AdminTournamentsPage() {
                                               </span>
                                             )}
                                             <span className="font-mono text-zinc-400 text-[10px]">{m.user?.freeFireId || '—'}</span>
-                                            {m.user?.verificationScreenshotUrl ? (
-                                              <button
-                                                type="button"
-                                                onClick={() => setPreviewScreenshot({
-                                                  url: m.user.verificationScreenshotUrl!,
-                                                  username: m.user.username,
-                                                  freeFireId: m.user.freeFireId,
-                                                  ign: m.user.ign,
-                                                  gameLevel: m.user.gameLevel,
-                                                  isVerified: m.user.isVerified,
-                                                })}
-                                                className="p-0.5 rounded hover:bg-white/10 text-fire-400 hover:text-fire-300 transition-colors"
-                                                title="View Free Fire ID Proof"
-                                              >
-                                                <Eye className="w-3 h-3" />
-                                              </button>
-                                            ) : (
-                                              <span className="p-0.5 text-zinc-600 cursor-not-allowed" title="No screenshot proof uploaded">
-                                                <Eye className="w-3 h-3 opacity-30" />
-                                              </span>
-                                            )}
                                             {m.user?.isVerified && (
                                               <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-400">
                                                 Verified
@@ -1098,27 +1077,6 @@ export default function AdminTournamentsPage() {
                                     )}
                                     {entry.user?.freeFireId && (
                                       <span className="font-mono text-zinc-500 text-[11px] bg-white/5 px-1.5 py-0.5 rounded">{entry.user.freeFireId}</span>
-                                    )}
-                                    {entry.user?.verificationScreenshotUrl ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => setPreviewScreenshot({
-                                          url: entry.user!.verificationScreenshotUrl!,
-                                          username: entry.user!.username,
-                                          freeFireId: entry.user!.freeFireId,
-                                          ign: entry.user!.ign,
-                                          gameLevel: entry.user!.gameLevel,
-                                          isVerified: entry.user!.isVerified,
-                                        })}
-                                        className="p-1 rounded hover:bg-white/10 text-fire-400 hover:text-fire-300 transition-colors"
-                                        title="View Free Fire ID Proof"
-                                      >
-                                        <Eye className="w-3.5 h-3.5" />
-                                      </button>
-                                    ) : (
-                                      <span className="p-1 text-zinc-600 cursor-not-allowed" title="No screenshot proof uploaded">
-                                        <Eye className="w-3.5 h-3.5 opacity-30" />
-                                      </span>
                                     )}
                                     {entry.placement === 1 && <Trophy className="w-3.5 h-3.5 text-yellow-400" />}
                                   </div>
