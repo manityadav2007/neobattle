@@ -3,6 +3,7 @@ import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { Decimal } from '@prisma/client/runtime/library';
 import { TransactionStatus, TransactionType } from '@prisma/client';
+import { paymentMatchingService } from '../services/paymentMatchingService';
 
 export async function createUpiPayment(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { amount, tournamentId, utrNumber } = req.body;
@@ -187,4 +188,107 @@ export async function getMyUpiPayments(req: AuthenticatedRequest, res: Response)
   });
 
   res.json({ success: true, data: payments });
+}
+
+// ── Automated Dynamic QR Deposit Flow ───────────────────────────────────────
+
+export async function initiateDynamicDeposit(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { amount } = req.body;
+  const userId = req.user!.id;
+
+  const numAmount = Number(amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    res.status(400).json({ success: false, message: 'Invalid deposit amount' });
+    return;
+  }
+
+  try {
+    const order = await paymentMatchingService.createDepositOrder(userId, numAmount);
+    res.status(201).json({
+      success: true,
+      data: order,
+      message: `Deposit QR generated for ₹${order.requestedAmount}`,
+    });
+  } catch (err: any) {
+    console.error('[Payment] initiateDynamicDeposit error:', err);
+    res.status(400).json({
+      success: false,
+      message: err.message || 'Failed to initiate dynamic deposit',
+    });
+  }
+}
+
+export async function getDepositOrderStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { transactionId } = req.params;
+  const userId = req.user!.id;
+
+  if (!transactionId) {
+    res.status(400).json({ success: false, message: 'Transaction ID is required' });
+    return;
+  }
+
+  try {
+    const status = await paymentMatchingService.getDepositStatus(userId, transactionId);
+    res.json({ success: true, data: status });
+  } catch (err: any) {
+    res.status(404).json({ success: false, message: err.message || 'Order not found' });
+  }
+}
+
+// ── Admin: Unmatched Payments Management ────────────────────────────────────
+
+export async function listUnmatchedPayments(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { status } = req.query;
+  const where: any = {};
+  if (status && ['PENDING', 'RESOLVED'].includes(String(status).toUpperCase())) {
+    where.status = String(status).toUpperCase();
+  }
+
+  try {
+    const records = await prisma.unmatchedPayment.findMany({
+      where,
+      include: {
+        resolvedUser: {
+          select: { id: true, username: true, email: true, freeFireId: true },
+        },
+      },
+      orderBy: { receivedAt: 'desc' },
+      take: 200,
+    });
+
+    res.json({ success: true, data: records });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to list unmatched payments' });
+  }
+}
+
+export async function creditUnmatchedPayment(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { id } = req.params;
+  const { targetUserId, notes } = req.body;
+  const adminUserId = req.user!.id;
+
+  if (!targetUserId) {
+    res.status(400).json({ success: false, message: 'targetUserId is required' });
+    return;
+  }
+
+  try {
+    const result = await paymentMatchingService.resolveUnmatchedPayment(
+      id,
+      targetUserId,
+      adminUserId,
+      notes
+    );
+    res.json({
+      success: true,
+      data: result,
+      message: `Successfully credited ₹${result.amount} to @${result.targetUsername}'s wallet`,
+    });
+  } catch (err: any) {
+    console.error('[Admin] creditUnmatchedPayment error:', err);
+    res.status(400).json({
+      success: false,
+      message: err.message || 'Failed to credit unmatched payment',
+    });
+  }
 }

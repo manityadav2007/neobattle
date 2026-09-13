@@ -23,6 +23,7 @@ import uploadRoutes from './upload.routes';
 import giftCardRoutes from './giftCard.routes';
 import resultRoutes from './result.routes';
 import killCounterRoutes from './killCounter.routes';
+import webhookRoutes from './webhook.routes';
 import * as statsController from '../controllers/stats.controller';
 
 const router = Router();
@@ -55,5 +56,6 @@ router.use('/upload', uploadRoutes);
 router.use('/gift-cards', giftCardRoutes);
 router.use('/results', resultRoutes);
 router.use('/admin/kill-counter', killCounterRoutes);
+router.use('/webhooks', webhookRoutes);
 
 export default router;

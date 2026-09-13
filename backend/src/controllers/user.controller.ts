@@ -250,15 +250,21 @@ export async function searchUsers(req: AuthenticatedRequest, res: Response): Pro
       OR: [
         { username: { contains: q, mode: 'insensitive' } },
         { displayName: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } },
+        { uid: { contains: q, mode: 'insensitive' } },
+        { freeFireId: { contains: q, mode: 'insensitive' } },
       ],
       isActive: true,
     },
     select: {
       id: true,
+      uid: true,
       username: true,
       displayName: true,
+      email: true,
       avatarUrl: true,
       isVerified: true,
+      freeFireId: true,
     },
     take: 20,
   });

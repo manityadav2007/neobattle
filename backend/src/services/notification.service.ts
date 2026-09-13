@@ -134,6 +134,16 @@ class NotificationService {
       link: '/wallet',
     });
   }
+
+  async notifyDepositApproved(userId: string, amount: number, utrNumber?: string): Promise<void> {
+    const utrText = utrNumber ? ` (Ref: ${utrNumber})` : '';
+    await this.sendToUser(userId, {
+      type: 'DEPOSIT_APPROVED',
+      title: '💳 Wallet Deposit Credited',
+      message: `₹${amount} has been successfully added to your wallet${utrText}.`,
+      link: '/wallet',
+    });
+  }
 }
 
 export const notificationService = new NotificationService();

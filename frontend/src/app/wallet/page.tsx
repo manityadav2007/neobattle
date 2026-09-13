@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { walletApi, formatCurrency, formatDate } from '@/lib/services';
-import UpiPayment from '@/components/RazorpayCheckout';
+import DynamicDepositModal from '@/components/DynamicDepositModal';
 import { getErrorMessage } from '@/lib/api';
 
 type PayoutMethod = 'UPI' | 'BANK_TRANSFER';
@@ -22,7 +22,7 @@ export default function WalletPage() {
   const { wallet, loading, error, refetch } = useWallet();
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
-  const [showUpi, setShowUpi] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
 
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -125,7 +125,7 @@ export default function WalletPage() {
             <input
               type="number"
               value={amount}
-               onChange={(e) => { setAmount(e.target.value); setShowUpi(false); }}
+              onChange={(e) => { setAmount(e.target.value); setMessage(''); }}
               className="input-field flex-1 px-4 py-3 rounded-lg text-white"
               placeholder="Amount (₹)"
               min="1"
@@ -134,7 +134,12 @@ export default function WalletPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <button
-              onClick={() => setShowUpi(true)}
+              onClick={() => {
+                if (amount && parseFloat(amount) > 0) {
+                  setShowDepositModal(true);
+                  setMessage('');
+                }
+              }}
               disabled={!amount || parseFloat(amount) <= 0}
               className="flex items-center justify-center gap-2 btn-fire py-3 rounded-lg font-semibold text-white disabled:opacity-50"
             >
@@ -151,13 +156,19 @@ export default function WalletPage() {
             </button>
           </div>
 
-          {showUpi && amount && parseFloat(amount) > 0 && (
-            <div className="mt-4">
-              <UpiPayment amount={parseFloat(amount)} onSuccess={() => { refetch(); setShowUpi(false); setAmount(''); setMessage('Deposit submitted! Awaiting admin approval.'); }} />
-            </div>
-          )}
+          <DynamicDepositModal
+            amount={parseFloat(amount) || 0}
+            open={showDepositModal}
+            onClose={() => setShowDepositModal(false)}
+            onSuccess={async () => {
+              await refetch();
+              setShowDepositModal(false);
+              setAmount('');
+              setMessage('Payment Verified! Funds have been added to your wallet.');
+            }}
+          />
 
-          {(error || message) && !showUpi && (
+          {(error || message) && !showDepositModal && (
             <div className={`flex items-center gap-2 mt-4 p-3 rounded-lg text-sm ${
               message ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
             }`}>

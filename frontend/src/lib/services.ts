@@ -318,6 +318,10 @@ export const userApi = {
     const res = await api.post('/users/delete-account', data);
     return res.data;
   },
+  search: async (q: string): Promise<{ success: boolean; data: Array<{ id: string; uid: string; username: string; displayName?: string; email?: string; avatarUrl?: string; isVerified?: boolean; freeFireId?: string | null }> }> => {
+    const res = await api.get(`/users/search?q=${encodeURIComponent(q)}`);
+    return res.data;
+  },
 };
 
 export const uploadApi = {
@@ -760,6 +764,69 @@ export const resultApi = {
 export const depositApi = {
   request: async (data: { amount: number; screenshotUrl: string }) => {
     const res = await api.post('/deposits/request', data);
+    return res.data;
+  },
+};
+
+export interface DynamicDepositOrder {
+  transactionId: string;
+  requestedAmount: number;
+  actualQrAmount: number;
+  upiDeepLink: string;
+  qrCodeDataUrl: string;
+  timerExpiresAt: string;
+  expiresAt: string;
+}
+
+export interface DepositOrderStatus {
+  transactionId: string;
+  status: 'PENDING' | 'AWAITING_LATE_MATCH' | 'COMPLETED' | 'EXPIRED' | 'FAILED';
+  isCompleted: boolean;
+  isExpired: boolean;
+  isLateMatch: boolean;
+  requestedAmount: number;
+  actualQrAmount: number;
+  timerExpiresAt: string;
+  expiresAt: string;
+  balance: number;
+}
+
+export interface UnmatchedPaymentRecord {
+  id: string;
+  amount: number | string;
+  rawMessage: string;
+  sender: string | null;
+  utrNumber: string | null;
+  receivedAt: string;
+  status: 'PENDING' | 'RESOLVED';
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolvedUserId: string | null;
+  notes: string | null;
+  resolvedUser?: {
+    id: string;
+    username: string;
+    email: string;
+    freeFireId: string | null;
+  } | null;
+}
+
+export const dynamicDepositApi = {
+  initiate: async (amount: number): Promise<{ success: boolean; data: DynamicDepositOrder; message?: string }> => {
+    const res = await api.post('/payment/deposit/initiate', { amount });
+    return res.data;
+  },
+  getStatus: async (transactionId: string): Promise<{ success: boolean; data: DepositOrderStatus }> => {
+    const res = await api.get(`/payment/deposit/status/${transactionId}`);
+    return res.data;
+  },
+  listUnmatched: async (status?: 'PENDING' | 'RESOLVED' | ''): Promise<{ success: boolean; data: UnmatchedPaymentRecord[] }> => {
+    const query = status ? `?status=${status}` : '';
+    const res = await api.get(`/payment/unmatched${query}`);
+    return res.data;
+  },
+  creditUnmatched: async (id: string, targetUserId: string, notes?: string): Promise<{ success: boolean; data: any; message: string }> => {
+    const res = await api.post(`/payment/unmatched/${id}/credit`, { targetUserId, notes });
     return res.data;
   },
 };

@@ -11,6 +11,7 @@ import { globalLimiter, apiLimiter } from './middleware/rateLimiter';
 import routes from './routes';
 import { startTournamentNotifier } from './jobs/tournament-notifier';
 import { startTournamentCompleter } from './jobs/tournament-completer';
+import { startDepositCleanupJob } from './jobs/deposit-cleanup';
 
 import path from 'path';
 import authRoutes from './routes/auth.routes';
@@ -91,6 +92,7 @@ async function startServer(): Promise<void> {
 
   startTournamentNotifier();
   startTournamentCompleter();
+  startDepositCleanupJob();
 
   app.listen(PORT, () => {
     console.log(`🔥 NEOBATTLE API running on http://localhost:${PORT}`);

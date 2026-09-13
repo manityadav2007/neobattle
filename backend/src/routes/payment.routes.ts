@@ -5,6 +5,15 @@ import { adminCheck } from '../middleware/adminCheck';
 
 const router = Router();
 
+// Dynamic QR Automated Deposit Flow
+router.post('/deposit/initiate', authenticate, paymentController.initiateDynamicDeposit);
+router.get('/deposit/status/:transactionId', authenticate, paymentController.getDepositOrderStatus);
+
+// Admin Unmatched Payments Management
+router.get('/unmatched', authenticate, adminCheck, paymentController.listUnmatchedPayments);
+router.post('/unmatched/:id/credit', authenticate, adminCheck, paymentController.creditUnmatchedPayment);
+
+// Legacy Manual UPI Payments (preserved for existing tournament entry or pending review)
 router.post('/upi/create', authenticate, paymentController.createUpiPayment);
 router.get('/upi/my', authenticate, paymentController.getMyUpiPayments);
 router.get('/pending', authenticate, adminCheck, paymentController.listPendingUpiPayments);
