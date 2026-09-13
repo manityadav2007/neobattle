@@ -124,8 +124,11 @@ export class PaymentMatchingService {
       const timerExpiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes UI countdown
       const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 60 minutes late match
 
-      const upiId = process.env.UPI_ID || 'neobattle@upi';
-      const merchantName = process.env.UPI_MERCHANT_NAME || 'NeoBattle';
+      const upiId = (process.env.MERCHANT_UPI_ID || process.env.UPI_ID || '').trim();
+      if (!upiId) {
+        throw new Error('Merchant UPI ID is not configured on the server. Please set MERCHANT_UPI_ID in the environment variables (.env).');
+      }
+      const merchantName = (process.env.UPI_MERCHANT_NAME || 'NeoBattle').trim();
       const upiDeepLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&am=${actualQrAmount.toFixed(2)}&cu=INR`;
 
       // Generate Base64 QR code image
