@@ -30,14 +30,21 @@ async function resolveWinners(tournament: {
   const resolved: ResolvedWinner[] = [];
 
   for (const c of candidates) {
+    const rawVal = c.uid!;
+    const cleanTag = rawVal.replace(/^[\[\(<]+|[\]\)>]+$/g, '').trim();
+
     const entry = await prisma.tournamentEntry.findFirst({
       where: {
         tournamentId: tournament.id,
         OR: [
-          { user: { freeFireId: c.uid! } },
-          { user: { freeFireUid: c.uid! } },
-          { team: { members: { some: { user: { freeFireId: c.uid! } } } } },
-          { team: { members: { some: { user: { freeFireUid: c.uid! } } } } },
+          { team: { tag: { equals: cleanTag, mode: 'insensitive' } } },
+          { team: { tag: { equals: rawVal, mode: 'insensitive' } } },
+          { team: { name: { equals: rawVal, mode: 'insensitive' } } },
+          { team: { name: { equals: cleanTag, mode: 'insensitive' } } },
+          { user: { freeFireId: rawVal } },
+          { user: { freeFireUid: rawVal } },
+          { team: { members: { some: { user: { freeFireId: rawVal } } } } },
+          { team: { members: { some: { user: { freeFireUid: rawVal } } } } },
         ],
       },
       include: {
@@ -56,15 +63,17 @@ async function resolveWinners(tournament: {
     });
 
     if (!entry) {
-      throw new Error(`${c.label}: Free Fire UID ${c.uid} is not a registered participant in this tournament.`);
+      throw new Error(
+        `${c.label}: "${rawVal}" is not a registered ${isTeam ? 'team tag or participant' : 'Free Fire UID'} in this tournament.`
+      );
     }
 
     const teamLeader = entry.user || entry.team?.leader || entry.team?.members.find((m) => m.role === 'LEADER')?.user || entry.team?.members[0]?.user;
     if (entry.team && teamLeader) {
-      // Duo/Squad registration: full placement prize credited to captain/leader's wallet
+      // Duo/Squad registration: full placement prize credited exclusively to captain/leader's wallet
       resolved.push({
         placement: c.placement,
-        label: `${c.label} (${entry.team.name})`,
+        label: `${c.label} (${entry.team.name || entry.team.tag || 'Team'})`,
         amount: c.amount,
         userId: teamLeader.id,
         username: teamLeader.username,
@@ -91,7 +100,7 @@ export async function submitResult(req: AuthenticatedRequest, res: Response): Pr
   const hostId = req.user!.id;
 
   if (!firstUid?.trim() || !screenshotUrl) {
-    res.status(400).json({ success: false, message: "1st place UID and proof screenshot are required" });
+    res.status(400).json({ success: false, message: "1st place identifier (Team Tag or UID) and proof screenshot are required" });
     return;
   }
 
@@ -184,7 +193,40 @@ export async function listPendingResults(_req: AuthenticatedRequest, res: Respon
           platformCommission: true, hostCommission: true, maxParticipants: true,
           creator: { select: { id: true, username: true } },
           entries: {
-            include: { user: { select: { id: true, username: true, ign: true, freeFireId: true } } },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  ign: true,
+                  inGameNickname: true,
+                  freeFireId: true,
+                  gameLevel: true,
+                },
+              },
+              team: {
+                select: {
+                  id: true,
+                  name: true,
+                  tag: true,
+                  leaderId: true,
+                  members: {
+                    include: {
+                      user: {
+                        select: {
+                          id: true,
+                          username: true,
+                          ign: true,
+                          inGameNickname: true,
+                          freeFireId: true,
+                          gameLevel: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             orderBy: { registeredAt: 'asc' },
           },
         },
@@ -200,8 +242,13 @@ export async function listPendingResults(_req: AuthenticatedRequest, res: Respon
       participants: s.tournament.entries.map((e) => ({
         uid: e.user?.freeFireId,
         username: e.user?.username,
-        ign: e.user?.ign,
+        ign: e.user?.inGameNickname || e.user?.ign,
+        level: e.user?.gameLevel,
+        team: e.team,
       })),
+      teams: s.tournament.entries
+        .filter((e) => Boolean(e.team))
+        .map((e) => e.team),
     })),
   });
 }
@@ -272,6 +319,7 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
   for (const e of allEntries) {
     if (e.userId) participantUserIds.add(e.userId);
     if (e.team) {
+      if (e.team.leaderId) participantUserIds.add(e.team.leaderId);
       for (const m of e.team.members) {
         participantUserIds.add(m.userId);
       }
@@ -307,6 +355,7 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
             tournamentId: t.id,
             OR: [
               { userId: w.userId },
+              { team: { leaderId: w.userId } },
               { team: { members: { some: { userId: w.userId } } } },
             ],
           },

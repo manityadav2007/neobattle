@@ -312,6 +312,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
               id: true,
               name: true,
               tag: true,
+              leaderId: true,
               members: {
                 include: {
                   user: { select: { id: true, uid: true, username: true, freeFireId: true, freeFireUid: true, ign: true, inGameNickname: true, gameLevel: true, inGameLevel: true, isVerified: true, avatarUrl: true, verificationScreenshotUrl: true } },

@@ -78,7 +78,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
   const handleSubmitResult = async () => {
     if (!tournament) return;
-    if (!resUids.first.trim()) { setRegisterError('1st place UID is required'); return; }
+    const isTeamFormat = tournament.format === 'DUO' || tournament.format === 'SQUAD';
+    if (!resUids.first.trim()) {
+      setRegisterError(isTeamFormat ? '1st winning team tag is required' : '1st place UID is required');
+      return;
+    }
     if (!resFile && !mySubmission?.screenshotUrl) { setRegisterError('Upload the winning proof screenshot'); return; }
     setSubmittingResult(true);
     setRegisterError('');
@@ -396,6 +400,46 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     ...(secondPlace > 0 ? [{ place: '2nd', label: isTeam ? '2nd Winning Team' : '2nd Place', value: secondPlace, color: 'text-zinc-300', bg: 'bg-zinc-500/5', border: 'border-zinc-500/10' }] : []),
     ...(thirdPlace > 0 ? [{ place: '3rd', label: isTeam ? '3rd Winning Team' : '3rd Place', value: thirdPlace, color: 'text-amber-500', bg: 'bg-amber-500/5', border: 'border-amber-500/10' }] : []),
   ];
+
+  const lookupTeamForWinner = (val: string) => {
+    if (!val || !val.trim() || !tournament?.entries) return null;
+    const raw = val.trim();
+    const cleanTag = raw.replace(/^[\[\(<]+|[\]\)>]+$/g, '').trim().toUpperCase();
+    const upperRaw = raw.toUpperCase();
+
+    for (const entry of tournament.entries) {
+      if (!entry.team) continue;
+      const t = entry.team;
+      const tag = t.tag?.trim().toUpperCase();
+      const name = t.name?.trim().toUpperCase();
+
+      if (tag && (tag === cleanTag || tag === upperRaw)) return { team: t, entry };
+      if (name && (name === upperRaw || name === cleanTag)) return { team: t, entry };
+
+      if (t.members?.some((m: any) => {
+        const ffId = (m.user?.freeFireId || m.user?.freeFireUid || '')?.trim().toUpperCase();
+        return ffId && ffId === upperRaw;
+      })) {
+        return { team: t, entry };
+      }
+
+      const entryFfId = (entry.user?.freeFireId || entry.user?.freeFireUid || '')?.trim().toUpperCase();
+      if (entryFfId && entryFfId === upperRaw) {
+        return { team: t, entry };
+      }
+    }
+    return null;
+  };
+
+  const lookupSoloParticipant = (val: string) => {
+    if (!val || !val.trim() || !tournament?.entries) return null;
+    const raw = val.trim().toUpperCase();
+    for (const entry of tournament.entries) {
+      const ffId = (entry.user?.freeFireId || entry.user?.freeFireUid || '')?.trim().toUpperCase();
+      if (ffId && ffId === raw) return entry;
+    }
+    return null;
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
@@ -1078,30 +1122,135 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             )}
             {canSubmitResults && (
               <div className="p-6 rounded-2xl bg-zinc-900/70 backdrop-blur-xl border border-white/10 space-y-4 shadow-xl">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-yellow-400" /> Submit Tournament Results
-                </h3>
-                <p className="text-xs text-zinc-400">Enter the Free Fire UIDs of your winners. Each UID must belong to a registered Neobattle participant.</p>
-                <div className="grid sm:grid-cols-3 gap-3">
-                  {([
-                    [isTeam ? '1st Winning Team' : '1st Place', 'first', '🥇'],
-                    [isTeam ? '2nd Winning Team (optional)' : '2nd Place (optional)', 'second', '🥈'],
-                    [isTeam ? '3rd Winning Team (optional)' : '3rd Place (optional)', 'third', '🥉']
-                  ] as const).map(([label, key, medal]) => (
-                    <div key={key}>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">{medal} {label}</label>
-                      <input
-                        type="text"
-                        value={resUids[key]}
-                        onChange={(e) => setResUids((prev) => ({ ...prev, [key]: e.target.value }))}
-                        placeholder={isTeam ? "Winner Team/Player UID" : "Winner UID"}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 focus:outline-none transition-all"
-                      />
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-yellow-400" /> Submit Tournament Results
+                  </h3>
+                  {isTeam && (
+                    <span className="text-[11px] px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/25 font-semibold">
+                      {isDuo ? 'Duo' : 'Squad'} Match — Team Tag Mode
+                    </span>
+                  )}
                 </div>
+                <p className="text-xs text-zinc-400">
+                  {isTeam
+                    ? 'Enter the Winning Team Tag for each placement. The registered team\'s full roster will be verified and displayed automatically.'
+                    : 'Enter the Free Fire UIDs of your winners. Each UID must belong to a registered participant.'}
+                </p>
+
+                <div className="grid sm:grid-cols-3 gap-3.5">
+                  {([
+                    [isTeam ? '1st Winning Team Tag' : '1st Place', 'first', '🥇'],
+                    [isTeam ? '2nd Winning Team Tag (optional)' : '2nd Place (optional)', 'second', '🥈'],
+                    [isTeam ? '3rd Winning Team Tag (optional)' : '3rd Place (optional)', 'third', '🥉'],
+                  ] as const).map(([label, key, medal]) => {
+                    const enteredVal = resUids[key];
+                    const matchedTeam = isTeam ? lookupTeamForWinner(enteredVal) : null;
+                    const matchedSolo = !isTeam ? lookupSoloParticipant(enteredVal) : null;
+
+                    return (
+                      <div key={key} className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex flex-col justify-between space-y-2.5">
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
+                            {medal} {label}
+                          </label>
+                          <input
+                            type="text"
+                            value={enteredVal}
+                            onChange={(e) => setResUids((prev) => ({ ...prev, [key]: e.target.value }))}
+                            placeholder={isTeam ? 'e.g. NEO or TM102' : 'Winner Free Fire UID'}
+                            className="w-full px-3 py-2 rounded-lg bg-zinc-900/90 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 focus:outline-none transition-all uppercase placeholder:normal-case placeholder:font-sans"
+                          />
+                        </div>
+
+                        {/* Preview for Duo / Squad Team */}
+                        {isTeam && enteredVal.trim() && (
+                          matchedTeam ? (
+                            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 space-y-2 text-xs">
+                              <div className="flex items-center justify-between pb-1.5 border-b border-emerald-500/20">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="font-bold text-white truncate text-xs">
+                                    {matchedTeam.team.name}
+                                  </span>
+                                  {matchedTeam.team.tag && (
+                                    <span className="font-mono text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/30 shrink-0">
+                                      [{matchedTeam.team.tag}]
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-emerald-400 font-bold shrink-0 flex items-center gap-0.5">
+                                  <Check className="w-3 h-3" /> Matched
+                                </span>
+                              </div>
+
+                              <div className="space-y-1">
+                                {matchedTeam.team.members?.map((m: any, idx: number) => {
+                                  const isLeader = m.role === 'LEADER' || m.user?.id === (matchedTeam.team.leaderId || matchedTeam.entry?.userId);
+                                  return (
+                                    <div key={m.id || idx} className="flex items-center justify-between text-[11px] text-zinc-300">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="text-zinc-500 font-mono text-[10px]">#{idx + 1}</span>
+                                        <span className="font-semibold text-zinc-100 truncate">
+                                          {m.user?.inGameNickname || m.user?.ign || m.user?.username || 'Player'}
+                                        </span>
+                                        {isLeader && (
+                                          <span className="text-[9px] px-1 rounded bg-yellow-500/20 text-yellow-400 font-bold uppercase shrink-0">
+                                            Capt
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 shrink-0">
+                                        <span>{m.user?.freeFireId || 'No UID'}</span>
+                                        <span className="text-emerald-400 font-semibold bg-white/5 px-1 py-0.2 rounded">
+                                          Lvl {m.user?.gameLevel || 0}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                              <span>No registered team matches tag &quot;{enteredVal.trim()}&quot;</span>
+                            </div>
+                          )
+                        )}
+
+                        {/* Preview for Solo Participant */}
+                        {!isTeam && enteredVal.trim() && (
+                          matchedSolo ? (
+                            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 space-y-1 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-white truncate">
+                                  {matchedSolo.user?.inGameNickname || matchedSolo.user?.ign || matchedSolo.user?.username}
+                                </span>
+                                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5">
+                                  <Check className="w-3 h-3" /> Matched
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
+                                <span>UID: {matchedSolo.user?.freeFireId}</span>
+                                <span className="text-emerald-400 font-semibold">Lvl {matchedSolo.user?.gameLevel || 0}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                              <span>No registered player matches UID &quot;{enteredVal.trim()}&quot;</span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Winning Proof Screenshot</label>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
+                    Winning Proof Screenshot
+                  </label>
                   <input
                     type="file"
                     accept="image/*"
@@ -1109,6 +1258,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                     className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:bg-fire-500/20 file:text-fire-400 file:text-xs file:font-semibold hover:file:bg-fire-500/30 transition-all cursor-pointer"
                   />
                 </div>
+
                 <button
                   onClick={handleSubmitResult}
                   disabled={submittingResult || !resUids.first.trim() || (!resFile && !mySubmission?.screenshotUrl)}

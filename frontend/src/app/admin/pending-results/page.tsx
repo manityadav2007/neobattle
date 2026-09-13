@@ -10,6 +10,63 @@ import { useAuth } from '@/hooks/useAuth';
 import { resultApi, formatCurrency, formatDate, type ResultSubmission } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 
+function findTeamForWinner(tournament: any, teamsList: any[] | undefined, val: string | null | undefined) {
+  if (!val || !val.trim() || !tournament) return null;
+  const raw = val.trim();
+  const clean = raw.replace(/^[\[\(<]+|[\]\)>]+$/g, '').trim().toUpperCase();
+  const upperRaw = raw.toUpperCase();
+
+  const entries = tournament.entries || [];
+  for (const entry of entries) {
+    const t = entry.team;
+    if (!t) continue;
+    const tag = t.tag?.trim().toUpperCase();
+    const name = t.name?.trim().toUpperCase();
+
+    if (tag && (tag === clean || tag === upperRaw)) return { team: t, entry };
+    if (name && (name === upperRaw || name === clean)) return { team: t, entry };
+
+    if (t.members?.some((m: any) => {
+      const ffId = (m.user?.freeFireId || m.user?.freeFireUid || '')?.trim().toUpperCase();
+      return ffId && ffId === upperRaw;
+    })) {
+      return { team: t, entry };
+    }
+
+    const entryFfId = (entry.user?.freeFireId || entry.user?.freeFireUid || '')?.trim().toUpperCase();
+    if (entryFfId && entryFfId === upperRaw) {
+      return { team: t, entry };
+    }
+  }
+
+  if (teamsList) {
+    for (const t of teamsList) {
+      const tag = t.tag?.trim().toUpperCase();
+      const name = t.name?.trim().toUpperCase();
+      if (tag && (tag === clean || tag === upperRaw)) return { team: t, entry: null };
+      if (name && (name === upperRaw || name === clean)) return { team: t, entry: null };
+      if (t.members?.some((m: any) => {
+        const ffId = (m.user?.freeFireId || m.user?.freeFireUid || '')?.trim().toUpperCase();
+        return ffId && ffId === upperRaw;
+      })) {
+        return { team: t, entry: null };
+      }
+    }
+  }
+  return null;
+}
+
+function findSoloForWinner(tournament: any, val: string | null | undefined) {
+  if (!val || !val.trim() || !tournament) return null;
+  const upperRaw = val.trim().toUpperCase();
+  const entries = tournament.entries || [];
+  for (const entry of entries) {
+    const ffId = (entry.user?.freeFireId || entry.user?.freeFireUid || '')?.trim().toUpperCase();
+    if (ffId && ffId === upperRaw) return entry;
+  }
+  return null;
+}
+
 export default function AdminPendingResultsPage() {
   const router = useRouter();
   const { user, loading, isAdmin, isSuperAdmin } = useAuth();
@@ -134,7 +191,14 @@ export default function AdminPendingResultsPage() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-bold text-white">{sub.tournament?.title}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-bold text-white">{sub.tournament?.title}</p>
+                      {sub.tournament?.format && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase">
+                          {sub.tournament.format}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-zinc-500 mt-0.5">
                       UID {sub.tournament?.uid} · Host: {sub.host?.username}
                     </p>
@@ -188,26 +252,129 @@ export default function AdminPendingResultsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {[
                         { medal: '🥇', label: isTeam ? '1st Winning Team' : '1st Place', uid: selected.firstUid, prize: Number(selected.tournament.prizeFirst) },
                         { medal: '🥈', label: isTeam ? '2nd Winning Team' : '2nd Place', uid: selected.secondUid, prize: Number(selected.tournament.prizeSecond) },
                         { medal: '🥉', label: isTeam ? '3rd Winning Team' : '3rd Place', uid: selected.thirdUid, prize: Number(selected.tournament.prizeThird) },
                       ]
                         .filter((w) => w.uid)
-                        .map((w) => (
-                          <div key={w.label} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
-                            <div>
-                              <span className="text-sm text-white font-medium">{w.medal} {w.label} — <span className="font-mono text-fire-400">{w.uid}</span></span>
-                              {isTeam && (
-                                <p className="text-[11px] text-zinc-400 mt-0.5">
-                                  Prize: {formatCurrency(w.prize)} → <span className="text-emerald-400 font-semibold">Full amount credited to team captain's wallet</span>
-                                </p>
-                              )}
+                        .map((w) => {
+                          const matchedTeam = isTeam ? findTeamForWinner(selected.tournament, selected.teams, w.uid) : null;
+                          const matchedSolo = !isTeam ? findSoloForWinner(selected.tournament, w.uid) : null;
+
+                          if (isTeam) {
+                            const team = matchedTeam?.team;
+                            const members = team?.members || [];
+                            const leaderId = team?.leaderId || matchedTeam?.entry?.userId;
+                            const leaderMember = members.find((m: any) => m.role === 'LEADER' || m.user?.id === leaderId) || members[0];
+                            const leaderName = leaderMember?.user?.inGameNickname || leaderMember?.user?.ign || leaderMember?.user?.username || matchedTeam?.entry?.user?.username || 'Captain';
+
+                            return (
+                              <div key={w.label} className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-base">{w.medal}</span>
+                                    <span className="text-sm font-bold text-white">{w.label}</span>
+                                    {team?.tag && (
+                                      <span className="font-mono text-xs font-bold text-fire-400 bg-fire-500/15 px-2 py-0.5 rounded border border-fire-500/25">
+                                        [{team.tag}]
+                                      </span>
+                                    )}
+                                    {team?.name && (
+                                      <span className="text-xs text-zinc-300 font-semibold truncate">
+                                        {team.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-sm font-black text-yellow-400">
+                                    {formatCurrency(w.prize)}
+                                  </span>
+                                </div>
+
+                                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center justify-between gap-2">
+                                  <span>
+                                    Prize credited in full to captain:{' '}
+                                    <strong className="text-emerald-200">{leaderName}</strong>
+                                    {leaderMember?.user?.freeFireId && (
+                                      <span className="font-mono text-zinc-400 ml-1">
+                                        ({leaderMember.user.freeFireId})
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="font-bold text-emerald-400 shrink-0">{formatCurrency(w.prize)}</span>
+                                </div>
+
+                                {members.length > 0 ? (
+                                  <div className="space-y-1.5 pt-1">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                      Team Roster ({members.length} Players)
+                                    </p>
+                                    <div className="grid sm:grid-cols-2 gap-2">
+                                      {members.map((m: any, idx: number) => {
+                                        const isCaptain = m.role === 'LEADER' || m.user?.id === leaderId;
+                                        return (
+                                          <div
+                                            key={m.id || idx}
+                                            className="p-2.5 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between text-xs"
+                                          >
+                                            <div className="min-w-0 flex items-center gap-1.5">
+                                              <span className="font-semibold text-white truncate">
+                                                {m.user?.inGameNickname || m.user?.ign || m.user?.username || 'Player'}
+                                              </span>
+                                              {isCaptain && (
+                                                <span className="text-[9px] px-1 rounded bg-yellow-500/20 text-yellow-400 font-bold uppercase shrink-0">
+                                                  Capt
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-2 font-mono text-[11px] shrink-0 text-zinc-400">
+                                              <span>{m.user?.freeFireId || 'No UID'}</span>
+                                              <span className="text-emerald-400 font-semibold bg-white/5 px-1 py-0.5 rounded text-[10px]">
+                                                Lvl {m.user?.gameLevel || 0}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-300 text-xs flex items-center gap-1.5">
+                                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                    <span>Submitted Tag/UID: <strong className="font-mono">{w.uid}</strong> — Registered team details not found.</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          // Solo format
+                          const player = matchedSolo?.user;
+                          return (
+                            <div key={w.label} className="flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/10">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm text-white font-medium">{w.medal} {w.label}</span>
+                                  {player && (
+                                    <span className="text-xs font-bold text-fire-400">
+                                      {player.inGameNickname || player.ign || player.username}
+                                    </span>
+                                  )}
+                                  <span className="font-mono text-xs text-zinc-400">
+                                    (UID: {player?.freeFireId || w.uid})
+                                  </span>
+                                  {player?.gameLevel != null && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-emerald-400 font-semibold">
+                                      Lvl {player.gameLevel}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="text-sm font-bold text-yellow-400">{formatCurrency(w.prize)}</span>
                             </div>
-                            <span className="text-sm font-bold text-yellow-400">{formatCurrency(w.prize)}</span>
-                          </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   </>
                 );

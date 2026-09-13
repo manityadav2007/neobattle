@@ -685,10 +685,57 @@ export interface ResultSubmission {
     prizeFirst: number; prizeSecond: number | null; prizeThird: number | null;
     platformCommission: number; hostCommission: number;
     creator: { id: string; username: string };
-    entries: Array<{ user: { id: string; username: string; ign: string | null; freeFireId: string | null } | null }>;
+    entries: Array<{
+      id?: string;
+      userId?: string;
+      user: {
+        id: string;
+        username: string;
+        ign?: string | null;
+        inGameNickname?: string | null;
+        freeFireId: string | null;
+        gameLevel?: number;
+      } | null;
+      team?: {
+        id: string;
+        name: string;
+        tag: string | null;
+        leaderId?: string | null;
+        members: Array<{
+          id?: string;
+          role?: string;
+          user: {
+            id: string;
+            username: string;
+            ign?: string | null;
+            inGameNickname?: string | null;
+            freeFireId: string | null;
+            gameLevel?: number;
+          } | null;
+        }>;
+      } | null;
+    }>;
   };
   host?: { id: string; username: string; email: string };
-  participants?: Array<{ uid: string | null; username: string | null; ign: string | null }>;
+  participants?: Array<{ uid: string | null; username: string | null; ign: string | null; level?: number }>;
+  teams?: Array<{
+    id: string;
+    name: string;
+    tag: string | null;
+    leaderId?: string | null;
+    members: Array<{
+      id?: string;
+      role?: string;
+      user: {
+        id: string;
+        username: string;
+        ign?: string | null;
+        inGameNickname?: string | null;
+        freeFireId: string | null;
+        gameLevel?: number;
+      } | null;
+    }>;
+  }>;
 }
 
 export const resultApi = {
