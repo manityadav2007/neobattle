@@ -7,10 +7,8 @@ import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { findBestPlayerMatch, PlayerCandidate, MatchResult } from '../utils/stringSimilarity';
 
-// Re-export or import kill detection service
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const killDetectionService = require('../../services/killDetectionService');
-const detectKillsFromVideo = killDetectionService.detectKillsFromVideo || killDetectionService;
+// Import kill detection service from local services
+import { detectKillsFromVideo } from '../services/killDetectionService';
 
 // Setup upload directory for kill counter videos
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'kill-counter');

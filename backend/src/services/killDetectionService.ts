@@ -1,19 +1,17 @@
-// NOTE: GEMINI_API_KEY needs to be added to .env
-// Example: GEMINI_API_KEY="your-gemini-api-key-here"
-
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const ffmpeg = require('fluent-ffmpeg');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import ffmpeg from 'fluent-ffmpeg';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Configure ffmpeg binary path: try ffmpeg-static first (needed on Render/cloud Linux containers), otherwise fallback to system PATH
 try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ffmpegStatic = require('ffmpeg-static');
   if (ffmpegStatic) {
     ffmpeg.setFfmpegPath(ffmpegStatic);
   }
-} catch (err) {
+} catch (err: any) {
   // Fall back to system ffmpeg binary in PATH
 }
 
@@ -25,7 +23,7 @@ if (!process.env.GEMINI_API_KEY) {
     path.resolve(process.cwd(), 'backend', '.env'),
     path.resolve(__dirname, '.env'),
     path.resolve(__dirname, '..', '.env'),
-    path.resolve(__dirname, '..', 'backend', '.env'),
+    path.resolve(__dirname, '..', '..', '.env'),
   ];
   for (const envPath of candidateEnvPaths) {
     if (fs.existsSync(envPath)) {
@@ -56,7 +54,7 @@ let lastApiCallTimestamp = 0;
  * Enforces rate limit of maximum 5 requests per minute by ensuring
  * at least RATE_LIMIT_DELAY_MS (13 seconds) elapses between API calls.
  */
-async function enforceRateLimit() {
+async function enforceRateLimit(): Promise<void> {
   const now = Date.now();
   const timeSinceLastCall = now - lastApiCallTimestamp;
 
@@ -70,15 +68,11 @@ async function enforceRateLimit() {
 
 /**
  * Extracts frames from a video file at 1 frame every 4 seconds.
- *
- * @param {string} videoPath - Absolute path to video file.
- * @param {string} outputDir - Directory to store extracted JPEG frames.
- * @returns {Promise<string[]>} - Sorted array of absolute frame file paths.
  */
-async function extractFramesFromVideo(videoPath, outputDir) {
+async function extractFramesFromVideo(videoPath: string, outputDir: string): Promise<string[]> {
   console.log(`[KillDetection] Extracting frames from "${path.basename(videoPath)}" (1 frame every ${FRAME_INTERVAL_SECONDS}s)...`);
 
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     ffmpeg(videoPath)
       .outputOptions([
         `-vf`, `fps=1/${FRAME_INTERVAL_SECONDS}`,
@@ -103,8 +97,10 @@ async function extractFramesFromVideo(videoPath, outputDir) {
     .readdirSync(outputDir)
     .filter((file) => /^frame_\d+\.jpg$/i.test(file))
     .sort((a, b) => {
-      const numA = parseInt(a.match(/\d+/)[0], 10);
-      const numB = parseInt(b.match(/\d+/)[0], 10);
+      const matchA = a.match(/\d+/);
+      const matchB = b.match(/\d+/);
+      const numA = matchA ? parseInt(matchA[0], 10) : 0;
+      const numB = matchB ? parseInt(matchB[0], 10) : 0;
       return numA - numB;
     })
     .map((file) => path.join(outputDir, file));
@@ -114,11 +110,8 @@ async function extractFramesFromVideo(videoPath, outputDir) {
 
 /**
  * Parses and sanitizes Gemini JSON response.
- *
- * @param {string} rawText - Response text from Gemini API.
- * @returns {Array<{eliminator: string, eliminated: string}>}
  */
-function parseGeminiResponse(rawText) {
+function parseGeminiResponse(rawText: string): Array<{ eliminator: string; eliminated: string }> {
   if (!rawText || !rawText.trim()) return [];
 
   let cleaned = rawText.trim();
@@ -132,13 +125,12 @@ function parseGeminiResponse(rawText) {
   try {
     const parsed = JSON.parse(cleaned);
 
-    let list = [];
+    let list: any[] = [];
     if (Array.isArray(parsed)) {
       list = parsed;
     } else if (parsed && typeof parsed === 'object') {
-      // In case the model wrapped the array in a property like { "kills": [...] }
       const arrayProp = Object.values(parsed).find((val) => Array.isArray(val));
-      if (arrayProp) list = arrayProp;
+      if (arrayProp && Array.isArray(arrayProp)) list = arrayProp;
     }
 
     return list
@@ -156,16 +148,14 @@ function parseGeminiResponse(rawText) {
 
 /**
  * Sends a batch of images to Gemini API with retry logic.
- * Retries once if the batch fails, and skips if still failing without crashing.
- *
- * @param {any} model - GoogleGenerativeAI model instance.
- * @param {string} prompt - Multimodal prompt text.
- * @param {Array<{inlineData: {data: string, mimeType: string}}>} imageParts - 12 base64 encoded images.
- * @param {number} batchNumber - 1-based batch index.
- * @param {number} totalBatches - Total count of batches.
- * @returns {Promise<Array<{eliminator: string, eliminated: string}>>}
  */
-async function processBatchWithRetry(model, prompt, imageParts, batchNumber, totalBatches) {
+async function processBatchWithRetry(
+  model: any,
+  prompt: string,
+  imageParts: Array<{ inlineData: { data: string; mimeType: string } }>,
+  batchNumber: number,
+  totalBatches: number
+): Promise<Array<{ eliminator: string; eliminated: string }>> {
   const maxAttempts = 2; // Initial attempt + 1 retry
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -184,7 +174,7 @@ async function processBatchWithRetry(model, prompt, imageParts, batchNumber, tot
         `[KillDetection] Batch ${batchNumber} of ${totalBatches} completed: ${batchKills.length} kill(s) found.`
       );
       return batchKills;
-    } catch (err) {
+    } catch (err: any) {
       console.error(
         `[KillDetection] Error processing batch ${batchNumber} on attempt ${attempt}:`,
         err.message || err
@@ -211,6 +201,20 @@ async function processBatchWithRetry(model, prompt, imageParts, batchNumber, tot
   return [];
 }
 
+export interface DetectedKill {
+  eliminator: string;
+  eliminated: string;
+  timestamp: number;
+}
+
+export interface ProgressData {
+  batchIndex: number;
+  currentBatch: number;
+  totalBatches: number;
+  batchKills: Array<{ eliminator: string; eliminated: string }>;
+  allKillsSoFar: DetectedKill[];
+}
+
 /**
  * Main detection pipeline:
  * 1. Validates video file and GEMINI_API_KEY
@@ -219,12 +223,11 @@ async function processBatchWithRetry(model, prompt, imageParts, batchNumber, tot
  * 4. Calls Gemini multimodal vision model (gemini-2.5-flash) with rate limiting
  * 5. Computes timestamps and deduplicates kills within a 10-second window / across consecutive batches
  * 6. Cleans up temporary frames and returns detected kills
- *
- * @param {string} videoFilePath - Path to Free Fire gameplay video file.
- * @param {(progress: {batchIndex: number, currentBatch: number, totalBatches: number, batchKills: Array<{eliminator: string, eliminated: string}>, allKillsSoFar: Array<{eliminator: string, eliminated: string, timestamp: number}>}) => void} [onProgress] - Optional progress callback.
- * @returns {Promise<Array<{eliminator: string, eliminated: string, timestamp: number}>>}
  */
-async function detectKillsFromVideo(videoFilePath, onProgress) {
+export async function detectKillsFromVideo(
+  videoFilePath: string,
+  onProgress?: (progress: ProgressData) => void
+): Promise<DetectedKill[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -256,6 +259,8 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
   console.log(`[KillDetection] Starting detection pipeline for: ${resolvedVideoPath}`);
   console.log(`[KillDetection] Temp frames directory: ${tempDir}`);
 
+  const collectedKills: Array<DetectedKill & { _batchIndex: number; _batchStartFrameIndex: number; _batchFrameCount: number }> = [];
+
   try {
     // 1. Extract frames from video
     const frameFiles = await extractFramesFromVideo(resolvedVideoPath, tempDir);
@@ -280,8 +285,6 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
     const totalBatches = batches.length;
     console.log(`[KillDetection] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each.`);
 
-    const collectedKills = [];
-
     // 3. Process each batch sequentially
     for (const batch of batches) {
       const batchNumber = batch.batchIndex + 1;
@@ -303,8 +306,8 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
         totalBatches
       );
 
-      // Deduplicate identical kills within the same batch (e.g., banner visible across multiple frames)
-      const uniqueBatchKills = [];
+      // Deduplicate identical kills within the same batch
+      const uniqueBatchKills: Array<{ eliminator: string; eliminated: string }> = [];
       for (const kill of rawBatchKills) {
         const isDuplicateInBatch = uniqueBatchKills.some(
           (k) =>
@@ -324,7 +327,6 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
       for (let i = 0; i < uniqueBatchKills.length; i++) {
         const kill = uniqueBatchKills[i];
 
-        // Approximate timestamp: distribute kills evenly across the batch window
         const offsetSeconds =
           uniqueBatchKills.length === 1
             ? Math.round(batchDurationSeconds / 2)
@@ -332,9 +334,6 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
 
         const killTimestamp = batchStartSeconds + offsetSeconds;
 
-        // Deduplication check against previously collected kills:
-        // If the same eliminator+eliminated pair was detected in consecutive batches
-        // or within a 10-second window, skip it to avoid counting the same kill twice.
         let isDuplicate = false;
 
         for (const existing of collectedKills) {
@@ -355,8 +354,7 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
             break;
           }
 
-          // 2. Consecutive batches boundary check:
-          // Kill feed stays on screen ~3-5s and may span across the batch boundary
+          // 2. Consecutive batches boundary check
           if (batch.batchIndex === existing._batchIndex + 1) {
             const prevBatchEnd =
               (existing._batchStartFrameIndex + existing._batchFrameCount - 1) * FRAME_INTERVAL_SECONDS;
@@ -388,7 +386,7 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
 
       if (typeof onProgress === 'function') {
         try {
-          const killsSoFar = collectedKills.map(({ eliminator, eliminated, timestamp }) => ({
+          const killsSoFar: DetectedKill[] = collectedKills.map(({ eliminator, eliminated, timestamp }) => ({
             eliminator,
             eliminated,
             timestamp,
@@ -400,14 +398,14 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
             batchKills: uniqueBatchKills,
             allKillsSoFar: killsSoFar,
           });
-        } catch (callbackErr) {
+        } catch (callbackErr: any) {
           console.warn('[KillDetection] Warning: onProgress callback threw an error:', callbackErr.message || callbackErr);
         }
       }
     }
 
-    // Map to final sanitized output format: { eliminator, eliminated, timestamp }
-    const finalKills = collectedKills.map(({ eliminator, eliminated, timestamp }) => ({
+    // Map to final sanitized output format
+    const finalKills: DetectedKill[] = collectedKills.map(({ eliminator, eliminated, timestamp }) => ({
       eliminator,
       eliminated,
       timestamp,
@@ -417,7 +415,7 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
       `[KillDetection] Detection pipeline complete. Total deduplicated kills detected: ${finalKills.length}`
     );
     return finalKills;
-  } catch (pipelineErr) {
+  } catch (pipelineErr: any) {
     if (collectedKills && collectedKills.length > 0) {
       pipelineErr.partialKills = collectedKills.map(({ eliminator, eliminated, timestamp }) => ({
         eliminator,
@@ -433,13 +431,12 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
         fs.rmSync(tempDir, { recursive: true, force: true });
         console.log(`[KillDetection] Cleaned up temporary frames at: ${tempDir}`);
       }
-    } catch (cleanupErr) {
+    } catch (cleanupErr: any) {
       console.warn(`[KillDetection] Warning: Failed to clean up temp dir "${tempDir}":`, cleanupErr.message);
     }
   }
 }
 
-module.exports = {
+export default {
   detectKillsFromVideo,
-  default: detectKillsFromVideo,
 };
