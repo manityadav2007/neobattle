@@ -12,13 +12,12 @@ import {
   Smartphone,
   ShieldCheck,
   Clock,
-  RefreshCw,
   Copy,
   Check,
-  Sparkles,
   Wallet,
-  ExternalLink,
+  Sparkles,
   ChevronRight,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { dynamicDepositApi, DynamicDepositOrder, formatCurrency } from '@/lib/services';
@@ -65,6 +64,7 @@ function DepositContent() {
     setError('');
     setIsSuccess(false);
     setIsTimerExpired(false);
+    // Always initialize timer at exactly 5 minutes (300 seconds)
     setTimeLeft(FIVE_MINUTES_SECONDS);
     setOrder(null);
 
@@ -73,13 +73,8 @@ function DepositContent() {
       if (res.success && res.data) {
         setOrder(res.data);
         setCreditedAmount(res.data.requestedAmount);
-
-        // Calculate remaining seconds if timerExpiresAt is returned
-        if (res.data.timerExpiresAt) {
-          const diffMs = new Date(res.data.timerExpiresAt).getTime() - Date.now();
-          const sec = Math.max(0, Math.floor(diffMs / 1000));
-          setTimeLeft(sec > 0 ? sec : FIVE_MINUTES_SECONDS);
-        }
+        // Start countdown from exactly 300 seconds
+        setTimeLeft(FIVE_MINUTES_SECONDS);
       } else {
         setError(res.message || 'Unable to generate payment QR. Please try again.');
       }
@@ -97,7 +92,7 @@ function DepositContent() {
     }
   }, [initialAmount]);
 
-  // 5-minute Countdown Interval
+  // 5-minute Countdown Interval: counts down by 1 second every 1000ms
   useEffect(() => {
     if (!order || isSuccess) return;
 
@@ -105,7 +100,7 @@ function DepositContent() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           setIsTimerExpired(true);
-          clearInterval(countdownIntervalRef.current!);
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
           return 0;
         }
         return prev - 1;
@@ -138,7 +133,7 @@ function DepositContent() {
           }
         }
       } catch {
-        // Silently continue polling
+        // Silently continue polling on transient network issues
       }
     };
 
@@ -168,27 +163,27 @@ function DepositContent() {
   if (authLoading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-fire-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="min-h-[85vh] flex flex-col justify-center items-center py-10 px-4 sm:px-6">
-      <div className="w-full max-w-xl mx-auto">
-        {/* Top Navigation */}
-        <div className="flex items-center justify-between mb-6">
+      <div className="w-full max-w-lg mx-auto">
+        {/* Single, Clean Navigation Link at the Top */}
+        <div className="mb-6 flex items-center justify-between">
           <Link
             href="/wallet"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition-colors group"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors group"
           >
-            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-            Back to Wallet
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+            <span>Cancel & Return to Wallet</span>
           </Link>
 
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Automated UPI Verification
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            Instant Verification
           </div>
         </div>
 
@@ -202,42 +197,34 @@ function DepositContent() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="glass-card rounded-3xl p-8 sm:p-10 border border-emerald-500/30 text-center shadow-2xl relative overflow-hidden"
+              className="glass-card rounded-2xl p-8 sm:p-10 border border-emerald-500/30 text-center shadow-2xl relative overflow-hidden fire-glow"
             >
-              <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-fire-500/10 rounded-full blur-3xl pointer-events-none" />
-
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', damping: 14, stiffness: 200, delay: 0.1 }}
-                className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-black shadow-xl shadow-emerald-500/25"
-              >
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-black shadow-xl shadow-emerald-500/20">
                 <Check className="w-10 h-10 stroke-[3]" />
-              </motion.div>
+              </div>
 
               <h1 className="text-3xl font-display font-black text-white mb-2 tracking-tight">
                 Payment Verified! 🎉
               </h1>
-              <p className="text-emerald-400 font-semibold text-lg mb-4">
+              <p className="text-emerald-400 font-bold text-xl mb-4">
                 +{formatCurrency(creditedAmount)} added to your wallet
               </p>
 
               {newBalance !== null && (
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 mb-6 text-sm">
                   <Wallet className="w-4 h-4 text-zinc-400" />
-                  <span className="text-zinc-400">New Balance:</span>
+                  <span className="text-zinc-400">Available Balance:</span>
                   <span className="font-bold text-white">{formatCurrency(newBalance)}</span>
                 </div>
               )}
 
-              <p className="text-zinc-400 text-xs max-w-sm mx-auto mb-8">
-                Your deposit was instantly verified and credited. You can now use your balance to enter tournaments.
+              <p className="text-zinc-400 text-xs max-w-sm mx-auto mb-8 leading-relaxed">
+                Your funds have been credited and are ready to use for tournament registrations.
               </p>
 
               <button
                 onClick={() => router.push('/wallet')}
-                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-black font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]"
+                className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
               >
                 Return to Wallet
               </button>
@@ -251,12 +238,12 @@ function DepositContent() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}
-              className="glass-card rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl relative"
+              className="glass-card rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl fire-glow relative"
             >
-              {/* Header Details */}
+              {/* Header Amount Display */}
               <div className="text-center mb-6">
-                <p className="text-xs uppercase tracking-widest text-zinc-400 font-bold mb-1">
-                  UPI Instant Deposit
+                <p className="text-xs uppercase tracking-widest text-zinc-400 font-bold mb-1.5">
+                  UPI Deposit
                 </p>
                 <h1 className="text-3xl sm:text-4xl font-display font-black text-white tracking-tight">
                   Scan to Pay{' '}
@@ -264,37 +251,50 @@ function DepositContent() {
                     {formatCurrency(order.requestedAmount)}
                   </span>
                 </h1>
-                <p className="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
-                  Scan using Google Pay, PhonePe, Paytm, or BHIM. Pay the exact requested amount.
+                <p className="text-xs text-zinc-400 mt-1.5 max-w-xs mx-auto">
+                  Scan the QR code using any UPI app to deposit instantly.
                 </p>
               </div>
 
-              {/* QR Code Container */}
-              <div className="flex flex-col items-center justify-center my-6">
-                <div className="relative group">
-                  <div className="absolute -inset-2 bg-gradient-to-r from-fire-500/30 to-amber-500/30 rounded-3xl blur-xl opacity-75 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative p-4 sm:p-5 bg-white rounded-3xl shadow-2xl border-4 border-white/10 flex items-center justify-center">
-                    <img
-                      src={order.qrCodeDataUrl}
-                      alt="UPI QR Code"
-                      className="w-56 h-56 sm:w-64 sm:h-64 object-contain rounded-xl block select-none"
-                    />
+              {/* Seamless QR Code Display Card */}
+              <div className="flex flex-col items-center justify-center my-4">
+                <div className="p-1 rounded-2xl bg-gradient-to-br from-blue-500/30 via-white/10 to-orange-500/30 shadow-2xl">
+                  <div className="bg-[#0f1017] rounded-xl p-4 flex flex-col items-center border border-white/5">
+                    {/* Badge inside QR card */}
+                    <div className="mb-3 px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-1.5 text-[10px] font-semibold text-zinc-300">
+                      <Sparkles className="w-3 h-3 text-blue-400" />
+                      <span>Any UPI App Accepted</span>
+                    </div>
+
+                    {/* QR Code itself */}
+                    <div className="p-3 bg-white rounded-xl shadow-inner flex items-center justify-center">
+                      <img
+                        src={order.qrCodeDataUrl}
+                        alt="UPI QR Code"
+                        className="w-56 h-56 sm:w-60 sm:h-60 object-contain rounded-lg block select-none"
+                      />
+                    </div>
+
+                    {/* Supported UPI Providers */}
+                    <p className="mt-3 text-[11px] font-medium text-zinc-400 tracking-wide">
+                      GPay • PhonePe • Paytm • BHIM • Cred
+                    </p>
                   </div>
                 </div>
 
-                {/* Mobile Direct Pay Button */}
+                {/* Mobile Direct Pay Buttons */}
                 <div className="w-full max-w-sm mt-5 space-y-2">
                   <a
                     href={order.upiDeepLink}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-fire-500 to-amber-500 hover:from-fire-600 hover:to-amber-600 text-white font-bold text-xs tracking-wide shadow-lg shadow-fire-500/25 transition-all active:scale-[0.98]"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl btn-fire text-white font-bold text-xs tracking-wide shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
                   >
                     <Smartphone className="w-4 h-4" />
-                    Pay via UPI App (GPay / PhonePe / Paytm)
+                    Pay via UPI App (Mobile)
                   </a>
 
                   <button
                     onClick={handleCopyDeepLink}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-medium transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold border border-white/5 transition-colors"
                   >
                     {copiedLink ? (
                       <>
@@ -311,29 +311,29 @@ function DepositContent() {
                 </div>
               </div>
 
-              {/* Polished 5-Minute Timer & Progress Bar */}
-              <div className="mt-6 mb-4 p-4 rounded-2xl bg-white/[0.03] border border-white/5">
+              {/* Polished 5-Minute Timer & Fluid Progress Bar */}
+              <div className="mt-6 p-4 rounded-xl bg-white/[0.02] border border-white/5">
                 <div className="flex items-center justify-between mb-2 text-xs">
                   <span className="text-zinc-400 flex items-center gap-1.5 font-medium">
-                    <Clock className="w-4 h-4 text-fire-400" />
-                    QR Code Expiry
+                    <Clock className="w-3.5 h-3.5 text-blue-400" />
+                    Time Remaining
                   </span>
                   <span
-                    className={`font-mono font-bold text-sm ${
-                      timeLeft <= 60 ? 'text-red-400 animate-pulse' : 'text-white'
+                    className={`font-mono font-bold text-sm tracking-wider ${
+                      timeLeft <= 60 ? 'text-orange-400 animate-pulse' : 'text-white'
                     }`}
                   >
                     {formattedTime}
                   </span>
                 </div>
 
-                {/* Animated Linear Progress Bar */}
+                {/* Progress Bar with Fluid CSS Transition */}
                 <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden relative">
-                  <motion.div
-                    className={`h-full rounded-full transition-all duration-1000 ${
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${
                       timeLeft <= 60
-                        ? 'bg-gradient-to-r from-red-500 to-amber-500'
-                        : 'bg-gradient-to-r from-fire-500 to-amber-400'
+                        ? 'bg-gradient-to-r from-orange-500 to-red-500'
+                        : 'bg-gradient-to-r from-blue-500 to-orange-500'
                     }`}
                     style={{ width: `${progressPercent}%` }}
                   />
@@ -343,48 +343,54 @@ function DepositContent() {
               {/* Waiting for verification indicator OR Late Match Transition */}
               <div className="mt-4 pt-4 border-t border-white/5">
                 {!isTimerExpired ? (
-                  <div className="flex items-center justify-center gap-3 py-2 text-xs text-zinc-300">
-                    <div className="relative flex items-center justify-center">
-                      <span className="w-3 h-3 rounded-full bg-amber-400/30 animate-ping absolute" />
-                      <Loader2 className="w-4 h-4 text-amber-400 animate-spin relative" />
+                  /* Premium Stripe/Razorpay style verification indicator */
+                  <div className="flex flex-col items-center justify-center py-2 px-1">
+                    <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 shadow-inner">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+                      </span>
+                      <span className="text-xs font-semibold text-zinc-200 tracking-wide flex items-center">
+                        Verifying your payment
+                        <span className="inline-flex overflow-hidden ml-1">
+                          <span className="animate-pulse font-bold text-blue-400">...</span>
+                        </span>
+                      </span>
                     </div>
-                    <span>
-                      Waiting for payment verification...{' '}
-                      <strong className="text-zinc-400 font-normal">Listening for bank SMS</strong>
-                    </span>
+                    <p className="text-[11px] text-zinc-400 mt-2 text-center">
+                      Please complete the transfer in your UPI app. This page will update automatically once confirmed.
+                    </p>
                   </div>
                 ) : (
                   /* Requirement 5: Timer Expired / Late Match State */
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-3">
+                  <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/25 space-y-3">
                     <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      <AlertCircle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-xs font-semibold text-amber-200 leading-relaxed">
+                        <h4 className="text-xs font-bold text-orange-300 mb-1">
+                          Payment Taking Longer Than Usual
+                        </h4>
+                        <p className="text-xs text-orange-200/90 leading-relaxed">
                           Taking a bit longer than usual. If you&apos;ve already paid, please don&apos;t pay again — it will be verified automatically. If it doesn&apos;t reflect within 15 minutes, contact support with your UTR.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-amber-500/10 text-xs">
-                      <div className="flex items-center gap-2 text-amber-400/90 text-[11px]">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                        Still checking for your bank credit in the background...
-                      </div>
-                      <Link
-                        href="/wallet"
-                        className="text-xs font-semibold text-zinc-300 hover:text-white underline"
-                      >
-                        Return to Wallet
-                      </Link>
+                    <div className="flex items-center gap-2 pt-2 border-t border-orange-500/15 text-xs text-orange-400 font-medium">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500" />
+                      </span>
+                      <span>Still verifying your transfer in the background...</span>
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Security note */}
-              <div className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400/80" />
-                <span>Protected by NeoBattle automated UPI bank credit verification</span>
+              <div className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-zinc-400">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-400/80" />
+                <span>Instant automated verification • 24/7 wallet credit</span>
               </div>
             </motion.div>
           ) : (
@@ -396,17 +402,17 @@ function DepositContent() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}
-              className="glass-card rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl"
+              className="glass-card rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl fire-glow"
             >
               <div className="text-center mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-fire-500/10 border border-fire-500/20 text-fire-400 flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto mb-3">
                   <Wallet className="w-6 h-6" />
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">
-                  Add Tournament Balance
+                  Add Wallet Balance
                 </h1>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Enter the amount you wish to deposit to generate your dynamic UPI QR code.
+                  Choose or enter the amount you want to deposit to generate your UPI QR code.
                 </p>
               </div>
 
@@ -436,7 +442,7 @@ function DepositContent() {
                         setError('');
                       }}
                       placeholder="e.g. 100"
-                      className="w-full pl-9 pr-4 py-3.5 rounded-2xl bg-white/5 border border-white/10 text-white font-display font-bold text-xl outline-none focus:border-fire-500/50 transition-colors"
+                      className="input-field w-full pl-9 pr-4 py-3.5 rounded-xl text-white font-display font-bold text-xl"
                       autoFocus
                     />
                   </div>
@@ -458,7 +464,7 @@ function DepositContent() {
                         }}
                         className={`py-2 px-1 rounded-xl text-xs font-bold transition-all ${
                           inputAmount === String(amt)
-                            ? 'bg-gradient-to-r from-fire-500 to-amber-500 text-white shadow-md shadow-fire-500/20 scale-[1.02]'
+                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-sm scale-[1.02]'
                             : 'bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/5'
                         }`}
                       >
@@ -479,7 +485,7 @@ function DepositContent() {
                     }
                   }}
                   disabled={loading || !inputAmount || parseFloat(inputAmount) <= 0}
-                  className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-fire-500 to-amber-500 hover:from-fire-600 hover:to-amber-600 text-white font-bold text-sm tracking-wide shadow-xl shadow-fire-500/25 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
+                  className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm tracking-wide shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
                 >
                   {loading ? (
                     <>
@@ -494,9 +500,9 @@ function DepositContent() {
                 </button>
               </div>
 
-              <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] text-zinc-500">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Zero convenience fees • Instant 24/7 wallet credit</span>
+              <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] text-zinc-400">
+                <ShieldCheck className="w-4 h-4 text-blue-400" />
+                <span>Zero fees • Instant automated balance credit</span>
               </div>
             </motion.div>
           )}
@@ -511,7 +517,7 @@ export default function DepositPage() {
     <Suspense
       fallback={
         <div className="min-h-[70vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 text-fire-500 animate-spin" />
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
         </div>
       }
     >
