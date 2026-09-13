@@ -367,16 +367,16 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     : true;
   const mapTheme = getMapTheme(tournament.mapName);
   const isEnded = tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED' || tournament.status === 'PAID';
-  const effectiveStatus = getEffectiveStatus(tournament);
+  const effectiveStatus = tournament ? getEffectiveStatus(tournament) : 'Unknown';
   const now = Date.now();
-  const startTimeMs = tournament.startTime ? new Date(tournament.startTime).getTime() : 0;
-  const registrationEndMs = tournament.registrationEnd ? new Date(tournament.registrationEnd).getTime() : 0;
+  const startTimeMs = tournament?.startTime ? new Date(tournament.startTime).getTime() : 0;
+  const registrationEndMs = tournament?.registrationEnd ? new Date(tournament.registrationEnd).getTime() : 0;
   const startTimeReached = startTimeMs > 0 && startTimeMs <= now;
   const registrationEndReached = registrationEndMs > 0 && registrationEndMs <= now;
   const oneHourPastStart = startTimeMs > 0 && now >= startTimeMs + TOURNAMENT_PLAY_GRACE_MS;
   const isCompletedState = isEnded || effectiveStatus === 'Ended' || oneHourPastStart;
-  const isLiveAndPlaying = !isCompletedState && (tournament.status === 'ACTIVE' || effectiveStatus === 'Playing' || effectiveStatus === 'Live' || startTimeReached);
-  const isRegistrationClosed = !isCompletedState && !isLiveAndPlaying && (isSlotsFull || registrationEndReached || tournament.status !== 'REGISTRATION');
+  const isLiveAndPlaying = !isCompletedState && (tournament?.status === 'ACTIVE' || effectiveStatus === 'Playing' || effectiveStatus === 'Live' || startTimeReached);
+  const isRegistrationClosed = !isCompletedState && !isLiveAndPlaying && (isSlotsFull || registrationEndReached || tournament?.status !== 'REGISTRATION');
   const canEndTournament = !isEnded && (isAdmin || isSuperAdmin || isHostCreator);
 
   console.log('[TournamentView] status:', tournament.status, 'effectiveStatus:', effectiveStatus, 'isSlotsFull:', isSlotsFull, 'isCompletedState:', isCompletedState, 'isLiveAndPlaying:', isLiveAndPlaying, 'isRegistrationClosed:', isRegistrationClosed);
@@ -570,14 +570,14 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   {
                     icon: Clock,
                     label: 'Start Time',
-                    value: formatDate(tournament.startTime),
+                    value: formatDate(tournament?.startTime),
                     iconBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
                     gradientClass: 'bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 bg-clip-text text-transparent font-semibold text-sm',
                   },
                   {
                     icon: Clock,
                     label: 'Registration Deadline',
-                    value: formatDate(tournament.registrationEnd),
+                    value: formatDate(tournament?.registrationEnd),
                     iconBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
                     gradientClass: 'bg-gradient-to-r from-rose-300 via-orange-300 to-amber-400 bg-clip-text text-transparent font-semibold text-sm',
                   },
@@ -709,7 +709,14 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                                 </span>
                               </div>
                               <p className="text-[11px] text-zinc-400">
-                                {myTeam.members?.length || 0} Members Total • Need {requiredSlots} for {tournament.format}
+                                {(() => {
+                                  const memberCount = myTeam.members?.length || 0;
+                                  const neededMore = Math.max(0, requiredSlots - memberCount);
+                                  const formatName = isDuo ? 'Duo' : isSquad ? 'Squad' : (tournament?.format || 'Team');
+                                  return `${memberCount}/${requiredSlots} members • ${
+                                    neededMore > 0 ? `Need ${neededMore} more for ${formatName}` : `Roster ready for ${formatName}`
+                                  }`;
+                                })()}
                               </p>
                             </div>
                           </div>
@@ -849,9 +856,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
                     <div className="space-y-3">
                       {/* Slot #1: Captain (You) */}
-                      <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between gap-3">
+                      <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
                             Captain
                           </span>
                           <span className="text-sm font-semibold text-white truncate">{user?.username}</span>
@@ -872,30 +879,34 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                         const status = teammateStatus[i];
                         return (
                           <div key={i} className="space-y-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono font-bold text-zinc-500 w-16 shrink-0">Slot #{i + 2}</span>
-                              <input
-                                type="text"
-                                value={teammateUids[i]}
-                                onChange={(e) => updateTeammateUid(i, e.target.value)}
-                                onBlur={() => checkTeammateUid(i, teammateUids[i])}
-                                placeholder={`Teammate ${i + 1} Free Fire ID`}
-                                className={`flex-1 px-3.5 py-2.5 rounded-xl bg-black/40 border text-white text-sm font-mono focus:outline-none transition-all ${
-                                  status?.valid === true
-                                    ? 'border-emerald-500/50 focus:border-emerald-400'
-                                    : status?.valid === false
-                                    ? 'border-rose-500/50 focus:border-rose-400'
-                                    : 'border-white/10 focus:border-fire-500/50'
-                                }`}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => checkTeammateUid(i, teammateUids[i])}
-                                disabled={status?.loading || !teammateUids[i]?.trim()}
-                                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold border border-white/10 disabled:opacity-40 transition-all shrink-0"
-                              >
-                                {status?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
-                              </button>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                              <div className="flex items-center justify-between sm:justify-start">
+                                <span className="text-xs font-mono font-bold text-zinc-500 sm:w-16 shrink-0">Slot #{i + 2}</span>
+                              </div>
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <input
+                                  type="text"
+                                  value={teammateUids[i]}
+                                  onChange={(e) => updateTeammateUid(i, e.target.value)}
+                                  onBlur={() => checkTeammateUid(i, teammateUids[i])}
+                                  placeholder={`Teammate ${i + 1} Free Fire ID`}
+                                  className={`flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/40 border text-white text-sm font-mono focus:outline-none transition-all ${
+                                    status?.valid === true
+                                      ? 'border-emerald-500/50 focus:border-emerald-400'
+                                      : status?.valid === false
+                                      ? 'border-rose-500/50 focus:border-rose-400'
+                                      : 'border-white/10 focus:border-fire-500/50'
+                                  }`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => checkTeammateUid(i, teammateUids[i])}
+                                  disabled={status?.loading || !teammateUids[i]?.trim()}
+                                  className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold border border-white/10 disabled:opacity-40 transition-all shrink-0 active:scale-95"
+                                >
+                                  {status?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
+                                </button>
+                              </div>
                             </div>
 
                             {/* Status Feedback */}

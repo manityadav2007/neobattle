@@ -27,11 +27,11 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
   const prizeSecond = tournament.prizeSecond != null ? (typeof tournament.prizeSecond === 'string' ? parseFloat(tournament.prizeSecond) : tournament.prizeSecond) : null;
   const prizeThird = tournament.prizeThird != null ? (typeof tournament.prizeThird === 'string' ? parseFloat(tournament.prizeThird) : tournament.prizeThird) : null;
   const hasBreakdown = prizeFirst != null && prizeFirst > 0;
-  const theme = getMapTheme(tournament.mapName);
+  const theme = getMapTheme(tournament?.mapName);
   const effectiveStatus = getEffectiveStatus(tournament);
   const ended = isTournamentEnded(tournament);
   const isFull = spotsLeft <= 0;
-  const countdown = ended ? 'Ended' : effectiveStatus === 'Playing' ? 'Playing now' : getCountdown(tournament.startTime);
+  const countdown = ended ? 'Ended' : effectiveStatus === 'Playing' ? 'Playing now' : getCountdown(tournament?.startTime);
   const isUrgent = spotsLeft > 0 && spotsLeft <= 5 && !ended;
 
   return (

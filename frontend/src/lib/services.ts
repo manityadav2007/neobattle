@@ -893,7 +893,8 @@ export function getMapTheme(mapName: string | null): { gradient: string; accent:
   };
 }
 
-export function getCountdown(date: string): string {
+export function getCountdown(date?: string | Date | null): string {
+  if (!date) return '—';
   const diff = new Date(date).getTime() - Date.now();
   if (diff <= 0) return 'Started';
   const d = Math.floor(diff / 86400000);
@@ -940,14 +941,15 @@ export const TOURNAMENT_PLAY_GRACE_MS = 60 * 60 * 1000;
  * - Past registrationEnd but before startTime → 'Registration Closed'
  * - Capacity full (entryCount >= maxParticipants) and still in registration phase → 'Slots Full'
  */
-export function getEffectiveStatus(t: {
-  status: string;
+export function getEffectiveStatus(t?: {
+  status?: string;
   startTime?: string | Date | null;
   endTime?: string | Date | null;
   registrationEnd?: string | Date | null;
   maxParticipants?: number;
   _count?: { entries: number };
-}): string {
+} | null): string {
+  if (!t || !t.status) return 'Unknown';
   if (t.status === 'COMPLETED' || t.status === 'PAID') return 'Ended';
   if (t.status === 'CANCELLED') return 'Cancelled';
   if (t.status === 'PENDING_PAYOUT') return 'Awaiting Payout';
@@ -987,11 +989,12 @@ export function getEffectiveStatus(t: {
   return t.status;
 }
 
-export function isTournamentEnded(t: {
-  status: string;
+export function isTournamentEnded(t?: {
+  status?: string;
   startTime?: string | Date | null;
   endTime?: string | Date | null;
-}): boolean {
+} | null): boolean {
+  if (!t) return false;
   return getEffectiveStatus(t) === 'Ended';
 }
 
