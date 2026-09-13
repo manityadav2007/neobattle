@@ -60,9 +60,6 @@ export default function AdminLinkedPlayersPage() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex items-center justify-between mb-8">
           <div>
-            <Link href="/admin" className="flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-3 transition-colors">
-              <ArrowLeft className="w-4 h-4" /> Admin Panel
-            </Link>
             <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
               <Shield className="w-8 h-8 text-fire-400" />
               Linked Players

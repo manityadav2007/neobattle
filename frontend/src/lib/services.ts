@@ -811,6 +811,33 @@ export interface UnmatchedPaymentRecord {
   } | null;
 }
 
+export interface AutoDepositRecord {
+  id: string;
+  userId: string;
+  amount: number | string;
+  requestedAmount: number | string | null;
+  actualQrAmount: number | string | null;
+  description: string | null;
+  reference: string | null;
+  status: string;
+  createdAt: string;
+  metadata?: any;
+  user: {
+    id: string;
+    uid: string;
+    username: string;
+    email: string;
+    freeFireId?: string | null;
+  };
+}
+
+export interface AutoDepositSummary {
+  todayCount: number;
+  todayTotalAmount: number;
+  allTimeCount: number;
+  allTimeTotalAmount: number;
+}
+
 export const dynamicDepositApi = {
   initiate: async (amount: number): Promise<{ success: boolean; data: DynamicDepositOrder; message?: string }> => {
     const res = await api.post('/payment/deposit/initiate', { amount });
@@ -827,6 +854,10 @@ export const dynamicDepositApi = {
   },
   creditUnmatched: async (id: string, targetUserId: string, notes?: string): Promise<{ success: boolean; data: any; message: string }> => {
     const res = await api.post(`/payment/unmatched/${id}/credit`, { targetUserId, notes });
+    return res.data;
+  },
+  listAutoDeposits: async (): Promise<{ success: boolean; data: { deposits: AutoDepositRecord[]; summary: AutoDepositSummary } }> => {
+    const res = await api.get('/payment/auto-deposits');
     return res.data;
   },
 };

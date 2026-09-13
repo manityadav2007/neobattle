@@ -292,3 +292,55 @@ export async function creditUnmatchedPayment(req: AuthenticatedRequest, res: Res
     });
   }
 }
+
+export async function listAutoDeposits(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const deposits = await prisma.transaction.findMany({
+      where: {
+        type: TransactionType.DEPOSIT,
+        status: TransactionStatus.COMPLETED,
+        actualQrAmount: { not: null },
+      },
+      include: {
+        user: {
+          select: { id: true, uid: true, username: true, email: true, freeFireId: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+
+    let todayCount = 0;
+    let todayTotalAmount = 0;
+    let allTimeCount = deposits.length;
+    let allTimeTotalAmount = 0;
+
+    for (const d of deposits) {
+      const amt = Number(d.requestedAmount || d.amount);
+      allTimeTotalAmount += amt;
+      if (new Date(d.createdAt) >= todayStart) {
+        todayCount++;
+        todayTotalAmount += amt;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        deposits,
+        summary: {
+          todayCount,
+          todayTotalAmount,
+          allTimeCount,
+          allTimeTotalAmount,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('[Admin] listAutoDeposits error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to list auto deposits' });
+  }
+}

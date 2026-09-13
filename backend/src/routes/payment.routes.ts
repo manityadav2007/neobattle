@@ -9,9 +9,10 @@ const router = Router();
 router.post('/deposit/initiate', authenticate, paymentController.initiateDynamicDeposit);
 router.get('/deposit/status/:transactionId', authenticate, paymentController.getDepositOrderStatus);
 
-// Admin Unmatched Payments Management
+// Admin Unmatched & Auto Deposits Management
 router.get('/unmatched', authenticate, adminCheck, paymentController.listUnmatchedPayments);
 router.post('/unmatched/:id/credit', authenticate, adminCheck, paymentController.creditUnmatchedPayment);
+router.get('/auto-deposits', authenticate, adminCheck, paymentController.listAutoDeposits);
 
 // Legacy Manual UPI Payments (preserved for existing tournament entry or pending review)
 router.post('/upi/create', authenticate, paymentController.createUpiPayment);

@@ -1,17 +1,18 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Shield, CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw,
-  MessageSquare, Search, UserCheck, ChevronDown, ChevronUp, X, CreditCard, Eye
+  Shield, CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw,
+  MessageSquare, Search, UserCheck, ChevronDown, ChevronUp, X, CreditCard, Eye,
+  Zap, TrendingUp, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { api, getErrorMessage } from '@/lib/api';
 import {
-  formatCurrency, formatDate, dynamicDepositApi, UnmatchedPaymentRecord, userApi
+  formatCurrency, formatDate, dynamicDepositApi, UnmatchedPaymentRecord, userApi,
+  AutoDepositRecord, AutoDepositSummary
 } from '@/lib/services';
 
 interface UpiPayment {
@@ -41,11 +42,13 @@ export default function AdminPaymentsPage() {
   const { user, loading, isSuperAdmin } = useAuth();
   const [payments, setPayments] = useState<UpiPayment[]>([]);
   const [unmatchedPayments, setUnmatchedPayments] = useState<UnmatchedPaymentRecord[]>([]);
+  const [autoDeposits, setAutoDeposits] = useState<AutoDepositRecord[]>([]);
+  const [autoSummary, setAutoSummary] = useState<AutoDepositSummary | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'UNMATCHED' | ''>('PENDING');
+  const [filter, setFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'UNMATCHED' | 'AUTO' | ''>('PENDING');
 
   // Credit Unmatched Modal state
   const [selectedPaymentForCredit, setSelectedPaymentForCredit] = useState<UnmatchedPaymentRecord | null>(null);
@@ -70,9 +73,22 @@ export default function AdminPaymentsPage() {
     setLoadingData(true);
     setError('');
     try {
+      // Always fetch auto deposits and summary metrics
+      try {
+        const autoRes = await dynamicDepositApi.listAutoDeposits();
+        if (autoRes.success && autoRes.data) {
+          setAutoDeposits(autoRes.data.deposits || []);
+          setAutoSummary(autoRes.data.summary || null);
+        }
+      } catch (autoErr) {
+        console.warn('Failed to load auto deposits data:', autoErr);
+      }
+
       if (filter === 'UNMATCHED') {
         const res = await dynamicDepositApi.listUnmatched();
         setUnmatchedPayments(res.data || []);
+      } else if (filter === 'AUTO') {
+        // Handled by listAutoDeposits
       } else {
         const endpoint = filter ? `/payment/all?status=${filter}` : '/payment/pending';
         const res = await api.get(endpoint);
@@ -184,22 +200,15 @@ export default function AdminPaymentsPage() {
     { label: 'Pending', value: 'PENDING' as const },
     { label: 'Approved', value: 'APPROVED' as const },
     { label: 'Rejected', value: 'REJECTED' as const },
+    { label: 'Completed (Auto)', value: 'AUTO' as const },
     { label: 'Unmatched (SMS)', value: 'UNMATCHED' as const },
   ];
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Link
-                href="/admin"
-                className="text-xs font-semibold text-zinc-400 hover:text-white inline-flex items-center gap-1 transition-colors"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" /> Back to Admin
-              </Link>
-            </div>
             <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
               <Shield className="w-8 h-8 text-fire-400" />
               UPI Payments & Deposits
@@ -212,6 +221,60 @@ export default function AdminPaymentsPage() {
           >
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
+        </div>
+
+        {/* Daily Summary Stats Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="glass-card rounded-2xl p-5 border border-white/10 relative overflow-hidden bg-gradient-to-br from-emerald-500/5 to-transparent">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-zinc-400">Auto Deposits Today</p>
+                <p className="text-2xl font-bold font-display text-white mt-1">
+                  {autoSummary ? autoSummary.todayCount : 0}
+                </p>
+                <p className="text-[11px] text-emerald-400/80 mt-1 flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> Webhook verified
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                <Zap className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-card rounded-2xl p-5 border border-white/10 relative overflow-hidden bg-gradient-to-br from-cyan-500/5 to-transparent">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-zinc-400">Auto Deposited Today</p>
+                <p className="text-2xl font-bold font-display text-cyan-400 mt-1">
+                  {formatCurrency(autoSummary ? autoSummary.todayTotalAmount : 0)}
+                </p>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  Instant balance credits
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
+                <TrendingUp className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-card rounded-2xl p-5 border border-white/10 relative overflow-hidden bg-gradient-to-br from-purple-500/5 to-transparent">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-zinc-400">All-Time Auto Volume</p>
+                <p className="text-2xl font-bold font-display text-purple-400 mt-1">
+                  {formatCurrency(autoSummary ? autoSummary.allTimeTotalAmount : 0)}
+                </p>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  {autoSummary ? autoSummary.allTimeCount : 0} deposits total
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {error && (
@@ -245,6 +308,8 @@ export default function AdminPaymentsPage() {
                 filter === t.value
                   ? t.value === 'UNMATCHED'
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                    : t.value === 'AUTO'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
                     : 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-sm'
                   : 'bg-white/5 text-zinc-400 hover:text-white border border-white/5'
               }`}
@@ -255,14 +320,135 @@ export default function AdminPaymentsPage() {
                   {pendingUnmatched.length}
                 </span>
               )}
+              {t.value === 'AUTO' && autoSummary && autoSummary.todayCount > 0 && filter !== 'AUTO' && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  {autoSummary.todayCount} today
+                </span>
+              )}
             </button>
           ))}
         </div>
 
         {/* ======================================================== */}
-        {/* UNMATCHED PAYMENTS TAB                                   */}
+        {/* COMPLETED (AUTO) PAYMENTS TAB                            */}
         {/* ======================================================== */}
-        {filter === 'UNMATCHED' ? (
+        {filter === 'AUTO' ? (
+          <div className="glass-card rounded-2xl p-6 border border-white/10 shadow-xl">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/5">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-emerald-400" />
+                  Completed Automated Deposits ({autoDeposits.length})
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Deposits automatically verified by the SMS webhook engine with dynamic decimal offsets and instant wallet credit.
+                </p>
+              </div>
+            </div>
+
+            {loadingData ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
+              </div>
+            ) : autoDeposits.length === 0 ? (
+              <div className="text-center py-10">
+                <AlertCircle className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
+                <p className="text-zinc-300 font-medium text-sm">No automated deposits yet</p>
+                <p className="text-zinc-500 text-xs mt-1">When users pay via dynamic QR and SMS is received, they will appear here.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-zinc-400 border-b border-white/5 text-xs uppercase tracking-wider">
+                      <th className="text-left py-3 pr-4 font-semibold">User</th>
+                      <th className="text-left py-3 pr-4 font-semibold">Credited</th>
+                      <th className="text-left py-3 pr-4 font-semibold">QR Paid</th>
+                      <th className="text-left py-3 pr-4 font-semibold">UTR / Reference</th>
+                      <th className="text-left py-3 pr-4 font-semibold">Date &amp; Time</th>
+                      <th className="text-left py-3 pr-4 font-semibold">Matched SMS</th>
+                      <th className="text-right py-3 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {autoDeposits.map((d) => {
+                      const creditedAmt = Number(d.requestedAmount || d.amount);
+                      const actualPaid = d.actualQrAmount ? Number(d.actualQrAmount) : creditedAmt;
+                      const rawSms = d.metadata?.rawSms || d.description || '';
+                      const sender = d.metadata?.sender || 'Bank / PhonePe';
+                      const utr = d.reference || d.metadata?.utrNumber || 'N/A';
+
+                      return (
+                        <tr key={d.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3.5 pr-4 whitespace-nowrap">
+                            <div>
+                              <span className="font-semibold text-white">@{d.user?.username || 'Unknown'}</span>
+                              <div className="text-zinc-500 text-[11px] font-mono">UID: {d.user?.uid || d.userId}</div>
+                              {d.user?.email && (
+                                <div className="text-zinc-500 text-[10px]">{d.user.email}</div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 pr-4 text-emerald-400 font-bold text-base whitespace-nowrap">
+                            {formatCurrency(creditedAmt)}
+                          </td>
+                          <td className="py-3.5 pr-4 whitespace-nowrap">
+                            <span className="font-mono text-xs px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-zinc-300">
+                              ₹{actualPaid.toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="py-3.5 pr-4 font-mono text-xs text-zinc-300 whitespace-nowrap">
+                            {utr}
+                          </td>
+                          <td className="py-3.5 pr-4 text-zinc-400 text-xs whitespace-nowrap">
+                            {formatDate(d.createdAt)}
+                          </td>
+                          <td className="py-3.5 pr-4 text-zinc-400 text-xs max-w-xs">
+                            {rawSms ? (
+                              <div className="flex items-center gap-2">
+                                <span className="truncate block font-mono text-zinc-400 max-w-[160px]">
+                                  {rawSms}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    setViewSmsPayment({
+                                      id: d.id,
+                                      amount: actualPaid,
+                                      sender,
+                                      rawMessage: rawSms,
+                                      utrNumber: utr !== 'N/A' ? utr : null,
+                                      receivedAt: d.createdAt,
+                                      status: 'RESOLVED',
+                                      resolvedAt: d.createdAt,
+                                      resolvedBy: 'SYSTEM',
+                                      resolvedUserId: d.userId,
+                                      notes: 'Auto-matched via SMS webhook',
+                                    })
+                                  }
+                                  className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors shrink-0"
+                                  title="View full SMS"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-zinc-600 italic">No SMS payload</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 text-right whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                              <Zap className="w-3 h-3" /> Auto Matched
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : filter === 'UNMATCHED' ? (
           <div className="space-y-6">
             {/* Pending Unmatched Card */}
             <div className="glass-card rounded-2xl p-6 border border-white/10 shadow-xl">
