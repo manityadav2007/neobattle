@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Crosshair, Search, Upload, Play, Pause, Video, CheckCircle, AlertCircle,
-  RefreshCw, Trophy, Users, Shield, ArrowLeft, Plus, Minus, Trash2,
+  RefreshCw, Trophy, Users, Shield, Plus, Minus, Trash2,
   Edit3, UserCheck, HelpCircle, ExternalLink, Loader2, Sparkles, Check,
   ChevronRight, AlertTriangle, Film, Target, ArrowRight, CornerDownRight, Save,
 } from 'lucide-react';
@@ -468,36 +468,28 @@ export default function AdminKillCounterPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Admin
-            </Link>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-fire-500/10 border border-fire-500/20 flex items-center justify-center text-fire-400 shrink-0">
+            <Crosshair className="w-5 h-5" />
           </div>
-          <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
-            <span className="p-2 rounded-xl bg-fire-500/20 text-fire-400 border border-fire-500/30">
-              <Crosshair className="w-6 h-6" />
-            </span>
-            AI Kill Counter
-          </h1>
-          <p className="text-zinc-400 text-sm mt-1">
-            Multimodal AI video detection &amp; kill feed verification engine for Per-Kill tournaments.
-          </p>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-white tracking-tight">
+              AI Kill Counter
+            </h1>
+            <p className="text-xs text-zinc-400">
+              Video kill feed detection &amp; score verification for Per-Kill tournaments
+            </p>
+          </div>
         </div>
 
         {confirmedTournament && (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleResetTournament}
-              className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 border border-white/10 transition-colors flex items-center gap-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Switch Tournament
-            </button>
-          </div>
+          <button
+            onClick={handleResetTournament}
+            className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-zinc-300 border border-white/10 transition-colors flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-zinc-400" /> Switch Tournament
+          </button>
         )}
       </div>
 
@@ -522,17 +514,18 @@ export default function AdminKillCounterPage() {
 
       {/* STEP 1: TOURNAMENT SEARCH & CONFIRMATION */}
       {!confirmedTournament ? (
-        <div className="space-y-6">
-          <div className="glass-card rounded-2xl p-6">
-            <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-              <Search className="w-5 h-5 text-fire-400" />
-              1. Select a Per-Kill Tournament
-            </h2>
-            <p className="text-xs text-zinc-400 mb-4">
-              Search by tournament name or UID (e.g. <span className="text-fire-400 font-mono">T-9014</span>). Only tournaments configured with <span className="text-yellow-400 font-semibold">Per Kill format</span> are eligible.
-            </p>
+        <div className="space-y-4">
+          <div className="bg-zinc-900/60 border border-white/10 rounded-2xl p-5 sm:p-6">
+            <div className="mb-4">
+              <h2 className="text-base font-semibold text-white">
+                Select Tournament
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Search Per-Kill tournaments by title or UID (e.g. <span className="font-mono text-zinc-300">T-9014</span>)
+              </p>
+            </div>
 
-            <div className="relative max-w-xl">
+            <div className="relative max-w-lg">
               <input
                 type="text"
                 value={searchQuery}
@@ -540,20 +533,26 @@ export default function AdminKillCounterPage() {
                   setSearchQuery(e.target.value);
                   handleSearchTournaments(e.target.value);
                 }}
-                placeholder="Search by Title or UID (e.g., T-9014)..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-fire-500/50"
+                placeholder="Search tournament name or UID..."
+                className="w-full pl-9 pr-4 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder:text-zinc-500 focus:outline-none focus:border-fire-500/60 focus:ring-1 focus:ring-fire-500/60 transition-colors"
               />
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3.5" />
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
               {searching && (
-                <Loader2 className="w-4 h-4 text-fire-400 animate-spin absolute right-3.5 top-3.5" />
+                <Loader2 className="w-4 h-4 text-fire-400 animate-spin absolute right-3 top-2.5" />
               )}
             </div>
 
             {/* Tournament List */}
-            <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {tournaments.length === 0 ? (
-                <div className="sm:col-span-3 p-8 text-center rounded-xl bg-white/[0.02] border border-white/5 text-zinc-500 text-sm">
-                  {searching ? 'Searching...' : 'No Per-Kill tournaments found. Ensure tournaments are created with "Per Kill" format.'}
+                <div className="sm:col-span-2 lg:col-span-3 py-10 px-4 text-center rounded-xl bg-white/[0.02] border border-white/5 text-zinc-500 text-xs">
+                  {searching ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 text-fire-400 animate-spin" /> Searching...
+                    </span>
+                  ) : (
+                    'No Per-Kill tournaments found. Ensure tournaments are created with "Per Kill" format.'
+                  )}
                 </div>
               ) : (
                 tournaments.map((t) => {
@@ -567,44 +566,42 @@ export default function AdminKillCounterPage() {
                       onClick={() => handleSelectTournament(t)}
                       className={`cursor-pointer p-4 rounded-xl border transition-all text-left flex flex-col justify-between ${
                         isSelected
-                          ? 'bg-fire-500/10 border-fire-500 shadow-lg shadow-fire-500/10'
-                          : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/[0.07]'
+                          ? 'bg-fire-500/10 border-fire-500/60 ring-1 ring-fire-500/40'
+                          : 'bg-white/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.05]'
                       }`}
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-fire-500/20 text-fire-400 border border-fire-500/30">
+                          <span className="font-mono text-xs font-semibold text-zinc-300">
                             {t.uid || t.id.slice(0, 8).toUpperCase()}
                           </span>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusColor(t.status)}`}>
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${getStatusColor(t.status)}`}>
                             {t.status}
                           </span>
                         </div>
 
-                        <h3 className="font-bold text-white text-sm line-clamp-1 mb-1">{t.title}</h3>
+                        <h3 className="font-semibold text-white text-sm line-clamp-1 mb-1">{t.title}</h3>
                         <p className="text-xs text-zinc-400 mb-3">
                           {t.format} • {t.gameMode === 'FULL_MAP' ? 'Battle Royale' : 'Clash Squad'} • {t.mapName || 'Bermuda'}
                         </p>
 
-                        <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-black/40 text-[11px] mb-2 border border-white/5">
-                          <div>
-                            <span className="text-zinc-500 block">Per Kill Rate:</span>
-                            <span className="text-yellow-400 font-bold">₹{perKillRate} / kill</span>
-                          </div>
-                          <div>
-                            <span className="text-zinc-500 block">Booyah Prize:</span>
-                            <span className="text-fire-400 font-bold">{formatCurrency(booyahPrize)}</span>
-                          </div>
+                        <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg bg-black/30 border border-white/5 mb-3">
+                          <span className="text-zinc-400">
+                            Rate: <strong className="text-yellow-400 font-semibold">₹{perKillRate}</strong>/kill
+                          </span>
+                          <span className="text-zinc-400">
+                            Booyah: <strong className="text-fire-400 font-semibold">{formatCurrency(booyahPrize)}</strong>
+                          </span>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs text-zinc-400">
-                        <span className="flex items-center gap-1">
-                          <Users className="w-3.5 h-3.5 text-blue-400" />
+                        <span className="flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-zinc-500" />
                           {t._count?.entries || 0}/{t.maxParticipants} players
                         </span>
                         {t.finalKillList && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">
                             ✓ Kills Saved
                           </span>
                         )}
@@ -614,36 +611,36 @@ export default function AdminKillCounterPage() {
                 })
               )}
             </div>
-          </div>
 
-          {/* Confirmation Card */}
-          {selectedTournament && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="glass-card rounded-2xl p-6 border-fire-500/30 bg-gradient-to-br from-fire-500/10 via-zinc-900 to-black"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Confirmation Card */}
+            {selectedTournament && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-5 p-4 sm:p-5 rounded-xl bg-fire-500/[0.07] border border-fire-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              >
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-xs font-bold text-fire-400">
-                      {selectedTournament.uid || selectedTournament.id.slice(0, 8)}
+                  <div className="flex items-center gap-2 text-xs text-zinc-400 mb-0.5">
+                    <span className="font-mono text-fire-400 font-medium">
+                      {selectedTournament.uid || selectedTournament.id.slice(0, 8).toUpperCase()}
                     </span>
-                    <span className="text-xs text-zinc-400">• Ready to scan gameplay video</span>
+                    <span>•</span>
+                    <span>{selectedTournament.format}</span>
+                    <span>•</span>
+                    <span>{selectedTournament.maxParticipants} slots</span>
                   </div>
-                  <h3 className="text-xl font-bold text-white">{selectedTournament.title}</h3>
-                  <p className="text-xs text-zinc-400 mt-1">
-                    Format: <span className="text-white font-semibold">{selectedTournament.format}</span> •
-                    Participants: <span className="text-white font-semibold">{selectedTournament.maxParticipants} slots</span> •
-                    Per Kill Rate: <span className="text-yellow-400 font-bold">₹{Number(selectedTournament.perKillRate) || 0}</span> •
-                    Booyah: <span className="text-fire-400 font-bold">{formatCurrency(Number(selectedTournament.booyahPrize) || 0)}</span>
-                  </p>
+                  <h3 className="text-base font-semibold text-white">{selectedTournament.title}</h3>
+                  <div className="flex items-center gap-3 text-xs text-zinc-300 mt-1">
+                    <span>Per Kill: <strong className="text-yellow-400">₹{Number(selectedTournament.perKillRate) || 0}</strong></span>
+                    <span>•</span>
+                    <span>Booyah: <strong className="text-fire-400">{formatCurrency(Number(selectedTournament.booyahPrize) || 0)}</strong></span>
+                  </div>
                 </div>
 
                 <button
                   onClick={handleConfirmTournament}
                   disabled={loadingRoster}
-                  className="btn-fire px-6 py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 shadow-lg shadow-fire-500/20 shrink-0"
+                  className="btn-fire px-5 py-2.5 rounded-xl font-semibold text-white text-xs sm:text-sm flex items-center justify-center gap-2 shrink-0 transition-all shadow-md shadow-fire-500/10"
                 >
                   {loadingRoster ? (
                     <>
@@ -651,13 +648,13 @@ export default function AdminKillCounterPage() {
                     </>
                   ) : (
                     <>
-                      Confirm / Open Tool <ArrowRight className="w-4 h-4" />
+                      Confirm &amp; Open Tool <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
-              </div>
-            </motion.div>
-          )}
+              </motion.div>
+            )}
+          </div>
         </div>
       ) : (
         /* STEP 3: MAIN 3-COLUMN INTERFACE */
