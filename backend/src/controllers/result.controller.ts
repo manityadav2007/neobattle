@@ -35,13 +35,16 @@ async function resolveWinners(tournament: {
         tournamentId: tournament.id,
         OR: [
           { user: { freeFireId: c.uid! } },
+          { user: { freeFireUid: c.uid! } },
           { team: { members: { some: { user: { freeFireId: c.uid! } } } } },
+          { team: { members: { some: { user: { freeFireUid: c.uid! } } } } },
         ],
       },
       include: {
         user: { select: { id: true, username: true, freeFireId: true } },
         team: {
           include: {
+            leader: { select: { id: true, username: true, freeFireId: true } },
             members: {
               include: {
                 user: { select: { id: true, username: true, freeFireId: true } },
@@ -56,20 +59,15 @@ async function resolveWinners(tournament: {
       throw new Error(`${c.label}: Free Fire UID ${c.uid} is not a registered participant in this tournament.`);
     }
 
-    if (entry.team && entry.team.members.length > 0) {
-      const members = entry.team.members.map((m) => m.user);
-      const splitAmount = Math.floor(c.amount / members.length);
-      const remainder = c.amount - (splitAmount * members.length);
-
-      members.forEach((m, idx) => {
-        const payout = idx === 0 ? splitAmount + remainder : splitAmount;
-        resolved.push({
-          placement: c.placement,
-          label: `${c.label} (${entry.team!.name})`,
-          amount: payout,
-          userId: m.id,
-          username: m.username,
-        });
+    const teamLeader = entry.user || entry.team?.leader || entry.team?.members.find((m) => m.role === 'LEADER')?.user || entry.team?.members[0]?.user;
+    if (entry.team && teamLeader) {
+      // Duo/Squad registration: full placement prize credited to captain/leader's wallet
+      resolved.push({
+        placement: c.placement,
+        label: `${c.label} (${entry.team.name})`,
+        amount: c.amount,
+        userId: teamLeader.id,
+        username: teamLeader.username,
       });
     } else if (entry.user) {
       resolved.push({
@@ -80,7 +78,7 @@ async function resolveWinners(tournament: {
         username: entry.user.username,
       });
     } else {
-      throw new Error(`${c.label}: Registered entry has no associated user or team.`);
+      throw new Error(`${c.label}: Registered entry has no associated user or team leader.`);
     }
   }
 
@@ -302,12 +300,15 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
 
   try {
     await prisma.$transaction(async (tx) => {
-      // 1. Stamp placements on the team entries for record-keeping
+      // 1. Stamp placements on the entries for record-keeping
       for (const w of winners) {
         await tx.tournamentEntry.updateMany({
           where: {
             tournamentId: t.id,
-            team: { members: { some: { userId: w.userId } } },
+            OR: [
+              { userId: w.userId },
+              { team: { members: { some: { userId: w.userId } } } },
+            ],
           },
           data: { placement: w.placement },
         });

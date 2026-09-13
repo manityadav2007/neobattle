@@ -46,14 +46,13 @@ export default function AdminPendingResultsPage() {
   const handleApprove = async (sub: ResultSubmission) => {
     const t = sub.tournament;
     const isTeam = t?.format === 'DUO' || t?.format === 'SQUAD';
-    const splitCount = t?.format === 'DUO' ? 2 : (t?.format === 'SQUAD' ? 4 : 1);
     const lines = [
-      Number(t?.prizeFirst) > 0 && `${isTeam ? '1st Winning Team' : '1st Place'} (${sub.firstUid}): ${formatCurrency(Number(t!.prizeFirst))}${isTeam ? ` (${formatCurrency(Math.floor(Number(t!.prizeFirst) / splitCount))}/player)` : ''}`,
-      Number(t?.prizeSecond) > 0 && `${isTeam ? '2nd Winning Team' : '2nd Place'} (${sub.secondUid || '—'}): ${formatCurrency(Number(t!.prizeSecond))}${isTeam && sub.secondUid ? ` (${formatCurrency(Math.floor(Number(t!.prizeSecond) / splitCount))}/player)` : ''}`,
-      Number(t?.prizeThird) > 0 && `${isTeam ? '3rd Winning Team' : '3rd Place'} (${sub.thirdUid || '—'}): ${formatCurrency(Number(t!.prizeThird))}${isTeam && sub.thirdUid ? ` (${formatCurrency(Math.floor(Number(t!.prizeThird) / splitCount))}/player)` : ''}`,
+      Number(t?.prizeFirst) > 0 && `${isTeam ? '1st Winning Team' : '1st Place'} (${sub.firstUid}): ${formatCurrency(Number(t!.prizeFirst))}${isTeam ? ' (Full prize credited to Captain)' : ''}`,
+      Number(t?.prizeSecond) > 0 && `${isTeam ? '2nd Winning Team' : '2nd Place'} (${sub.secondUid || '—'}): ${formatCurrency(Number(t!.prizeSecond))}${isTeam && sub.secondUid ? ' (Full prize credited to Captain)' : ''}`,
+      Number(t?.prizeThird) > 0 && `${isTeam ? '3rd Winning Team' : '3rd Place'} (${sub.thirdUid || '—'}): ${formatCurrency(Number(t!.prizeThird))}${isTeam && sub.thirdUid ? ' (Full prize credited to Captain)' : ''}`,
       Number(t?.hostCommission) > 0 && `Host commission: ${formatCurrency(Number(t!.hostCommission))}`,
     ].filter(Boolean);
-    if (!confirm(`Approve & distribute prizes?\n\n${lines.join('\n')}\n\n${isTeam ? 'Winning team prizes will be split equally among all verified members directly into their wallets.' : "Winners' and host wallets will be credited instantly."}`)) return;
+    if (!confirm(`Approve & distribute prizes?\n\n${lines.join('\n')}\n\n${isTeam ? "Winning team prizes will be credited in full directly to the team captain's wallet." : "Winners' and host wallets will be credited instantly."}`)) return;
 
     setBusy(sub.id);
     setError('');
@@ -179,14 +178,13 @@ export default function AdminPendingResultsPage() {
             <div className="mt-5">
               {(() => {
                 const isTeam = selected.tournament.format === 'DUO' || selected.tournament.format === 'SQUAD';
-                const splitCount = selected.tournament.format === 'DUO' ? 2 : (selected.tournament.format === 'SQUAD' ? 4 : 1);
                 return (
                   <>
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Submitted Winners</p>
                       {isTeam && (
                         <span className="text-[11px] px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-semibold">
-                          {selected.tournament.format} Match — {splitCount}-Way Split Payout
+                          {selected.tournament.format} Match — Full Prize to Captain
                         </span>
                       )}
                     </div>
@@ -203,7 +201,7 @@ export default function AdminPendingResultsPage() {
                               <span className="text-sm text-white font-medium">{w.medal} {w.label} — <span className="font-mono text-fire-400">{w.uid}</span></span>
                               {isTeam && (
                                 <p className="text-[11px] text-zinc-400 mt-0.5">
-                                  Total Pool: {formatCurrency(w.prize)} → <span className="text-emerald-400 font-semibold">{formatCurrency(Math.floor(w.prize / splitCount))} per player</span> ({splitCount} verified members)
+                                  Prize: {formatCurrency(w.prize)} → <span className="text-emerald-400 font-semibold">Full amount credited to team captain's wallet</span>
                                 </p>
                               )}
                             </div>

@@ -103,7 +103,13 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     }
   };
 
-  const isHostCreator = user?.id === tournament?.creatorId;
+  const isHostCreator = Boolean(
+    user?.id && (
+      user.id === tournament?.creatorId ||
+      user.id === tournament?.creator?.id ||
+      user.id === (tournament as any)?.hostId
+    )
+  );
   const isAdminUser = Boolean(isAdmin || isSuperAdmin);
 
   const canSubmitResults =
@@ -191,22 +197,43 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
     setTeammateStatus((prev) => ({ ...prev, [index]: { loading: true } }));
     try {
-      const res = await tournamentApi.checkPlayer(trimmed, tournament?.requiredLevel || tournament?.minLevel || 0);
+      const minLvl = Number(tournament?.requiredLevel || tournament?.minLevel) || 0;
+      const res = await tournamentApi.checkPlayer(trimmed, minLvl);
       if (res.success && res.data) {
-        setTeammateStatus((prev) => ({
-          ...prev,
-          [index]: { loading: false, valid: true, info: res.data },
-        }));
+        const fetchedLevel = Number(res.data.level ?? res.data.gameLevel ?? 0);
+        if (minLvl > 0 && fetchedLevel < minLvl) {
+          setTeammateStatus((prev) => ({
+            ...prev,
+            [index]: {
+              loading: false,
+              valid: false,
+              error: `This player's level (${fetchedLevel}) does not meet the minimum level requirement (${minLvl})`,
+            },
+          }));
+        } else {
+          setTeammateStatus((prev) => ({
+            ...prev,
+            [index]: { loading: false, valid: true, info: res.data },
+          }));
+        }
       } else {
         setTeammateStatus((prev) => ({
           ...prev,
-          [index]: { loading: false, valid: false, error: res.message || 'Verification failed' },
+          [index]: {
+            loading: false,
+            valid: false,
+            error: res.message || "Couldn't find this UID, please check and try again.",
+          },
         }));
       }
     } catch (err) {
       setTeammateStatus((prev) => ({
         ...prev,
-        [index]: { loading: false, valid: false, error: getErrorMessage(err) },
+        [index]: {
+          loading: false,
+          valid: false,
+          error: getErrorMessage(err) || "Couldn't find this UID, please check and try again.",
+        },
       }));
     }
   };
@@ -247,11 +274,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           for (const m of activeMembers) {
             if (!m.user.freeFireId) {
               setRegisterError(`Player "${m.user.username}" has not linked their Free Fire ID.`);
-              setRegistering(false);
-              return;
-            }
-            if (!m.user.isVerified) {
-              setRegisterError(`Player "${m.user.username}" (UID: ${m.user.freeFireId}) is not verified. All teammates must be verified.`);
               setRegistering(false);
               return;
             }
@@ -333,7 +355,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const teamMembersSlice = myTeam?.members?.slice(0, requiredSlots) || [];
   const failingTeamMember = teamMembersSlice.find((m) => {
     if (!m.user?.freeFireId) return true;
-    if (!m.user?.isVerified) return true;
     if ((m.user?.gameLevel ?? 0) < reqLevel) return true;
     return false;
   });
@@ -356,7 +377,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const isCompletedState = isEnded || effectiveStatus === 'Ended' || oneHourPastStart;
   const isLiveAndPlaying = !isCompletedState && (tournament.status === 'ACTIVE' || effectiveStatus === 'Playing' || effectiveStatus === 'Live' || startTimeReached);
   const isRegistrationClosed = !isCompletedState && !isLiveAndPlaying && (isSlotsFull || registrationEndReached || tournament.status !== 'REGISTRATION');
-  const canEndTournament = !isEnded && (tournament.status === 'ACTIVE' || startTimeReached || isSuperAdmin || isAdmin) && (isSuperAdmin || isAdmin || user?.id === tournament.creatorId);
+  const canEndTournament = !isEnded && (isAdmin || isSuperAdmin || isHostCreator);
 
   console.log('[TournamentView] status:', tournament.status, 'effectiveStatus:', effectiveStatus, 'isSlotsFull:', isSlotsFull, 'isCompletedState:', isCompletedState, 'isLiveAndPlaying:', isLiveAndPlaying, 'isRegistrationClosed:', isRegistrationClosed);
 
@@ -783,15 +804,13 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                               <strong>{failingTeamMember.user.username}</strong>{' '}
                               {!failingTeamMember.user.freeFireId
                                 ? 'has not linked their Free Fire ID.'
-                                : !failingTeamMember.user.isVerified
-                                ? `(UID: ${failingTeamMember.user.freeFireId}) is not verified.`
                                 : `(Level ${failingTeamMember.user.gameLevel ?? 0}) does not meet the tournament requirement of Level ${reqLevel}.`}
                             </span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
                             <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
-                            <span>All {requiredSlots} teammates verified &amp; meet Level {reqLevel}+ requirement. Ready for 1-click registration!</span>
+                            <span>All {requiredSlots} teammates meet Level {reqLevel}+ requirement. Ready for 1-click registration!</span>
                           </div>
                         )}
                       </div>
@@ -801,20 +820,31 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   /* 2. MANUAL UID MODE VIEW */
                   <div className="space-y-4">
                     <p className="text-xs text-zinc-400">
-                      Enter pre-verified Free Fire IDs for your teammates. All teammates must be registered on Neobattle, verified, and meet the Level {reqLevel}+ requirement.
+                      Enter Free Fire IDs for your teammates. Teammates do not need a Neobattle account — their in-game nickname and level are verified directly from Free Fire.
                     </p>
 
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
-                        Team Name (Optional)
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Team Name (Optional)
+                        </label>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="text-zinc-500">Tournament Tag:</span>
+                          <span className="font-mono font-bold text-fire-400 bg-fire-500/10 px-2 py-0.5 rounded border border-fire-500/20">
+                            [{(teamName.trim() || user?.username || 'TM').replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'TM'}#]
+                          </span>
+                        </div>
+                      </div>
                       <input
                         type="text"
                         value={teamName}
                         onChange={(e) => setTeamName(e.target.value)}
-                        placeholder={`e.g., ${user?.username}'s Team`}
+                        placeholder={`e.g., ${user?.username || 'Player'}'s Team`}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-fire-500/50 transition-all"
                       />
+                      <p className="text-[11px] text-zinc-500 mt-1">
+                        A unique tournament-scoped team tag will be generated automatically for this match roster.
+                      </p>
                     </div>
 
                     <div className="space-y-3">
@@ -872,9 +902,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                             {status?.valid === true && status.info && (
                               <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
                                 <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                                <span className="font-semibold">{status.info.username}</span>
-                                {status.info.ign && <span className="font-mono text-zinc-400">({status.info.ign})</span>}
-                                <span className="ml-auto font-semibold text-emerald-300">Level {status.info.gameLevel}</span>
+                                <span className="font-semibold">{status.info.nickname || status.info.ign || status.info.username}</span>
+                                {teammateUids[i] && (
+                                  <span className="font-mono text-zinc-400 text-[11px]">(UID: {teammateUids[i].trim()})</span>
+                                )}
+                                <span className="ml-auto font-semibold text-emerald-300">Level {status.info.level ?? status.info.gameLevel ?? 0}</span>
                               </div>
                             )}
                             {status?.valid === false && status.error && (
@@ -916,7 +948,14 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                       return (
                         <div key={entry.id} className="p-4 rounded-xl bg-black/40 border border-white/10 hover:border-white/20 transition-all">
                           <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-white/5">
-                            <span className="font-bold text-white text-sm truncate">{tName}</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-bold text-white text-sm truncate">{tName}</span>
+                              {entry.team?.tag && (
+                                <span className="font-mono text-xs font-bold text-fire-400 bg-fire-500/10 px-1.5 py-0.5 rounded border border-fire-500/20 shrink-0">
+                                  [{entry.team.tag}]
+                                </span>
+                              )}
+                            </div>
                             {entry.placement && (
                               <span className="px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-400 text-xs font-bold font-mono">
                                 #{entry.placement}

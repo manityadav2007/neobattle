@@ -173,12 +173,14 @@ export const tournamentApi = {
     const res = await api.get<{
       success: boolean;
       data: {
-        id: string;
-        username: string;
-        ign: string | null;
+        id?: string;
+        username?: string;
+        ign?: string | null;
+        nickname?: string;
+        level?: number;
         freeFireId: string;
-        gameLevel: number;
-        isVerified: boolean;
+        gameLevel?: number;
+        isVerified?: boolean;
         avatarUrl?: string | null;
       };
       message?: string;

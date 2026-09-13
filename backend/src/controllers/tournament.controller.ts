@@ -9,6 +9,8 @@ import { validatePrizePool } from '../services/commission.service';
 import { gameProfileService } from '../services/gameProfile.service';
 import { syncTournamentStatuses } from '../utils/tournamentStatus';
 import { notificationService } from '../services/notification.service';
+import { v4 as uuidv4 } from 'uuid';
+import { fetchPlayerInfo, FreefireApiError } from '../services/freefireApi';
 
 export async function createTournament(req: AuthenticatedRequest, res: Response): Promise<void> {
   const data = req.body;
@@ -236,50 +238,51 @@ export async function checkPlayerEligibility(req: AuthenticatedRequest, res: Res
     return;
   }
 
-  const player = await prisma.user.findUnique({
-    where: { freeFireId: uid },
-    select: {
-      id: true,
-      username: true,
-      ign: true,
-      inGameNickname: true,
-      freeFireId: true,
-      gameLevel: true,
-      isVerified: true,
-      avatarUrl: true,
-    },
-  });
-
-  if (!player) {
-    res.status(404).json({
-      success: false,
-      message: `Player with Free Fire ID "${uid}" is not registered on Neobattle. Teammates must create an account first.`,
-    });
-    return;
-  }
-
-  if (!player.isVerified) {
+  // 1. Call fetchPlayerInfo(uid, "IND") from freefireApi service directly —
+  // do NOT check whether this UID belongs to a registered Neobattle account.
+  let playerInfo: { nickname: string; level: number; region: string };
+  try {
+    playerInfo = await fetchPlayerInfo(uid, 'IND');
+  } catch (err: unknown) {
+    console.error(`[Tournament] checkPlayerEligibility FreeFire API error for UID ${uid}:`, err);
     res.status(400).json({
       success: false,
-      message: `Player "${player.username}" (UID: ${uid}) has not verified their Free Fire ID.`,
-      data: player,
+      message: "Couldn't find this UID, please check and try again.",
     });
     return;
   }
 
-  if (player.gameLevel < minLevel) {
+  // 2. Check fetched level against this tournament's minLevel
+  if (minLevel > 0 && playerInfo.level < minLevel) {
     res.status(400).json({
       success: false,
-      message: `Player "${player.username}" (Level ${player.gameLevel}) is below required Level ${minLevel}.`,
-      data: player,
+      message: `This player's level (${playerInfo.level}) does not meet the minimum level requirement (${minLevel})`,
+      data: {
+        freeFireId: uid,
+        nickname: playerInfo.nickname,
+        level: playerInfo.level,
+        ign: playerInfo.nickname,
+        username: playerInfo.nickname,
+        gameLevel: playerInfo.level,
+        isVerified: true,
+      },
     });
     return;
   }
 
+  // 3. Successful verification
   res.json({
     success: true,
-    data: player,
-    message: `Verified: ${player.username} (Level ${player.gameLevel})`,
+    data: {
+      freeFireId: uid,
+      nickname: playerInfo.nickname,
+      level: playerInfo.level,
+      ign: playerInfo.nickname,
+      username: playerInfo.nickname,
+      gameLevel: playerInfo.level,
+      isVerified: true,
+    },
+    message: `Verified: ${playerInfo.nickname} (Level ${playerInfo.level})`,
   });
 }
 
@@ -292,7 +295,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
       creator: { select: { id: true, username: true } },
       entries: {
         include: {
-          user: { select: { id: true, uid: true, username: true, avatarUrl: true, freeFireId: true, ign: true, inGameNickname: true, gameLevel: true, isVerified: true, verificationScreenshotUrl: true } },
+          user: { select: { id: true, uid: true, username: true, avatarUrl: true, freeFireId: true, freeFireUid: true, ign: true, inGameNickname: true, gameLevel: true, inGameLevel: true, isVerified: true, verificationScreenshotUrl: true } },
           team: {
             select: {
               id: true,
@@ -300,7 +303,7 @@ export async function getTournament(req: AuthenticatedRequest, res: Response): P
               tag: true,
               members: {
                 include: {
-                  user: { select: { id: true, uid: true, username: true, freeFireId: true, ign: true, inGameNickname: true, gameLevel: true, isVerified: true, avatarUrl: true, verificationScreenshotUrl: true } },
+                  user: { select: { id: true, uid: true, username: true, freeFireId: true, freeFireUid: true, ign: true, inGameNickname: true, gameLevel: true, inGameLevel: true, isVerified: true, avatarUrl: true, verificationScreenshotUrl: true } },
                 },
               },
             },
@@ -514,14 +517,6 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
           return;
         }
 
-        if (!p.isVerified) {
-          res.status(400).json({
-            success: false,
-            message: `Player "${p.username}" (UID: ${p.freeFireId}) does not have a verified Free Fire ID. All team members must be verified.`,
-          });
-          return;
-        }
-
         if (p.gameLevel < tournament.requiredLevel) {
           res.status(400).json({
             success: false,
@@ -630,37 +625,72 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
       return;
     }
 
-    // Strictly validate each player against registered Neobattle accounts
+    // Validate each player via Free Fire API (no Neobattle account required for teammates)
     const verifiedPlayers: { id: string; username: string; ign: string | null; freeFireId: string | null; gameLevel: number }[] = [];
 
     for (const uid of trimmedUids) {
-      const player = await prisma.user.findUnique({
+      let player = await prisma.user.findUnique({
         where: { freeFireId: uid },
         select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true },
       });
 
       if (!player) {
-        res.status(400).json({
-          success: false,
-          message: `Player with Free Fire ID "${uid}" is not registered on Neobattle. Teammates must create an account first.`,
-        });
-        return;
-      }
+        // Fetch player info directly from Free Fire API without requiring an existing account
+        let info: { nickname: string; level: number; region: string };
+        try {
+          info = await fetchPlayerInfo(uid, 'IND');
+        } catch (err: unknown) {
+          console.error(`[Tournament] Registration FreeFire API error for UID ${uid}:`, err);
+          res.status(400).json({
+            success: false,
+            message: "Couldn't find this UID, please check and try again.",
+          });
+          return;
+        }
 
-      if (!player.isVerified) {
-        res.status(400).json({
-          success: false,
-          message: `Player "${player.username}" (${uid}) does not have a verified Free Fire ID. All teammates must be verified.`,
-        });
-        return;
-      }
+        if (tournament.requiredLevel > 0 && info.level < tournament.requiredLevel) {
+          res.status(400).json({
+            success: false,
+            message: `This player's level (${info.level}) does not meet the minimum level requirement (${tournament.requiredLevel})`,
+          });
+          return;
+        }
 
-      if (player.gameLevel < tournament.requiredLevel) {
-        res.status(400).json({
-          success: false,
-          message: `Player "${player.username}" (Level ${player.gameLevel}) does not meet the tournament requirement of Level ${tournament.requiredLevel}.`,
+        // Create a participant record so teammate is properly tracked in tournament roster
+        const cleanName = (info.nickname || `Player_${uid.slice(-4)}`).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 16) || `Player_${uid.slice(-4)}`;
+        let guestUsername = cleanName;
+        const nameTaken = await prisma.user.findUnique({ where: { username: guestUsername } });
+        if (nameTaken) {
+          guestUsername = `${cleanName.slice(0, 11)}_${Date.now().toString().slice(-4)}`;
+        }
+
+        player = await prisma.user.create({
+          data: {
+            uid: uuidv4(),
+            email: `ff_${uid}@guest.firearena.local`,
+            username: guestUsername,
+            passwordHash: 'GUEST_UNREGISTERED_ACCOUNT',
+            freeFireId: uid,
+            freeFireUid: uid,
+            freeFireRegion: 'IND',
+            ign: info.nickname || guestUsername,
+            inGameNickname: info.nickname || guestUsername,
+            gameLevel: info.level,
+            inGameLevel: info.level,
+            isVerified: true,
+            role: 'PLAYER',
+          },
+          select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true },
         });
-        return;
+      } else {
+        // Player already has an account — check tournament level requirement
+        if (tournament.requiredLevel > 0 && player.gameLevel < tournament.requiredLevel) {
+          res.status(400).json({
+            success: false,
+            message: `This player's level (${player.gameLevel}) does not meet the minimum level requirement (${tournament.requiredLevel})`,
+          });
+          return;
+        }
       }
 
       // Check if player is already in this tournament
@@ -677,7 +707,7 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
       if (alreadyInTournament) {
         res.status(409).json({
           success: false,
-          message: `Player "${player.username}" (${uid}) is already registered in this tournament.`,
+          message: `Player "${player.ign || player.username}" (${uid}) is already registered in this tournament.`,
         });
         return;
       }
@@ -707,15 +737,35 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
       isPaid = true;
     }
 
-    // Create a new Team record for this tournament roster
+    // Create a new Team record for this tournament roster with auto-generated unique team tag
     const rawTeamName = teamName?.trim() || `${(currentUser as any).username || 'Player'}'s Team`;
-    const uniqueSuffix = Date.now().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
-    const safeTag = rawTeamName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'TM';
-    const uniqueTeamTag = `${safeTag}${uniqueSuffix.slice(-3)}`;
+    const safeBaseTag = (rawTeamName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'TM').padEnd(3, 'X');
+    let uniqueTeamTag = '';
+    let uniqueTeamName = '';
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const randNum = Math.floor(100 + Math.random() * 900);
+      const candidateTag = `${safeBaseTag.slice(0, 3)}${randNum}`.slice(0, 6);
+      const suffix = Math.floor(1000 + Math.random() * 9000);
+      const candidateName = `${rawTeamName} #${suffix}`;
+
+      const existingTag = await prisma.team.findUnique({ where: { tag: candidateTag } });
+      const existingName = await prisma.team.findUnique({ where: { name: candidateName } });
+      if (!existingTag && !existingName) {
+        uniqueTeamTag = candidateTag;
+        uniqueTeamName = candidateName;
+        break;
+      }
+    }
+    if (!uniqueTeamTag) {
+      const ts = Date.now().toString().slice(-4);
+      uniqueTeamTag = `T${ts.slice(-5)}`;
+      uniqueTeamName = `${rawTeamName} #${Date.now().toString().slice(-6)}`;
+    }
 
     const team = await prisma.team.create({
       data: {
-        name: `${rawTeamName} #${uniqueSuffix}`,
+        name: uniqueTeamName,
         tag: uniqueTeamTag.slice(0, 6),
         leaderId: userId,
         maxMembers: requiredSlots,

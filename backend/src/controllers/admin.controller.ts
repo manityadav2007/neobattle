@@ -550,6 +550,7 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
           user: { select: { id: true, username: true } },
           team: {
             include: {
+              leader: { select: { id: true, username: true } },
               members: {
                 include: { user: { select: { id: true, username: true } } },
               },
@@ -601,20 +602,15 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
       return;
     }
 
-    if (entry.team && entry.team.members.length > 0) {
-      const members = entry.team.members.map((m) => m.user);
-      const splitAmount = Math.floor(s.amount / members.length);
-      const remainder = s.amount - (splitAmount * members.length);
-
-      members.forEach((m, idx) => {
-        const payout = idx === 0 ? splitAmount + remainder : splitAmount;
-        winnerPayouts.push({
-          placement: s.placement,
-          label: `${s.label} (${entry.team!.name})`,
-          amount: payout,
-          userId: m.id,
-          username: m.username,
-        });
+    const teamLeader = entry.user || entry.team?.leader || entry.team?.members.find((m) => m.role === 'LEADER')?.user || entry.team?.members[0]?.user;
+    if (entry.team && teamLeader) {
+      // Duo/Squad registration: full placement prize credited to captain/leader's wallet
+      winnerPayouts.push({
+        placement: s.placement,
+        label: `${s.label} (${entry.team.name})`,
+        amount: s.amount,
+        userId: teamLeader.id,
+        username: teamLeader.username,
       });
     } else if (entry.user) {
       winnerPayouts.push({
@@ -627,7 +623,7 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
     } else {
       res.status(400).json({
         success: false,
-        message: `Winner entry #${s.placement} has no associated user or team.`,
+        message: `Winner entry #${s.placement} has no associated user or team leader.`,
       });
       return;
     }
@@ -648,12 +644,15 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
 
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // 1. Stamp placements on the team entries for record-keeping
+      // 1. Stamp placements on the entries for record-keeping
       for (const w of winnerPayouts) {
         await tx.tournamentEntry.updateMany({
           where: {
             tournamentId: tournament.id,
-            team: { members: { some: { userId: w.userId } } },
+            OR: [
+              { userId: w.userId },
+              { team: { members: { some: { userId: w.userId } } } },
+            ],
           },
           data: { placement: w.placement },
         });

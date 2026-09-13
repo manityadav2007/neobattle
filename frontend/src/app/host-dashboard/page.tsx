@@ -833,64 +833,87 @@ export default function HostDashboardPage() {
                               ? team.members
                               : entry.user ? [{ id: entry.id, role: 'LEADER', user: entry.user }] : [];
 
+                            const rawTag = team?.tag || '';
+                            const formattedTag = rawTag ? (rawTag.startsWith('[') ? rawTag : `[${rawTag}]`) : `[T${tIdx + 1}]`;
+                            const teamName = team?.name || `Team ${entry.user?.username || tIdx + 1}`;
+
                             return (
                               <div
                                 key={entry.id}
-                                className="p-3.5 rounded-xl bg-black/40 border border-white/10 hover:border-white/20 transition-all space-y-2.5"
+                                className="p-3.5 rounded-xl bg-black/50 border border-white/10 hover:border-white/20 transition-all space-y-2.5 flex flex-col justify-between"
                               >
-                                <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-6 h-6 rounded-lg bg-fire-500/20 text-fire-400 flex items-center justify-center text-xs font-bold font-mono shrink-0">
-                                      #{tIdx + 1}
-                                    </div>
-                                    <span className="font-bold text-white text-sm truncate">
-                                      {team?.name || `Team ${entry.user?.username || tIdx + 1}`}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-zinc-400">
-                                      {members.length} {members.length === 1 ? 'player' : 'players'}
-                                    </span>
-                                    {entry.placement && (
-                                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-yellow-500/20 text-yellow-300 font-bold border border-yellow-500/30">
-                                        #{entry.placement}
+                                <div>
+                                  {/* Team Box Header: Tag + Name + Player Count */}
+                                  <div className="flex items-center justify-between pb-2 border-b border-white/10 gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="px-2 py-0.5 rounded-md bg-fire-500/20 text-fire-400 border border-fire-500/30 font-mono text-xs font-bold shrink-0 tracking-wider">
+                                        {formattedTag}
                                       </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                  {members.map((m: any, mIdx: number) => (
-                                    <div
-                                      key={m.id || mIdx}
-                                      className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] text-xs"
-                                    >
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${mIdx === 0 || m.role === 'LEADER' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-zinc-800 text-zinc-400'}`}>
-                                          {mIdx === 0 || m.role === 'LEADER' ? 'C' : `#${mIdx + 1}`}
-                                        </span>
-                                        <span className="text-white font-medium truncate">{m.user?.username || '—'}</span>
-                                        {(m.user?.inGameNickname || m.user?.ign) && (
-                                          <span className="text-fire-400 text-[11px] truncate font-medium" title={`Free Fire Nickname: ${m.user.inGameNickname || m.user.ign}`}>
-                                            ({m.user.inGameNickname || m.user.ign})
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        {m.user?.gameLevel != null && (
-                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/25 font-mono">
-                                            Lv. {m.user.gameLevel}
-                                          </span>
-                                        )}
-                                        <span className="font-mono text-zinc-400 text-[11px]">{m.user?.freeFireId || '—'}</span>
-                                        {m.user?.isVerified && (
-                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-                                            Verified
-                                          </span>
-                                        )}
-                                      </div>
+                                      <span className="font-bold text-white text-sm truncate" title={teamName}>
+                                        {teamName}
+                                      </span>
                                     </div>
-                                  ))}
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-zinc-400">
+                                        {members.length} {members.length === 1 ? 'player' : 'players'}
+                                      </span>
+                                      {entry.placement && (
+                                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-yellow-500/20 text-yellow-300 font-bold border border-yellow-500/30">
+                                          #{entry.placement}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Team Players List: IGN, UID, Level */}
+                                  <div className="space-y-1.5 mt-2">
+                                    {members.map((m: any, mIdx: number) => {
+                                      const ign = m.user?.inGameNickname || m.user?.ign || m.user?.username || '—';
+                                      const uid = m.user?.freeFireId || m.user?.freeFireUid || '—';
+                                      const level = m.user?.gameLevel ?? m.user?.inGameLevel ?? null;
+                                      const isLeader = mIdx === 0 || m.role === 'LEADER';
+
+                                      return (
+                                        <div
+                                          key={m.id || mIdx}
+                                          className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] border border-white/5 text-xs"
+                                        >
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <span
+                                              className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                                                isLeader
+                                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700/50'
+                                              }`}
+                                              title={isLeader ? 'Team Captain' : `Player #${mIdx + 1}`}
+                                            >
+                                              {isLeader ? 'Captain' : `#${mIdx + 1}`}
+                                            </span>
+                                            <div className="min-w-0 flex items-center gap-1.5">
+                                              <span className="text-white font-semibold truncate text-xs" title={`IGN: ${ign}`}>
+                                                {ign}
+                                              </span>
+                                              {m.user?.username && m.user.username !== ign && (
+                                                <span className="text-[10px] text-zinc-500 truncate hidden sm:inline" title={`Username: @${m.user.username}`}>
+                                                  (@{m.user.username})
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2 shrink-0">
+                                            <span className="font-mono text-zinc-400 text-[11px] bg-black/40 px-2 py-0.5 rounded border border-white/5" title="Free Fire UID">
+                                              {uid}
+                                            </span>
+                                            {level != null && (
+                                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/25 font-mono">
+                                                Lv. {level}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               </div>
                             );
@@ -1037,7 +1060,7 @@ export default function HostDashboardPage() {
                         </p>
                         {t.format !== 'SOLO' && (
                           <span className="text-[11px] px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-medium">
-                            Team Split Payout
+                            Team Captain Payout
                           </span>
                         )}
                       </div>
@@ -1057,7 +1080,7 @@ export default function HostDashboardPage() {
                         />
                         {t.format !== 'SOLO' && (
                           <p className="text-[11px] text-zinc-400 mt-1.5">
-                            Enter any verified Free Fire UID belonging to the 1st winning team. When approved by admin, the prize will automatically split equally among all verified teammates directly into their wallets.
+                            Enter any verified Free Fire UID belonging to the 1st winning team. When approved by admin, the full prize will be credited directly to the team captain's wallet.
                           </p>
                         )}
                       </div>

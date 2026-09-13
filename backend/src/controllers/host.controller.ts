@@ -15,7 +15,7 @@ export async function getMyTournaments(req: AuthenticatedRequest, res: Response)
       _count: { select: { entries: true } },
       entries: {
         include: {
-          user: { select: { id: true, username: true, ign: true, inGameNickname: true, freeFireId: true, gameLevel: true, isVerified: true } },
+          user: { select: { id: true, username: true, ign: true, inGameNickname: true, freeFireId: true, freeFireUid: true, gameLevel: true, inGameLevel: true, isVerified: true } },
           team: {
             select: {
               id: true,
@@ -23,7 +23,7 @@ export async function getMyTournaments(req: AuthenticatedRequest, res: Response)
               tag: true,
               members: {
                 include: {
-                  user: { select: { id: true, username: true, ign: true, inGameNickname: true, freeFireId: true, gameLevel: true, isVerified: true } },
+                  user: { select: { id: true, username: true, ign: true, inGameNickname: true, freeFireId: true, freeFireUid: true, gameLevel: true, inGameLevel: true, isVerified: true } },
                 },
               },
             },
@@ -34,7 +34,15 @@ export async function getMyTournaments(req: AuthenticatedRequest, res: Response)
     orderBy: { createdAt: 'desc' },
   });
 
-  res.json({ success: true, data: tournaments });
+  const data = tournaments.map((t) => {
+    const isTeam = t.format === 'DUO' || t.format === 'SQUAD';
+    return {
+      ...t,
+      entries: isTeam ? t.entries.filter((e) => e.teamId !== null || e.team !== null) : t.entries,
+    };
+  });
+
+  res.json({ success: true, data });
 }
 
 export async function createTournament(req: AuthenticatedRequest, res: Response): Promise<void> {

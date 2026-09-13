@@ -986,89 +986,109 @@ export default function AdminTournamentsPage() {
                           <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-fire-400 animate-spin" /></div>
                         ) : entries[t.id] && entries[t.id].length > 0 ? (
                           t.format === 'DUO' || t.format === 'SQUAD' || entries[t.id].some((e: any) => e.team) ? (
-                            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                            <div className="grid sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
                               {entries[t.id].map((entry: any, tIdx: number) => {
                                 const team = entry.team;
                                 const members = team?.members && team.members.length > 0
                                   ? team.members
                                   : entry.user ? [{ id: entry.id, role: 'LEADER', user: entry.user }] : [];
 
+                                const rawTag = team?.tag || '';
+                                const formattedTag = rawTag ? (rawTag.startsWith('[') ? rawTag : `[${rawTag}]`) : `[T${tIdx + 1}]`;
+                                const teamName = team?.name || `Team ${entry.user?.username || tIdx + 1}`;
+
                                 return (
                                   <div
                                     key={entry.id}
-                                    className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-2"
+                                    className="p-3.5 rounded-xl bg-black/50 border border-white/10 hover:border-white/20 transition-all space-y-2.5 flex flex-col justify-between"
                                   >
-                                    <div className="flex items-center justify-between pb-1.5 border-b border-white/5">
-                                      <div className="flex items-center gap-1.5 min-w-0">
-                                        <span className="w-5 h-5 rounded bg-fire-500/20 text-fire-400 flex items-center justify-center text-[10px] font-bold font-mono shrink-0">
-                                          #{tIdx + 1}
-                                        </span>
-                                        <span className="font-bold text-white text-xs truncate">
-                                          {team?.name || `Team ${entry.user?.username || tIdx + 1}`}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-1 shrink-0">
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-zinc-400">
-                                          {members.length} {members.length === 1 ? 'member' : 'members'}
-                                        </span>
-                                        {entry.placement && (
-                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-300 font-bold border border-yellow-500/30">
-                                            #{entry.placement}
+                                    <div>
+                                      {/* Team Box Header: Tag + Name + Player Count */}
+                                      <div className="flex items-center justify-between pb-2 border-b border-white/10 gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className="px-2 py-0.5 rounded-md bg-fire-500/20 text-fire-400 border border-fire-500/30 font-mono text-xs font-bold shrink-0 tracking-wider">
+                                            {formattedTag}
                                           </span>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      {members.map((m: any, mIdx: number) => (
-                                        <div
-                                          key={m.id || mIdx}
-                                          className="flex items-center justify-between p-1.5 rounded-lg bg-white/[0.03] text-[11px]"
-                                        >
-                                          <div className="flex items-center gap-1.5 min-w-0">
-                                            <span className={`text-[9px] px-1 py-0.2 rounded font-semibold shrink-0 ${mIdx === 0 || m.role === 'LEADER' ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                                              {mIdx === 0 || m.role === 'LEADER' ? 'C' : `#${mIdx + 1}`}
-                                            </span>
-                                            <span className="text-white font-medium truncate">{m.user?.username || '—'}</span>
-                                            {(m.user?.inGameNickname || m.user?.ign) && (
-                                              <span
-                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-fire-500/10 border border-fire-500/20 text-fire-300 text-[10px] font-normal truncate max-w-[140px]"
-                                                title={`Free Fire In-Game Nickname: ${m.user.inGameNickname || m.user.ign}`}
-                                              >
-                                                <span className="text-[9px] uppercase tracking-wider text-fire-400/70 font-semibold shrink-0">IGN</span>
-                                                <span className="truncate">{m.user.inGameNickname || m.user.ign}</span>
-                                              </span>
-                                            )}
-                                          </div>
-                                          <div className="flex items-center gap-1.5 shrink-0">
-                                            {m.user?.gameLevel != null && (
-                                              <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/15 text-blue-300 font-mono">
-                                                Lv.{m.user.gameLevel}
-                                              </span>
-                                            )}
-                                            <span className="font-mono text-zinc-400 text-[10px]">{m.user?.freeFireId || '—'}</span>
-                                            {m.user?.isVerified && (
-                                              <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-400">
-                                                Verified
-                                              </span>
-                                            )}
-                                            {isFreeTournament && m.user?.id && (
-                                              <button
-                                                onClick={() => setAwardModal({
-                                                  tournamentId: t.id,
-                                                  tournamentTitle: t.title,
-                                                  winnerId: m.user.id,
-                                                  winnerName: m.user.username,
-                                                })}
-                                                className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[10px] font-medium hover:bg-green-500/20 transition-colors"
-                                                title="Award prize to this player"
-                                              >
-                                                Award
-                                              </button>
-                                            )}
-                                          </div>
+                                          <span className="font-bold text-white text-xs truncate" title={teamName}>
+                                            {teamName}
+                                          </span>
                                         </div>
-                                      ))}
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-400">
+                                            {members.length} {members.length === 1 ? 'player' : 'players'}
+                                          </span>
+                                          {entry.placement && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-300 font-bold border border-yellow-500/30">
+                                              #{entry.placement}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Team Players List: IGN, UID, Level */}
+                                      <div className="space-y-1.5 mt-2">
+                                        {members.map((m: any, mIdx: number) => {
+                                          const ign = m.user?.inGameNickname || m.user?.ign || m.user?.username || '—';
+                                          const uid = m.user?.freeFireId || m.user?.freeFireUid || '—';
+                                          const level = m.user?.gameLevel ?? m.user?.inGameLevel ?? null;
+                                          const isLeader = mIdx === 0 || m.role === 'LEADER';
+
+                                          return (
+                                            <div
+                                              key={m.id || mIdx}
+                                              className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] border border-white/5 text-xs"
+                                            >
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <span
+                                                  className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                                                    isLeader
+                                                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                                      : 'bg-zinc-800 text-zinc-400 border border-zinc-700/50'
+                                                  }`}
+                                                  title={isLeader ? 'Team Captain' : `Player #${mIdx + 1}`}
+                                                >
+                                                  {isLeader ? 'Captain' : `#${mIdx + 1}`}
+                                                </span>
+                                                <div className="min-w-0 flex items-center gap-1.5">
+                                                  <span className="text-white font-semibold truncate text-[11px]" title={`IGN: ${ign}`}>
+                                                    {ign}
+                                                  </span>
+                                                  {m.user?.username && m.user.username !== ign && (
+                                                    <span className="text-[10px] text-zinc-500 truncate hidden sm:inline" title={`Username: @${m.user.username}`}>
+                                                      (@{m.user.username})
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className="font-mono text-zinc-400 text-[10px] bg-black/40 px-1.5 py-0.5 rounded border border-white/5" title="Free Fire UID">
+                                                  {uid}
+                                                </span>
+                                                {level != null && (
+                                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/25 font-mono">
+                                                    Lv.{level}
+                                                  </span>
+                                                )}
+                                                {isFreeTournament && m.user?.id && (
+                                                  <button
+                                                    onClick={() => setAwardModal({
+                                                      tournamentId: t.id,
+                                                      tournamentTitle: t.title,
+                                                      winnerId: m.user.id,
+                                                      winnerName: m.user.username,
+                                                    })}
+                                                    className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[10px] font-medium hover:bg-green-500/20 transition-colors"
+                                                    title="Award prize to this player"
+                                                  >
+                                                    Award
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
                                   </div>
                                 );
