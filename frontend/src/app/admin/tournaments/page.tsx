@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Trophy, AlertCircle, RefreshCw, Loader2, Users, DollarSign, MapPin, Clock,
   Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X, Copy, Check, Trash2,
+  Crosshair, Target,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentApi, adminApi, formatCurrency, formatDate, getStatusColor, resolveAssetUrl, type Tournament } from '@/lib/services';
@@ -83,6 +84,9 @@ export default function AdminTournamentsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [isFree, setIsFree] = useState(false);
   const [form, setForm] = useState({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
+  const [tournamentFormat, setTournamentFormat] = useState<'PLACEMENT' | 'PER_KILL'>('PLACEMENT');
+  const [booyahPrize, setBooyahPrize] = useState<number | string>(0);
+  const [perKillRate, setPerKillRate] = useState<number | string>(0);
   const [prizes, setPrizes] = useState({ first: 0, second: 0, third: 0 });
   const [prizeCount, setPrizeCount] = useState(3);
   const [breakdown, setBreakdown] = useState<CommissionBreakdown | null>(null);
@@ -183,6 +187,7 @@ export default function AdminTournamentsPage() {
   }, [form.entryFee, effectiveMaxParticipants, effectiveFree, form.gameMode]);
 
   // Clean & Direct Prize Calculation and Validation
+  const isPerKill = tournamentFormat === 'PER_KILL';
   const prize1Num = Number(prizes.first) || 0;
   const prize2Num = prizeCount >= 2 ? (Number(prizes.second) || 0) : 0;
   const prize3Num = prizeCount >= 3 ? (Number(prizes.third) || 0) : 0;
@@ -190,13 +195,27 @@ export default function AdminTournamentsPage() {
   const totalDistribution = prize1Num + prize2Num + prize3Num;
   const maxPrizePool = Math.round(Number(breakdown?.maxPrizePool) || 0);
   const maxPool = maxPrizePool;
-  const totalPrizes = totalDistribution;
 
-  const isPrizesBalanced = Number(totalDistribution) === Number(maxPrizePool);
+  const estimatedKills = Math.max(0, effectiveMaxParticipants - 1);
+  const booyahPrizeNum = Number(booyahPrize) || 0;
+  const perKillRateNum = Number(perKillRate) || 0;
+  const totalPerKillPrize = booyahPrizeNum + (estimatedKills * perKillRateNum);
 
-  const prizeError = (maxPrizePool > 0 && !isPrizesBalanced)
-    ? `Prize distribution must equal the Max Prize Pool: ₹${maxPrizePool} (currently ₹${totalDistribution})`
-    : '';
+  const totalPrizes = isPerKill ? totalPerKillPrize : totalDistribution;
+
+  const isPrizesBalanced = isPerKill
+    ? (effectiveFree || (maxPrizePool > 0 && totalPerKillPrize > 0 && totalPerKillPrize <= maxPrizePool))
+    : (effectiveFree || Number(totalDistribution) === Number(maxPrizePool));
+
+  const prizeError = isPerKill
+    ? (maxPrizePool > 0 && totalPerKillPrize > maxPrizePool
+        ? `Total estimated prize (₹${totalPerKillPrize}) exceeds Max Prize Pool: ₹${maxPrizePool}`
+        : (maxPrizePool > 0 && totalPerKillPrize <= 0
+            ? 'Please enter Booyah prize and/or per kill rate'
+            : ''))
+    : (maxPrizePool > 0 && !isPrizesBalanced
+        ? `Prize distribution must equal the Max Prize Pool: ₹${maxPrizePool} (currently ₹${totalDistribution})`
+        : '');
 
   const filteredTournaments = tournaments.filter((t) => {
     const q = searchQuery.trim().toLowerCase();
@@ -255,13 +274,16 @@ export default function AdminTournamentsPage() {
         requiredLevel: Number(form.requiredLevel) || 0,
         minLevel: Number(form.requiredLevel) || 0,
         format: isClashSquad ? (clashFormatMap[form.teamSize] || 'SQUAD') : form.format,
+        tournamentFormat,
+        perKillRate: isPerKill ? round2(perKillRate) : null,
+        booyahPrize: isPerKill ? round2(booyahPrize) : null,
         platform: form.platform,
         gameMode: form.gameMode,
         entryFee: isFree ? 0 : Number(form.entryFee),
         prizePool: prizePoolTotal,
-        prizeFirst: round2(prizes.first),
-        prizeSecond: prizeCount >= 2 ? round2(prizes.second) : null,
-        prizeThird: prizeCount >= 3 ? round2(prizes.third) : null,
+        prizeFirst: isPerKill ? round2(booyahPrize) : round2(prizes.first),
+        prizeSecond: isPerKill ? null : (prizeCount >= 2 ? round2(prizes.second) : null),
+        prizeThird: isPerKill ? null : (prizeCount >= 3 ? round2(prizes.third) : null),
         maxParticipants: isClashSquad ? teamSizeMap[form.teamSize] || 2 : Number(form.maxParticipants),
         registrationStart: new Date(form.registrationStart).toISOString(),
         registrationEnd: new Date(form.registrationEnd).toISOString(),
@@ -272,6 +294,9 @@ export default function AdminTournamentsPage() {
       await tournamentApi.create(payload);
       setShowCreate(false);
       setIsFree(false);
+      setTournamentFormat('PLACEMENT');
+      setBooyahPrize(0);
+      setPerKillRate(0);
       setForm({ title: '', entryFee: 10, maxParticipants: 50, teamSize: '', requiredLevel: 0, format: 'SOLO', platform: 'MOBILE', gameMode: 'FULL_MAP', mapName: '', registrationStart: '', registrationEnd: '', startTime: '', description: '' });
       setPrizes({ first: 0, second: 0, third: 0 });
       setPrizeCount(3);
@@ -525,8 +550,40 @@ export default function AdminTournamentsPage() {
               </div>
 
               <div className="sm:col-span-2">
+                <label className="text-xs text-zinc-400 mb-1.5 block font-medium">Tournament Format</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setTournamentFormat('PLACEMENT')}
+                    className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                      tournamentFormat === 'PLACEMENT'
+                        ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Trophy className="w-3.5 h-3.5" />
+                    Placement Prize
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTournamentFormat('PER_KILL')}
+                    className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                      tournamentFormat === 'PER_KILL'
+                        ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Crosshair className="w-3.5 h-3.5" />
+                    Per Kill
+                  </button>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-zinc-400 block">Prize Distribution{effectiveFree ? ' (Manual)' : ''}</label>
+                    <label className="text-xs text-zinc-400 block">
+                      {tournamentFormat === 'PER_KILL' ? 'Prize Structure (Per Kill)' : `Prize Distribution${effectiveFree ? ' (Manual)' : ''}`}
+                    </label>
                     {!effectiveFree && maxPool > 0 && (
                       <span className="text-xs text-zinc-500">
                         Max Prize Pool: <span className="text-yellow-400 font-semibold">{formatCurrency(maxPool)}</span>
@@ -537,6 +594,74 @@ export default function AdminTournamentsPage() {
                   <div className="space-y-2">
                     {(() => {
                       const isCreatingTeam = form.gameMode === 'CLASH_SQUAD' ? form.teamSize !== '1v1' : form.format !== 'SOLO';
+
+                      if (tournamentFormat === 'PER_KILL') {
+                        return (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">
+                                  Booyah Prize ({isCreatingTeam ? 'Winning Team' : '1st Place'})
+                                </label>
+                                <input
+                                  type="number"
+                                  value={booyahPrize === 0 ? '' : booyahPrize}
+                                  onChange={(e) => {
+                                    const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                                    const num = raw === '' ? 0 : Number(raw);
+                                    setBooyahPrize(isNaN(num) ? 0 : num);
+                                  }}
+                                  placeholder="0"
+                                  className="input-field w-full px-3 py-2 rounded-lg bg-fire-500/10 border border-fire-500/30 text-fire-400 text-sm font-bold"
+                                  min={0}
+                                  required
+                                />
+                              </div>
+                              <div className="pt-5">
+                                <span className="text-fire-400 text-lg">🏆</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">
+                                  Per Kill Rate (₹ per kill)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={perKillRate === 0 ? '' : perKillRate}
+                                  onChange={(e) => {
+                                    const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                                    const num = raw === '' ? 0 : Number(raw);
+                                    setPerKillRate(isNaN(num) ? 0 : num);
+                                  }}
+                                  placeholder="0"
+                                  className="input-field w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm font-bold"
+                                  min={0}
+                                  required
+                                />
+                              </div>
+                              <div className="pt-5">
+                                <span className="text-yellow-400 text-lg">🎯</span>
+                              </div>
+                            </div>
+
+                            <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 space-y-1">
+                              <div className="flex justify-between">
+                                <span className="text-zinc-400">Estimated Total Kills:</span>
+                                <span className="font-semibold text-white">~{estimatedKills} kills</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-400">Total Estimated Prize:</span>
+                                <span className="font-bold text-yellow-400">
+                                  ₹{booyahPrizeNum} + (~{estimatedKills} × ₹{perKillRateNum}) = {formatCurrency(totalPerKillPrize)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       if (form.gameMode === 'CLASH_SQUAD') {
                         return (
                           <div className="space-y-3">
@@ -696,7 +821,9 @@ export default function AdminTournamentsPage() {
                     <div className={`mt-2 flex items-center justify-between text-xs ${isPrizesBalanced ? 'text-green-400' : 'text-red-400'}`}>
                       <span className="flex items-center gap-1">
                         {isPrizesBalanced ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                        {isPrizesBalanced ? 'Prize distribution is balanced' : prizeError}
+                        {isPrizesBalanced
+                          ? (isPerKill ? 'Prize structure is within budget' : 'Prize distribution is balanced')
+                          : prizeError}
                       </span>
                       <span className="text-zinc-500">
                         Total: {formatCurrency(totalPrizes)} / {formatCurrency(maxPool)}
@@ -920,6 +1047,11 @@ export default function AdminTournamentsPage() {
                       <span className="text-fire-400 font-semibold">{isFreeTournament ? 'FREE' : formatCurrency(entryFee)}</span>
                       <span className="text-zinc-500 ml-2">Format:</span>
                       <span className="text-purple-400 font-semibold">{t.format}</span>
+                      {t.tournamentFormat === 'PER_KILL' && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/25 ml-1">
+                          Per Kill (₹{Number(t.perKillRate)})
+                        </span>
+                      )}
                       {Number(t.requiredLevel || t.minLevel) > 0 ? (
                         <span className="text-emerald-400 font-semibold ml-2">
                           Req: Lvl {t.requiredLevel || t.minLevel}+

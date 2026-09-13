@@ -31,6 +31,11 @@ enum TournamentFormat {
   SQUAD
 }
 
+enum TournamentType {
+  PLACEMENT
+  PER_KILL
+}
+
 enum Platform {
   MOBILE
   PC
@@ -258,6 +263,10 @@ model Tournament {
   prizeFirst         Decimal  @default(0) @db.Decimal(12, 2)
   prizeSecond        Decimal? @db.Decimal(12, 2)
   prizeThird         Decimal? @db.Decimal(12, 2)
+  tournamentFormat   TournamentType   @default(PLACEMENT)
+  perKillRate        Decimal?         @db.Decimal(12, 2)
+  booyahPrize        Decimal?         @db.Decimal(12, 2)
+  finalKillList      Json?
 
   delayedCount  Int      @default(0)
   delayedAt     DateTime?

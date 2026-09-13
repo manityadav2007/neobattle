@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Users, Trophy, AlertCircle, CheckCircle, XCircle,
   Activity, RefreshCw, DollarSign, Banknote, Gift, Ban, ShoppingBag,
-  MessageSquareMore, Eye, Smartphone, Wallet, Loader2,
+  MessageSquareMore, Eye, Smartphone, Wallet, Loader2, Crosshair,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { adminApi, winnerProofApi, WinnerProof, DepositRequest, AdminStats, formatCurrency } from '@/lib/services';
@@ -108,6 +108,7 @@ export default function AdminPage() {
               { href: '/admin/store', label: 'Store Manager', desc: 'Shop items & pricing', icon: ShoppingBag, tone: 'bg-green-500/15 text-green-400' },
               { href: '/admin/support', label: 'Support', desc: 'User tickets', icon: MessageSquareMore, tone: 'bg-blue-500/15 text-blue-400' },
               { href: '/admin/pending-results', label: 'Pending Results', desc: 'Approve winner payouts', icon: Trophy, tone: 'bg-amber-500/15 text-amber-400' },
+              { href: '/admin/kill-counter', label: 'AI Kill Counter', desc: 'Scan video & count kills', icon: Crosshair, tone: 'bg-rose-500/15 text-rose-400' },
               { href: '/admin/withdrawals', label: 'Withdrawals', desc: 'Redeem & refund requests', icon: Banknote, tone: 'bg-sky-500/15 text-sky-400' },
               { href: '/admin/payments', label: 'UPI Payments', desc: 'Deposit approvals', icon: DollarSign, tone: 'bg-green-500/15 text-green-400' },
               { href: '/admin/gift-cards', label: 'Gift Cards', desc: 'Catalog & fulfillment', icon: Gift, tone: 'bg-pink-500/15 text-pink-400' },

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { Decimal } from '@prisma/client/runtime/library';
-import { GameMode, Platform, TournamentFormat, TournamentStatus } from '@prisma/client';
+import { GameMode, Platform, TournamentFormat, TournamentStatus, TournamentType } from '@prisma/client';
 import { validatePrizePool } from '../services/commission.service';
 import { escrowService } from '../services/escrow.service';
 import { notificationService } from '../services/notification.service';
@@ -58,6 +58,11 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   const prizePoolNum = isFree ? 0 : Number(data.prizePool);
   const maxPlayers = data.maxParticipants;
 
+  const tourFormat: TournamentType = data.tournamentFormat === 'PER_KILL' ? 'PER_KILL' : 'PLACEMENT';
+  const isPerKill = tourFormat === 'PER_KILL';
+  const perKillRateNum = isPerKill && data.perKillRate != null ? new Decimal(Number(data.perKillRate)) : null;
+  const booyahPrizeNum = isPerKill && data.booyahPrize != null ? new Decimal(Number(data.booyahPrize)) : null;
+
   if (!isFree) {
     const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum, data.gameMode);
     if (!validation.valid) {
@@ -75,6 +80,9 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
         title: data.title,
         description: data.description,
         format: data.format as TournamentFormat,
+        tournamentFormat: tourFormat,
+        perKillRate: perKillRateNum,
+        booyahPrize: booyahPrizeNum,
         platform: (data.platform as Platform) || 'MOBILE',
         gameMode: (data.gameMode as GameMode) || 'FULL_MAP',
         requiredLevel: parseInt(String(data.requiredLevel ?? data.minLevel ?? 0), 10) || 0,
@@ -91,9 +99,9 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
         platformCommission: new Decimal(validation.breakdown.platformCommission),
         hostCommission: new Decimal(validation.breakdown.hostCommission),
         remainingPool: new Decimal(validation.breakdown.remainingPool),
-        prizeFirst: data.prizeFirst !== undefined ? new Decimal(data.prizeFirst) : new Decimal(0),
-        prizeSecond: data.prizeSecond !== undefined && data.prizeSecond !== null ? new Decimal(data.prizeSecond) : null,
-        prizeThird: data.prizeThird !== undefined && data.prizeThird !== null ? new Decimal(data.prizeThird) : null,
+        prizeFirst: isPerKill ? (booyahPrizeNum ?? new Decimal(0)) : (data.prizeFirst !== undefined ? new Decimal(data.prizeFirst) : new Decimal(0)),
+        prizeSecond: isPerKill ? null : (data.prizeSecond !== undefined && data.prizeSecond !== null ? new Decimal(data.prizeSecond) : null),
+        prizeThird: isPerKill ? null : (data.prizeThird !== undefined && data.prizeThird !== null ? new Decimal(data.prizeThird) : null),
       },
       include: { creator: { select: { id: true, username: true } } },
     });
@@ -119,6 +127,9 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       title: data.title,
       description: data.description,
       format: data.format as TournamentFormat,
+      tournamentFormat: tourFormat,
+      perKillRate: perKillRateNum,
+      booyahPrize: booyahPrizeNum,
       platform: (data.platform as Platform) || 'MOBILE',
       gameMode: (data.gameMode as GameMode) || 'FULL_MAP',
       requiredLevel: parseInt(String(data.requiredLevel ?? data.minLevel ?? 0), 10) || 0,
@@ -135,9 +146,9 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       platformCommission: new Decimal(0),
       hostCommission: new Decimal(0),
       remainingPool: new Decimal(0),
-      prizeFirst: new Decimal(Number(data.prizeFirst) || 0),
-      prizeSecond: data.prizeSecond != null && Number(data.prizeSecond) > 0 ? new Decimal(Number(data.prizeSecond)) : null,
-      prizeThird: data.prizeThird != null && Number(data.prizeThird) > 0 ? new Decimal(Number(data.prizeThird)) : null,
+      prizeFirst: isPerKill ? (booyahPrizeNum ?? new Decimal(0)) : new Decimal(Number(data.prizeFirst) || 0),
+      prizeSecond: isPerKill ? null : (data.prizeSecond != null && Number(data.prizeSecond) > 0 ? new Decimal(Number(data.prizeSecond)) : null),
+      prizeThird: isPerKill ? null : (data.prizeThird != null && Number(data.prizeThird) > 0 ? new Decimal(Number(data.prizeThird)) : null),
     },
     include: { creator: { select: { id: true, username: true } } },
   });

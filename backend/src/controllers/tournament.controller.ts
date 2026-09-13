@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import { TournamentFormat, TournamentStatus, Platform, GameMode } from '@prisma/client';
+import { TournamentFormat, TournamentStatus, Platform, GameMode, TournamentType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
 import { cacheGet, cacheSet, cacheDel, cacheDelPattern } from '../config/redis';
@@ -25,6 +25,11 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   const maxPlayers = data.maxParticipants;
   const prizePoolNum = isFree ? 0 : Number(data.prizePool);
 
+  const tourFormat: TournamentType = data.tournamentFormat === 'PER_KILL' ? 'PER_KILL' : 'PLACEMENT';
+  const isPerKill = tourFormat === 'PER_KILL';
+  const perKillRateNum = isPerKill && data.perKillRate != null ? new Decimal(Number(data.perKillRate)) : null;
+  const booyahPrizeNum = isPerKill && data.booyahPrize != null ? new Decimal(Number(data.booyahPrize)) : null;
+
   if (!isFree) {
     const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum, data.gameMode);
     if (!validation.valid) {
@@ -36,13 +41,16 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
     const lastTourNum = lastTour?.uid ? parseInt(lastTour.uid.replace('T-', '')) || 9000 : 9000;
     const tourUid = `T-${lastTourNum + 1}`;
 
-    const { minLevel: _minLevel, isFree: _isFree, ...cleanData } = data;
+    const { minLevel: _minLevel, isFree: _isFree, tournamentFormat: _tf, perKillRate: _pkr, booyahPrize: _bp, ...cleanData } = data;
     const reqLevel = parseInt(String(data.requiredLevel ?? data.minLevel ?? 0), 10) || 0;
 
     const tournament = await prisma.tournament.create({
       data: {
         ...cleanData,
         uid: tourUid,
+        tournamentFormat: tourFormat,
+        perKillRate: perKillRateNum,
+        booyahPrize: booyahPrizeNum,
         requiredLevel: reqLevel,
         entryFee: new Decimal(entryFeeNum),
         prizePool: new Decimal(prizePoolNum),
@@ -54,9 +62,9 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
         platformCommission: new Decimal(validation.breakdown.platformCommission),
         hostCommission: new Decimal(validation.breakdown.hostCommission),
         remainingPool: new Decimal(validation.breakdown.remainingPool),
-        prizeFirst: data.prizeFirst !== undefined ? new Decimal(data.prizeFirst) : new Decimal(0),
-        prizeSecond: data.prizeSecond != null ? new Decimal(data.prizeSecond) : null,
-        prizeThird: data.prizeThird != null ? new Decimal(data.prizeThird) : null,
+        prizeFirst: isPerKill ? (booyahPrizeNum ?? new Decimal(0)) : (data.prizeFirst !== undefined ? new Decimal(data.prizeFirst) : new Decimal(0)),
+        prizeSecond: isPerKill ? null : (data.prizeSecond != null ? new Decimal(data.prizeSecond) : null),
+        prizeThird: isPerKill ? null : (data.prizeThird != null ? new Decimal(data.prizeThird) : null),
       },
       include: { creator: { select: { id: true, username: true } } },
     });
@@ -77,13 +85,16 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   const lastTourNum = lastTour?.uid ? parseInt(lastTour.uid.replace('T-', '')) || 9000 : 9000;
   const tourUid = `T-${lastTourNum + 1}`;
 
-  const { minLevel: _minLevel, isFree: _isFree, ...cleanFreeData } = data;
+  const { minLevel: _minLevel, isFree: _isFree, tournamentFormat: _tf, perKillRate: _pkr, booyahPrize: _bp, ...cleanFreeData } = data;
   const reqFreeLevel = parseInt(String(data.requiredLevel ?? data.minLevel ?? 0), 10) || 0;
 
   const tournament = await prisma.tournament.create({
     data: {
       ...cleanFreeData,
       uid: tourUid,
+      tournamentFormat: tourFormat,
+      perKillRate: perKillRateNum,
+      booyahPrize: booyahPrizeNum,
       requiredLevel: reqFreeLevel,
       entryFee: new Decimal(0),
       prizePool: new Decimal(Number(data.prizePool) || 0),
@@ -95,9 +106,9 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
       platformCommission: new Decimal(0),
       hostCommission: new Decimal(0),
       remainingPool: new Decimal(0),
-      prizeFirst: new Decimal(Number(data.prizeFirst) || 0),
-      prizeSecond: data.prizeSecond != null && Number(data.prizeSecond) > 0 ? new Decimal(Number(data.prizeSecond)) : null,
-      prizeThird: data.prizeThird != null && Number(data.prizeThird) > 0 ? new Decimal(Number(data.prizeThird)) : null,
+      prizeFirst: isPerKill ? (booyahPrizeNum ?? new Decimal(0)) : new Decimal(Number(data.prizeFirst) || 0),
+      prizeSecond: isPerKill ? null : (data.prizeSecond != null && Number(data.prizeSecond) > 0 ? new Decimal(Number(data.prizeSecond)) : null),
+      prizeThird: isPerKill ? null : (data.prizeThird != null && Number(data.prizeThird) > 0 ? new Decimal(Number(data.prizeThird)) : null),
     },
     include: { creator: { select: { id: true, username: true } } },
   });

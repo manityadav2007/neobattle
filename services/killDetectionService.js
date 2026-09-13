@@ -211,9 +211,10 @@ async function processBatchWithRetry(model, prompt, imageParts, batchNumber, tot
  * 6. Cleans up temporary frames and returns detected kills
  *
  * @param {string} videoFilePath - Path to Free Fire gameplay video file.
+ * @param {(progress: {batchIndex: number, currentBatch: number, totalBatches: number, batchKills: Array<{eliminator: string, eliminated: string}>, allKillsSoFar: Array<{eliminator: string, eliminated: string, timestamp: number}>}) => void} [onProgress] - Optional progress callback.
  * @returns {Promise<Array<{eliminator: string, eliminated: string, timestamp: number}>>}
  */
-async function detectKillsFromVideo(videoFilePath) {
+async function detectKillsFromVideo(videoFilePath, onProgress) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -374,6 +375,25 @@ async function detectKillsFromVideo(videoFilePath) {
           });
         }
       }
+
+      if (typeof onProgress === 'function') {
+        try {
+          const killsSoFar = collectedKills.map(({ eliminator, eliminated, timestamp }) => ({
+            eliminator,
+            eliminated,
+            timestamp,
+          }));
+          onProgress({
+            batchIndex: batch.batchIndex,
+            currentBatch: batchNumber,
+            totalBatches,
+            batchKills: uniqueBatchKills,
+            allKillsSoFar: killsSoFar,
+          });
+        } catch (callbackErr) {
+          console.warn('[KillDetection] Warning: onProgress callback threw an error:', callbackErr.message || callbackErr);
+        }
+      }
     }
 
     // Map to final sanitized output format: { eliminator, eliminated, timestamp }
@@ -387,6 +407,15 @@ async function detectKillsFromVideo(videoFilePath) {
       `[KillDetection] Detection pipeline complete. Total deduplicated kills detected: ${finalKills.length}`
     );
     return finalKills;
+  } catch (pipelineErr) {
+    if (collectedKills && collectedKills.length > 0) {
+      pipelineErr.partialKills = collectedKills.map(({ eliminator, eliminated, timestamp }) => ({
+        eliminator,
+        eliminated,
+        timestamp,
+      }));
+    }
+    throw pipelineErr;
   } finally {
     // Clean up temporary extracted frames
     try {

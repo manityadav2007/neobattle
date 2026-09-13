@@ -44,6 +44,10 @@ export interface Tournament {
   prizeFirst?: number | string | null;
   prizeSecond?: number | string | null;
   prizeThird?: number | string | null;
+  tournamentFormat?: 'PLACEMENT' | 'PER_KILL';
+  perKillRate?: number | string | null;
+  booyahPrize?: number | string | null;
+  finalKillList?: any;
   maxParticipants: number;
   teamSize: string | null;
   mapName: string | null;
@@ -990,3 +994,92 @@ export function isTournamentEnded(t: {
 }): boolean {
   return getEffectiveStatus(t) === 'Ended';
 }
+
+export const killCounterApi = {
+  searchTournaments: async (search?: string) => {
+    const res = await api.get<ApiResponse<Tournament[]>>('/admin/kill-counter/tournaments', {
+      params: { search },
+    });
+    return res.data;
+  },
+  getTournamentRoster: async (id: string) => {
+    const res = await api.get<ApiResponse<{
+      tournament: Tournament;
+      entries: any[];
+      candidates: any[];
+      isTeamTournament: boolean;
+      finalKillList?: any;
+    }>>(`/admin/kill-counter/tournaments/${id}`);
+    return res.data;
+  },
+  uploadVideo: async (tournamentId: string, file: File, onUploadProgress?: (percent: number) => void) => {
+    const formData = new FormData();
+    formData.append('tournamentId', tournamentId);
+    formData.append('video', file);
+
+    const res = await api.post<ApiResponse<{
+      jobId: string;
+      tournamentId: string;
+      fileName: string;
+      fileSize: number;
+    }>>('/admin/kill-counter/upload-video', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total && onUploadProgress) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onUploadProgress(percent);
+        }
+      },
+    });
+    return res.data;
+  },
+  startAnalysis: async (jobId: string) => {
+    const res = await api.post<ApiResponse<{
+      jobId: string;
+      status: string;
+      progress: any;
+    }>>(`/admin/kill-counter/jobs/${jobId}/start`);
+    return res.data;
+  },
+  getJobStatus: async (jobId: string) => {
+    const res = await api.get<ApiResponse<{
+      id: string;
+      tournamentId: string;
+      status: 'ready' | 'processing' | 'completed' | 'failed';
+      progress: {
+        currentBatch: number;
+        totalBatches: number;
+        percent: number;
+        statusText: string;
+      };
+      matchedKills: Record<string, {
+        player: any;
+        kills: number;
+        detections: Array<{ eliminated: string; timestamp: number; confidence: string; score: number }>;
+      }>;
+      unmatchedDetections: Array<{
+        id: string;
+        eliminator: string;
+        eliminated: string;
+        timestamp: number;
+        bestCandidate?: any;
+        score: number;
+      }>;
+      totalDetectionsCount: number;
+      error?: string | null;
+      startedAt?: number;
+      completedAt?: number;
+    }>>(`/admin/kill-counter/jobs/${jobId}/status`);
+    return res.data;
+  },
+  finalizeKills: async (tournamentId: string, finalKills: any[], unmatchedCount?: number) => {
+    const res = await api.post<ApiResponse<{
+      tournament: Tournament;
+      finalKillRecord: any;
+    }>>(`/admin/kill-counter/tournaments/${tournamentId}/finalize`, {
+      finalKills,
+      unmatchedCount,
+    });
+    return res.data;
+  },
+};
