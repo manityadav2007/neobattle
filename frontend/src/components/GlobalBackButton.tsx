@@ -16,7 +16,7 @@ function getParentPath(pathname: string): { href: string; label: string } | null
   if (pathname.startsWith('/tournaments/')) return { href: '/tournaments', label: 'Back to Tournaments' };
 
   // Wallet sub-pages → back to /wallet
-  if (pathname.startsWith('/wallet/')) return { href: '/wallet', label: 'Wallet' };
+  if (pathname.startsWith('/wallet/')) return { href: '/wallet', label: 'Back to Wallet' };
 
   // Dashboard verification page → back to profile dashboard
   if (pathname.startsWith('/dashboard/')) return { href: '/dashboard', label: 'Back to Dashboard' };

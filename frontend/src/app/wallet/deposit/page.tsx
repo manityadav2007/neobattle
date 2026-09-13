@@ -171,16 +171,8 @@ function DepositContent() {
   return (
     <div className="min-h-[85vh] flex flex-col justify-center items-center py-10 px-4 sm:px-6">
       <div className="w-full max-w-lg mx-auto">
-        {/* Single, Clean Navigation Link at the Top */}
-        <div className="mb-6 flex items-center justify-between">
-          <Link
-            href="/wallet"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors group"
-          >
-            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-            <span>Cancel & Return to Wallet</span>
-          </Link>
-
+        {/* Header Badge */}
+        <div className="mb-6 flex items-center justify-end">
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
             Instant Verification
@@ -341,24 +333,58 @@ function DepositContent() {
               </div>
 
               {/* Waiting for verification indicator OR Late Match Transition */}
-              <div className="mt-4 pt-4 border-t border-white/5">
+              <div className="mt-5 pt-5 border-t border-white/5">
                 {!isTimerExpired ? (
-                  /* Premium Stripe/Razorpay style verification indicator */
-                  <div className="flex flex-col items-center justify-center py-2 px-1">
-                    <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 shadow-inner">
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
-                      </span>
-                      <span className="text-xs font-semibold text-zinc-200 tracking-wide flex items-center">
-                        Verifying your payment
-                        <span className="inline-flex overflow-hidden ml-1">
-                          <span className="animate-pulse font-bold text-blue-400">...</span>
-                        </span>
+                  /* Visual rotating circular spinner (Razorpay / Stripe checkout style) */
+                  <div className="flex flex-col items-center justify-center py-2 text-center">
+                    {/* Continuous rotating dual-gradient SVG ring */}
+                    <div className="relative w-12 h-12 mb-3 flex items-center justify-center">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/20 to-orange-500/20 blur-md animate-pulse" />
+                      <svg className="w-12 h-12 -rotate-90 animate-spin" viewBox="0 0 48 48">
+                        <circle
+                          cx="24"
+                          cy="24"
+                          r="18"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3.5"
+                          className="text-white/10"
+                        />
+                        <circle
+                          cx="24"
+                          cy="24"
+                          r="18"
+                          fill="none"
+                          stroke="url(#verify-spinner-gradient)"
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeDasharray="113"
+                          strokeDashoffset="75"
+                        />
+                        <defs>
+                          <linearGradient id="verify-spinner-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#3b82f6" />
+                            <stop offset="100%" stopColor="#f97316" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                      {/* Central pulsing core dot */}
+                      <div className="absolute w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+                      <div className="absolute w-2 h-2 rounded-full bg-blue-500" />
+                    </div>
+
+                    {/* Status Headline */}
+                    <div className="flex items-center justify-center gap-1 text-sm font-bold text-white tracking-wide">
+                      <span>Verifying your payment</span>
+                      <span className="flex space-x-0.5">
+                        <span className="animate-bounce delay-100 text-blue-400 font-bold">.</span>
+                        <span className="animate-bounce delay-200 text-blue-400 font-bold">.</span>
+                        <span className="animate-bounce delay-300 text-orange-400 font-bold">.</span>
                       </span>
                     </div>
-                    <p className="text-[11px] text-zinc-400 mt-2 text-center">
-                      Please complete the transfer in your UPI app. This page will update automatically once confirmed.
+
+                    <p className="text-xs text-zinc-400 mt-1 max-w-xs leading-relaxed">
+                      Please complete the transfer in your UPI app. This page will update automatically.
                     </p>
                   </div>
                 ) : (
