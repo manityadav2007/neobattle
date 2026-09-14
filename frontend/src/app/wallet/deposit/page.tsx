@@ -26,6 +26,19 @@ import { getErrorMessage } from '@/lib/api';
 const FIVE_MINUTES_SECONDS = 300;
 const PRESET_AMOUNTS = [50, 100, 200, 500, 1000];
 
+// Freework-style circular wave loader configuration (Orange to Blue brand gradient)
+const FREEWORK_LOADER_DOTS = [
+  { angle: 0, color: '#f97316' },   // Fire Orange (top)
+  { angle: 45, color: '#fb923c' },  // Warm Amber/Orange
+  { angle: 90, color: '#f43f5e' },  // Coral / Rose
+  { angle: 135, color: '#818cf8' }, // Indigo Bridge
+  { angle: 180, color: '#3b82f6' }, // Neo Blue (bottom)
+  { angle: 225, color: '#60a5fa' }, // Light Neo Blue
+  { angle: 270, color: '#a855f7' }, // Violet Bridge
+  { angle: 315, color: '#ea580c' }, // Deep Fire Orange
+];
+
+
 function DepositContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -335,42 +348,35 @@ function DepositContent() {
               {/* Waiting for verification indicator OR Late Match Transition */}
               <div className="mt-5 pt-5 border-t border-white/5">
                 {!isTimerExpired ? (
-                  /* Visual rotating circular spinner (Razorpay / Stripe checkout style) */
+                  /* Freework Dribbble-style circular wave loader */
                   <div className="flex flex-col items-center justify-center py-2 text-center">
-                    {/* Continuous rotating dual-gradient SVG ring */}
+                    {/* Staggered radial dots wave loader with brand orange-to-blue gradient */}
                     <div className="relative w-12 h-12 mb-3 flex items-center justify-center">
-                      <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/20 to-orange-500/20 blur-md animate-pulse" />
-                      <svg className="w-12 h-12 -rotate-90 animate-spin" viewBox="0 0 48 48">
-                        <circle
-                          cx="24"
-                          cy="24"
-                          r="18"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3.5"
-                          className="text-white/10"
-                        />
-                        <circle
-                          cx="24"
-                          cy="24"
-                          r="18"
-                          fill="none"
-                          stroke="url(#verify-spinner-gradient)"
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                          strokeDasharray="113"
-                          strokeDashoffset="75"
-                        />
-                        <defs>
-                          <linearGradient id="verify-spinner-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor="#3b82f6" />
-                            <stop offset="100%" stopColor="#f97316" />
-                          </linearGradient>
-                        </defs>
-                      </svg>
-                      {/* Central pulsing core dot */}
-                      <div className="absolute w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-                      <div className="absolute w-2 h-2 rounded-full bg-blue-500" />
+                      {/* Ambient background glow aura */}
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/15 via-transparent to-orange-500/15 blur-md pointer-events-none" />
+
+                      {/* 8 Radial Staggered Pulsing Dots */}
+                      {FREEWORK_LOADER_DOTS.map((dot, i) => (
+                        <div
+                          key={i}
+                          className="absolute top-1/2 left-1/2 -ml-1 -mt-1 w-2 h-2 flex items-center justify-center pointer-events-none"
+                          style={{
+                            transform: `rotate(${dot.angle}deg) translateY(-16px)`,
+                          }}
+                        >
+                          <div
+                            className="w-2 h-2 rounded-full freework-wave-dot"
+                            style={{
+                              backgroundColor: dot.color,
+                              color: dot.color,
+                              animationDelay: `${-1.2 + (i * 1.2) / FREEWORK_LOADER_DOTS.length}s`,
+                            }}
+                          />
+                        </div>
+                      ))}
+
+                      {/* Delicate ambient center core */}
+                      <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-blue-400/40 to-orange-400/40 blur-[0.5px] pointer-events-none" />
                     </div>
 
                     {/* Status Headline */}
