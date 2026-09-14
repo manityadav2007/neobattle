@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, CheckCircle, AlertCircle, Loader2, Smartphone, ShieldCheck, Clock, RefreshCw, Copy, Check
+  X, CheckCircle, AlertCircle, Loader2, Smartphone, ShieldCheck, Clock, RefreshCw, Copy, Check, Info
 } from 'lucide-react';
 import { dynamicDepositApi, DynamicDepositOrder, DepositOrderStatus, formatCurrency } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
@@ -238,14 +238,23 @@ export default function DynamicDepositModal({
           {/* Active QR & Countdown State */}
           {!loading && !error && !isSuccess && order && (
             <div className="space-y-4 pt-3">
-              {/* Amount Banner — Always shows requested round amount (e.g. ₹50) */}
+              {/* Amount Banner — Shows exact actual amount with paise offset */}
               <div className="text-center p-3 rounded-2xl bg-white/[0.04] border border-white/5">
                 <span className="text-xs text-zinc-400 uppercase tracking-wider font-semibold block">
                   Scan to Pay
                 </span>
                 <span className="text-3xl font-black gradient-text tracking-tight mt-0.5 inline-block">
-                  ₹{order.requestedAmount}
+                  {formatCurrency(order.actualQrAmount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
+              </div>
+
+              {/* Explanatory note about dynamic paise matching */}
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-left flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-zinc-300 leading-relaxed">
+                  <strong className="text-blue-300 font-semibold">Why the extra paise?</strong>{' '}
+                  This unique amount lets us verify and credit your payment instantly, without any manual approval delays. You&apos;ll always receive the exact amount you requested in your wallet.
+                </p>
               </div>
 
               {/* Dynamic QR Display */}

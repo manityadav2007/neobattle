@@ -977,9 +977,22 @@ export const notificationApi = {
   },
 };
 
-export function formatCurrency(amount: number | string): string {
+export function formatCurrency(
+  amount: number | string,
+  options?: { showDecimals?: boolean; minimumFractionDigits?: number; maximumFractionDigits?: number }
+): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);
+  if (isNaN(num)) return '₹0';
+  const hasDecimals = num % 1 !== 0;
+  const shouldShowDecimals = options?.showDecimals ?? hasDecimals;
+  const minDigits = options?.minimumFractionDigits ?? (shouldShowDecimals ? 2 : 0);
+  const maxDigits = options?.maximumFractionDigits ?? (shouldShowDecimals ? 2 : 0);
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: minDigits,
+    maximumFractionDigits: maxDigits,
+  }).format(num);
 }
 
 export function formatDate(date: string): string {

@@ -18,6 +18,7 @@ import {
   Sparkles,
   ChevronRight,
   CreditCard,
+  Info,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { dynamicDepositApi, DynamicDepositOrder, formatCurrency } from '@/lib/services';
@@ -253,12 +254,21 @@ function DepositContent() {
                 <h1 className="text-3xl sm:text-4xl font-display font-black text-white tracking-tight">
                   Scan to Pay{' '}
                   <span className="gradient-text font-black">
-                    {formatCurrency(order.requestedAmount)}
+                    {formatCurrency(order.actualQrAmount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </h1>
                 <p className="text-xs text-zinc-400 mt-1.5 max-w-xs mx-auto">
                   Scan the QR code using any UPI app to deposit instantly.
                 </p>
+
+                {/* Explanatory note about dynamic paise matching */}
+                <div className="mt-3.5 mx-auto max-w-sm p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-left flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    <strong className="text-blue-300 font-semibold">Why the extra paise?</strong>{' '}
+                    This unique amount lets us verify and credit your payment instantly, without any manual approval delays. You&apos;ll always receive the exact amount you requested in your wallet.
+                  </p>
+                </div>
               </div>
 
               {/* Seamless QR Code Display Card */}
@@ -266,9 +276,9 @@ function DepositContent() {
                 <div className="p-1 rounded-2xl bg-gradient-to-br from-blue-500/30 via-white/10 to-orange-500/30 shadow-2xl">
                   <div className="bg-[#0f1017] rounded-xl p-4 flex flex-col items-center border border-white/5">
                     {/* Badge inside QR card */}
-                    <div className="mb-3 px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-1.5 text-[10px] font-semibold text-zinc-300">
-                      <Sparkles className="w-3 h-3 text-blue-400" />
-                      <span>Any UPI App Accepted</span>
+                    <div className="mb-3 px-3.5 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-1.5 text-[11px] font-semibold text-zinc-300">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Exact Amount: <strong className="text-white font-mono">{formatCurrency(order.actualQrAmount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
                     </div>
 
                     {/* QR Code itself */}
@@ -294,7 +304,7 @@ function DepositContent() {
                     className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl btn-fire text-white font-bold text-xs tracking-wide shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
                   >
                     <Smartphone className="w-4 h-4" />
-                    Pay via UPI App (Mobile)
+                    Pay {formatCurrency(order.actualQrAmount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} via UPI App (Mobile)
                   </a>
 
                   <button
