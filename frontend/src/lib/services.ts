@@ -1244,3 +1244,54 @@ export const killCounterApi = {
     return res.data;
   },
 };
+
+export interface TestAiDetectedKill {
+  killer: string;
+  victim: string;
+  weapon: string;
+  timestamp: number;
+  formattedTime: string;
+  eliminator?: string;
+  eliminated?: string;
+}
+
+export interface TestAiFeedResponse {
+  success: boolean;
+  message: string;
+  totalKillsFound: number;
+  kills: TestAiDetectedKill[];
+  data?: {
+    totalKillsFound: number;
+    kills: TestAiDetectedKill[];
+    videoDetails?: {
+      fileName: string;
+      fileSize: number;
+      framesAnalyzed: number;
+      batchesProcessed: number;
+      durationSeconds: number;
+    };
+  };
+}
+
+export const testAiCounterApi = {
+  testFeed: async (
+    file: File,
+    onUploadProgress?: (percent: number) => void
+  ): Promise<TestAiFeedResponse> => {
+    const formData = new FormData();
+    formData.append('video', file);
+
+    const res = await api.post<TestAiFeedResponse>('/admin/test-ai-feed', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 180000, // 3-minute timeout for frame extraction and Gemini inference
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total && onUploadProgress) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onUploadProgress(percent);
+        }
+      },
+    });
+    return res.data;
+  },
+};
+

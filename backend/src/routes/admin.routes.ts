@@ -1,9 +1,18 @@
 import { Router } from 'express';
 import * as adminController from '../controllers/admin.controller';
 import { authenticate } from '../middleware/authMiddleware';
-import { ownerOnly } from '../middleware/adminCheck';
+import { adminCheck, ownerOnly } from '../middleware/adminCheck';
 
 const router = Router();
+
+// AI Counter Playground - test video feed without tournament constraints
+router.post(
+  '/test-ai-feed',
+  authenticate,
+  adminCheck,
+  adminController.uploadTestVideoMiddleware,
+  adminController.testAiFeed
+);
 
 router.use(authenticate, ownerOnly);
 

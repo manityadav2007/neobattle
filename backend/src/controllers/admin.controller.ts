@@ -1,10 +1,15 @@
 import { Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { UserRole, TournamentStatus, TransactionType, TransactionStatus, Prisma, RedeemStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
 import { notificationService } from '../services/notification.service';
+import { detectKillsForTestFeed } from '../services/killDetectionService';
 
 function formatCurrency(n: number): string {
   return `₹${n.toLocaleString('en-IN')}`;
@@ -1066,3 +1071,122 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
     res.status(500).json({ success: false, message: 'Failed to review withdrawal request' });
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test AI Feed Video Upload & Processing (Playground)
+// ─────────────────────────────────────────────────────────────────────────────
+const TEST_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'kill-counter');
+if (!fs.existsSync(TEST_UPLOAD_DIR)) {
+  fs.mkdirSync(TEST_UPLOAD_DIR, { recursive: true });
+}
+
+const testVideoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, TEST_UPLOAD_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.mp4';
+    cb(null, `test_feed_${Date.now()}_${uuidv4().slice(0, 8)}${ext}`);
+  },
+});
+
+const testVideoFilter = (_req: any, file: any, cb: any) => {
+  const allowed = /\.(mp4|mkv|mov|webm|avi)$/i;
+  if (allowed.test(file.originalname) || file.mimetype.startsWith('video/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only video files (.mp4, .mkv, .mov, .webm, .avi) are allowed'));
+  }
+};
+
+const testUpload = multer({
+  storage: testVideoStorage,
+  fileFilter: testVideoFilter,
+  limits: { fileSize: 250 * 1024 * 1024 }, // 250 MB
+}).fields([
+  { name: 'video', maxCount: 1 },
+  { name: 'file', maxCount: 1 },
+]);
+
+export const uploadTestVideoMiddleware = (req: any, res: any, next: any) => {
+  testUpload(req, res, (err: any) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message || 'File upload failed' });
+    }
+    if (req.files) {
+      if (req.files.video?.[0]) {
+        req.file = req.files.video[0];
+      } else if (req.files.file?.[0]) {
+        req.file = req.files.file[0];
+      }
+    }
+    next();
+  });
+};
+
+/**
+ * POST /api/admin/test-ai-feed
+ * Accepts a video file upload via multer.
+ * Bypasses all database player checks and tournament ID restrictions.
+ * Runs AI/OCR frame sampling and returns JSON with detected kills (killer, victim, weapon, timestamp, totalKillsFound).
+ */
+export async function testAiFeed(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const file = req.file;
+
+  if (!file) {
+    res.status(400).json({
+      success: false,
+      message: 'No video file uploaded. Please provide a video under "video" or "file".',
+    });
+    return;
+  }
+
+  const startTime = Date.now();
+  const videoPath = file.path;
+
+  try {
+    console.log(`[TestAIFeed] Analyzing uploaded video: ${file.originalname} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`);
+
+    const result = await detectKillsForTestFeed(videoPath);
+    const durationSeconds = Math.round((Date.now() - startTime) / 1000);
+
+    console.log(`[TestAIFeed] Completed in ${durationSeconds}s. Found ${result.totalKillsFound} kills.`);
+
+    res.json({
+      success: true,
+      message: `Successfully analyzed gameplay video. Found ${result.totalKillsFound} kill feed event(s).`,
+      totalKillsFound: result.totalKillsFound,
+      kills: result.kills,
+      data: {
+        totalKillsFound: result.totalKillsFound,
+        kills: result.kills,
+        videoDetails: {
+          fileName: file.originalname,
+          fileSize: file.size,
+          framesAnalyzed: result.framesAnalyzed,
+          batchesProcessed: result.batchesProcessed,
+          durationSeconds,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('[TestAIFeed] Error analyzing video:', err.message || err);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to analyze video feed',
+      totalKillsFound: 0,
+      kills: [],
+    });
+  } finally {
+    // Clean up uploaded video file from disk
+    try {
+      if (fs.existsSync(videoPath)) {
+        fs.unlinkSync(videoPath);
+        console.log(`[TestAIFeed] Cleaned up temporary upload: ${videoPath}`);
+      }
+    } catch (cleanErr: any) {
+      console.warn(`[TestAIFeed] Failed to delete uploaded video ${videoPath}:`, cleanErr.message);
+    }
+  }
+}
+

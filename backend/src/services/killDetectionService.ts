@@ -437,6 +437,291 @@ export async function detectKillsFromVideo(
   }
 }
 
+export interface TestDetectedKill {
+  killer: string;
+  victim: string;
+  weapon: string;
+  timestamp: number;
+  formattedTime: string;
+  eliminator: string;
+  eliminated: string;
+}
+
+export interface TestAiFeedResult {
+  totalKillsFound: number;
+  kills: TestDetectedKill[];
+  framesAnalyzed: number;
+  batchesProcessed: number;
+}
+
+const TEST_FEED_PROMPT =
+  'These are sequential screenshots from a Free Fire match, taken a few seconds apart, in chronological order. ' +
+  'For each image where a kill feed notification is visible (text usually near the top of the screen showing one player eliminating or knocking down another), extract: ' +
+  '1. "killer": name of the eliminator/killer. ' +
+  '2. "victim": name of the eliminated/knocked player. ' +
+  '3. "weapon": name of the weapon or method (e.g. "M1887", "MP40", "AWM", "AK47", "Groza", "Woodpecker", "Headshot", "Grenade", "Fist", etc., or "Unknown" if not clearly visible). ' +
+  'Return a JSON array of all kills found across these images in this format: [{"killer": "name", "victim": "name", "weapon": "weapon name"}]. ' +
+  'If no kill feed notification is visible in any image, return an empty array [].';
+
+function parseTestFeedGeminiResponse(rawText: string): Array<{ killer: string; victim: string; weapon: string }> {
+  if (!rawText || !rawText.trim()) return [];
+
+  let cleaned = rawText.trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```\s*/, '').replace(/```$/, '').trim();
+  }
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    let list: any[] = [];
+    if (Array.isArray(parsed)) {
+      list = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      const arrayProp = Object.values(parsed).find((val) => Array.isArray(val));
+      if (arrayProp && Array.isArray(arrayProp)) list = arrayProp;
+    }
+
+    return list
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null;
+        const killer = String(item.killer || item.eliminator || '').trim();
+        const victim = String(item.victim || item.eliminated || '').trim();
+        const weapon = String(item.weapon || 'Unknown').trim() || 'Unknown';
+        if (!killer || !victim) return null;
+        return { killer, victim, weapon };
+      })
+      .filter((item): item is { killer: string; victim: string; weapon: string } => item !== null);
+  } catch (err) {
+    console.warn('[KillDetection] Warning: Failed to parse test feed Gemini response as JSON. Raw response:', rawText);
+    return [];
+  }
+}
+
+function formatSeconds(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Test AI Feed Detection:
+ * Bypasses all tournament roster checks and database queries.
+ * Runs frame extraction via ffmpeg and multimodal Gemini analysis to detect kills (killer, victim, weapon, timestamp).
+ */
+export async function detectKillsForTestFeed(
+  videoFilePath: string,
+  onProgress?: (progress: ProgressData) => void
+): Promise<TestAiFeedResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      'GEMINI_API_KEY is missing. Please set GEMINI_API_KEY in your .env file or environment variables.'
+    );
+  }
+
+  if (!videoFilePath || typeof videoFilePath !== 'string') {
+    throw new Error('Invalid videoFilePath parameter provided.');
+  }
+
+  const resolvedVideoPath = path.resolve(videoFilePath);
+  if (!fs.existsSync(resolvedVideoPath)) {
+    throw new Error(`Video file not found at: ${resolvedVideoPath}`);
+  }
+
+  // Initialize Google Generative AI
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: GEMINI_MODEL_NAME,
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.1,
+    },
+  });
+
+  // Create temporary directory for extracted frames
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'firearena-test-kills-'));
+  console.log(`[TestAIFeed] Starting test detection pipeline for: ${resolvedVideoPath}`);
+  console.log(`[TestAIFeed] Temp frames directory: ${tempDir}`);
+
+  const collectedKills: Array<TestDetectedKill & { _batchIndex: number; _batchStartFrameIndex: number; _batchFrameCount: number }> = [];
+
+  try {
+    // 1. Extract frames from video (1 frame every 4s)
+    const frameFiles = await extractFramesFromVideo(resolvedVideoPath, tempDir);
+
+    if (frameFiles.length === 0) {
+      console.warn('[TestAIFeed] No frames were extracted from the video.');
+      return { totalKillsFound: 0, kills: [], framesAnalyzed: 0, batchesProcessed: 0 };
+    }
+
+    console.log(`[TestAIFeed] Total frames extracted: ${frameFiles.length}`);
+
+    // 2. Group frames into batches of 12 (up to 4 batches / 48 frames for snappy test turnaround)
+    const batches = [];
+    const maxBatches = 6; // Max 72 frames (~4.8 minutes of gameplay)
+    for (let i = 0; i < frameFiles.length && batches.length < maxBatches; i += BATCH_SIZE) {
+      batches.push({
+        batchIndex: batches.length,
+        frames: frameFiles.slice(i, i + BATCH_SIZE),
+        startFrameIndex: i,
+      });
+    }
+
+    const totalBatches = batches.length;
+    console.log(`[TestAIFeed] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each.`);
+
+    // 3. Process each batch sequentially
+    for (const batch of batches) {
+      const batchNumber = batch.batchIndex + 1;
+
+      const imageParts = batch.frames.map((framePath) => ({
+        inlineData: {
+          data: fs.readFileSync(framePath).toString('base64'),
+          mimeType: 'image/jpeg',
+        },
+      }));
+
+      // Call Gemini with test feed prompt
+      let rawBatchKills: Array<{ killer: string; victim: string; weapon: string }> = [];
+      const maxAttempts = 2;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await enforceRateLimit();
+          console.log(`[TestAIFeed] Processing batch ${batchNumber} of ${totalBatches}...`);
+          const result = await model.generateContent([TEST_FEED_PROMPT, ...imageParts]);
+          const response = await result.response;
+          const text = response.text();
+          rawBatchKills = parseTestFeedGeminiResponse(text);
+          console.log(`[TestAIFeed] Batch ${batchNumber} completed: ${rawBatchKills.length} kill(s) found.`);
+          break;
+        } catch (err: any) {
+          console.error(`[TestAIFeed] Error processing batch ${batchNumber} on attempt ${attempt}:`, err.message || err);
+          if (attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+        }
+      }
+
+      // Deduplicate identical kills within the same batch
+      const uniqueBatchKills: Array<{ killer: string; victim: string; weapon: string }> = [];
+      for (const kill of rawBatchKills) {
+        const isDuplicate = uniqueBatchKills.some(
+          (k) =>
+            k.killer.toLowerCase() === kill.killer.toLowerCase() &&
+            k.victim.toLowerCase() === kill.victim.toLowerCase()
+        );
+        if (!isDuplicate) {
+          uniqueBatchKills.push(kill);
+        }
+      }
+
+      // Compute timestamps
+      const batchStartSeconds = batch.startFrameIndex * FRAME_INTERVAL_SECONDS;
+      const batchFrameCount = batch.frames.length;
+      const batchDurationSeconds = batchFrameCount * FRAME_INTERVAL_SECONDS;
+
+      for (let i = 0; i < uniqueBatchKills.length; i++) {
+        const kill = uniqueBatchKills[i];
+        const offsetSeconds =
+          uniqueBatchKills.length === 1
+            ? Math.round(batchDurationSeconds / 2)
+            : Math.round(((i + 0.5) / uniqueBatchKills.length) * batchDurationSeconds);
+        const killTimestamp = batchStartSeconds + offsetSeconds;
+
+        let isDuplicate = false;
+        for (const existing of collectedKills) {
+          const samePair =
+            existing.killer.toLowerCase() === kill.killer.toLowerCase() &&
+            existing.victim.toLowerCase() === kill.victim.toLowerCase();
+
+          if (!samePair) continue;
+
+          // 10s window check
+          if (Math.abs(killTimestamp - existing.timestamp) <= 10) {
+            isDuplicate = true;
+            break;
+          }
+
+          // Consecutive batch boundary check
+          if (batch.batchIndex === existing._batchIndex + 1) {
+            const prevBatchEnd =
+              (existing._batchStartFrameIndex + existing._batchFrameCount - 1) * FRAME_INTERVAL_SECONDS;
+            const currentBatchStart = batch.startFrameIndex * FRAME_INTERVAL_SECONDS;
+            if (Math.abs(currentBatchStart - prevBatchEnd) <= 10) {
+              isDuplicate = true;
+              break;
+            }
+          }
+        }
+
+        if (!isDuplicate) {
+          collectedKills.push({
+            killer: kill.killer,
+            victim: kill.victim,
+            weapon: kill.weapon || 'Unknown',
+            timestamp: killTimestamp,
+            formattedTime: formatSeconds(killTimestamp),
+            eliminator: kill.killer,
+            eliminated: kill.victim,
+            _batchIndex: batch.batchIndex,
+            _batchStartFrameIndex: batch.startFrameIndex,
+            _batchFrameCount: batchFrameCount,
+          });
+        }
+      }
+
+      if (typeof onProgress === 'function') {
+        try {
+          onProgress({
+            batchIndex: batch.batchIndex,
+            currentBatch: batchNumber,
+            totalBatches,
+            batchKills: uniqueBatchKills.map((k) => ({ eliminator: k.killer, eliminated: k.victim })),
+            allKillsSoFar: collectedKills.map((k) => ({
+              eliminator: k.killer,
+              eliminated: k.victim,
+              timestamp: k.timestamp,
+            })),
+          });
+        } catch (cbErr: any) {
+          console.warn('[TestAIFeed] Progress callback warning:', cbErr.message);
+        }
+      }
+    }
+
+    const finalKills: TestDetectedKill[] = collectedKills.map((k) => ({
+      killer: k.killer,
+      victim: k.victim,
+      weapon: k.weapon,
+      timestamp: k.timestamp,
+      formattedTime: k.formattedTime,
+      eliminator: k.killer,
+      eliminated: k.victim,
+    }));
+
+    console.log(`[TestAIFeed] Test analysis finished. Total kills found: ${finalKills.length}`);
+    return {
+      totalKillsFound: finalKills.length,
+      kills: finalKills,
+      framesAnalyzed: frameFiles.length,
+      batchesProcessed: batches.length,
+    };
+  } finally {
+    // Clean up temporary extracted frames
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        console.log(`[TestAIFeed] Cleaned up temporary frames at: ${tempDir}`);
+      }
+    } catch (cleanErr: any) {
+      console.warn(`[TestAIFeed] Failed to clean up temp dir:`, cleanErr.message);
+    }
+  }
+}
+
 export default {
   detectKillsFromVideo,
+  detectKillsForTestFeed,
 };
