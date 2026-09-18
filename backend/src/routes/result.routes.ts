@@ -6,6 +6,7 @@ import { adminCheck } from '../middleware/adminCheck';
 const router = Router();
 
 // Host submits / views own result submissions for a tournament
+router.post('/tournament/:id/process-ai', authenticate, resultController.uploadResultVideoMiddleware, resultController.processAiVideo);
 router.post('/tournament/:id/submit', authenticate, resultController.submitResult);
 router.get('/mine', authenticate, resultController.listMyResultSubmissions);
 

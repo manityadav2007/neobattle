@@ -676,7 +676,9 @@ export interface ResultSubmission {
   firstUid: string;
   secondUid: string | null;
   thirdUid: string | null;
-  screenshotUrl: string;
+  screenshotUrl: string | null;
+  videoUrl?: string | null;
+  killList?: any[] | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string | null;
   reviewedAt?: string | null;
@@ -684,9 +686,13 @@ export interface ResultSubmission {
   tournament?: {
     id: string; uid: string; title: string; status: string;
     format?: string;
+    tournamentFormat?: 'PLACEMENT' | 'PER_KILL' | string;
     gameMode?: string;
     prizePool: number;
     prizeFirst: number; prizeSecond: number | null; prizeThird: number | null;
+    perKillRate?: number | null;
+    booyahPrize?: number | null;
+    finalKillList?: any | null;
     platformCommission: number; hostCommission: number;
     creator: { id: string; username: string };
     entries: Array<{
@@ -721,7 +727,7 @@ export interface ResultSubmission {
     }>;
   };
   host?: { id: string; username: string; email: string };
-  participants?: Array<{ uid: string | null; username: string | null; ign: string | null; level?: number }>;
+  participants?: Array<{ userId?: string; uid: string | null; username: string | null; ign: string | null; level?: number }>;
   teams?: Array<{
     id: string;
     name: string;
@@ -743,7 +749,33 @@ export interface ResultSubmission {
 }
 
 export const resultApi = {
-  submit: async (tournamentId: string, data: { firstUid: string; secondUid?: string; thirdUid?: string; screenshotUrl: string }) => {
+  processAi: async (tournamentId: string, videoFile: File, onProgress?: (percent: number) => void) => {
+    const formData = new FormData();
+    formData.append('video', videoFile);
+    const res = await api.post(`/results/tournament/${tournamentId}/process-ai`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percent);
+        }
+      },
+    });
+    return res.data;
+  },
+  submit: async (
+    tournamentId: string,
+    data: {
+      firstUid?: string;
+      secondUid?: string;
+      thirdUid?: string;
+      screenshotUrl?: string;
+      videoUrl?: string;
+      killList?: any[];
+      booyahUid?: string;
+    }
+  ) => {
     const res = await api.post(`/results/tournament/${tournamentId}/submit`, data);
     return res.data;
   },

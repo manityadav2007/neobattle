@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import {
   Trophy, Users, MapPin, Clock, IndianRupee,
   CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Shield, Wallet, Trash2, UserPlus, Settings, Check, BadgeCheck,
+  Crosshair, Sparkles, UploadCloud, Film, FileVideo, Crown,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
@@ -62,6 +63,16 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [resFile, setResFile] = useState<File | null>(null);
   const [submittingResult, setSubmittingResult] = useState(false);
 
+  // AI Per-Kill submission states
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [processingAi, setProcessingAi] = useState(false);
+  const [aiProgress, setAiProgress] = useState(0);
+  const [aiStatusMessage, setAiStatusMessage] = useState('');
+  const [aiKillsData, setAiKillsData] = useState<any[]>([]);
+  const [aiVideoUrl, setAiVideoUrl] = useState<string>('');
+  const [aiVideoStats, setAiVideoStats] = useState<any>(null);
+  const [booyahUserId, setBooyahUserId] = useState<string>('');
+
   useEffect(() => {
     if (!user || !tournament || user.id !== tournament.creatorId) return;
     resultApi.mine()
@@ -72,8 +83,147 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
       .catch(() => {});
   }, [user, tournament]);
 
+  useEffect(() => {
+    if (!tournament) return;
+    if (mySubmission?.killList && Array.isArray(mySubmission.killList) && mySubmission.killList.length > 0) {
+      setAiKillsData(mySubmission.killList);
+      if (mySubmission.videoUrl) setAiVideoUrl(mySubmission.videoUrl);
+      if (mySubmission.firstUid) setBooyahUserId(mySubmission.firstUid);
+      return;
+    }
+
+    if (tournament.tournamentFormat === 'PER_KILL' && (!aiKillsData || aiKillsData.length === 0)) {
+      const roster: any[] = [];
+      const seen = new Set<string>();
+      for (const entry of (tournament.entries || [])) {
+        if (entry.user && !seen.has(entry.user.id)) {
+          seen.add(entry.user.id);
+          roster.push({
+            userId: entry.user.id,
+            username: entry.user.username,
+            ign: entry.user.inGameNickname || entry.user.ign || entry.user.username,
+            freeFireId: entry.user.freeFireId,
+            teamName: null,
+            kills: 0,
+            isBooyah: false,
+          });
+        }
+        if (entry.team) {
+          const members = [
+            ...(entry.team.leader ? [{ user: entry.team.leader }] : []),
+            ...(entry.team.members || []),
+          ];
+          for (const m of members) {
+            if (m.user && !seen.has(m.user.id)) {
+              seen.add(m.user.id);
+              roster.push({
+                userId: m.user.id,
+                username: m.user.username,
+                ign: m.user.inGameNickname || m.user.ign || m.user.username,
+                freeFireId: m.user.freeFireId,
+                teamName: entry.team.name || entry.team.tag,
+                kills: 0,
+                isBooyah: false,
+              });
+            }
+          }
+        }
+      }
+      if (roster.length > 0) {
+        setAiKillsData(roster);
+      }
+    }
+  }, [tournament, mySubmission]);
+
   const handleResultScreenshot = (e: React.ChangeEvent<HTMLInputElement>) => {
     setResFile(e.target.files?.[0] || null);
+  };
+
+  const handleProcessAiVideo = async () => {
+    if (!tournament || !videoFile) {
+      setRegisterError('Please select a gameplay video file first (.mp4, .mkv, .mov, .webm)');
+      return;
+    }
+    setProcessingAi(true);
+    setRegisterError('');
+    setMessage('');
+    setAiProgress(15);
+    setAiStatusMessage('Uploading gameplay recording to server...');
+    try {
+      const res = await resultApi.processAi(tournament.id, videoFile, (percent) => {
+        setAiProgress(Math.min(85, Math.max(15, Math.round(percent * 0.85))));
+        if (percent >= 100) {
+          setAiStatusMessage('Extracting frames & running Gemini 2.5 Vision OCR...');
+        }
+      });
+      setAiProgress(100);
+      setAiStatusMessage('Analysis complete!');
+      if (res.data?.killsPerPlayer) {
+        setAiKillsData(res.data.killsPerPlayer);
+      }
+      if (res.data?.videoUrl) {
+        setAiVideoUrl(res.data.videoUrl);
+      }
+      if (res.data?.videoDetails) {
+        setAiVideoStats(res.data.videoDetails);
+      }
+      setMessage(`AI Detection Complete! Analyzed ${res.data?.videoDetails?.framesAnalyzed || 0} frames and found ${res.data?.totalKillsFound || 0} kill event(s). Review and confirm kills below.`);
+    } catch (err) {
+      setRegisterError(getErrorMessage(err));
+    } finally {
+      setProcessingAi(false);
+    }
+  };
+
+  const handleUpdatePlayerKills = (userId: string, newKills: number) => {
+    setAiKillsData((prev) =>
+      prev.map((p) => (p.userId === userId ? { ...p, kills: Math.max(0, newKills) } : p))
+    );
+  };
+
+  const handleSubmitPerKillResult = async () => {
+    if (!tournament) return;
+    if (!aiKillsData || aiKillsData.length === 0) {
+      setRegisterError('No participants found in roster to submit results.');
+      return;
+    }
+    if (!videoFile && !aiVideoUrl && !resFile && !mySubmission?.screenshotUrl) {
+      setRegisterError('Please upload and process a gameplay video recording or proof screenshot.');
+      return;
+    }
+    setSubmittingResult(true);
+    setRegisterError('');
+    try {
+      let screenshotUrl = mySubmission?.screenshotUrl || '';
+      if (resFile) {
+        const up = await uploadApi.verificationScreenshot(resFile);
+        screenshotUrl = up.data.screenshotUrl;
+      }
+
+      const killListPayload = aiKillsData.map((p) => ({
+        userId: p.userId,
+        username: p.username,
+        ign: p.ign,
+        freeFireId: p.freeFireId,
+        teamName: p.teamName,
+        kills: Number(p.kills) || 0,
+        isBooyah: p.userId === booyahUserId || Boolean(p.isBooyah),
+      }));
+
+      await resultApi.submit(tournament.id, {
+        killList: killListPayload,
+        videoUrl: aiVideoUrl || undefined,
+        screenshotUrl: screenshotUrl || undefined,
+        booyahUid: booyahUserId || undefined,
+      });
+
+      setMessage('AI Per-Kill results submitted! Awaiting Super Admin review and payout distribution.');
+      window.location.reload();
+    } catch (err) {
+      setRegisterError(getErrorMessage(err));
+    } finally {
+      setSubmittingResult(false);
+    }
   };
 
   const handleSubmitResult = async () => {
@@ -470,6 +620,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   { label: tournament.format, color: tagColorMap.format[tournament.format as keyof typeof tagColorMap.format], icon: tagIcons.format },
                   { label: tournament.platform === 'MOBILE' ? 'Mobile' : 'PC', color: tagColorMap.platform[tournament.platform as keyof typeof tagColorMap.platform], icon: tagIcons.platform },
                   { label: tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad', color: tagColorMap.gameMode[tournament.gameMode as keyof typeof tagColorMap.gameMode], icon: tagIcons.gameMode },
+                  ...(tournament.tournamentFormat === 'PER_KILL' ? [{ label: '⚡ AI-Verified Match', color: 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/30', icon: Sparkles }] : []),
                 ]}
                 className="justify-start drop-shadow-md"
               />
@@ -491,6 +642,14 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
             {/* Title & Host Meta */}
             <div className="absolute bottom-5 left-5 right-5 z-10">
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                {tournament.tournamentFormat === 'PER_KILL' && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 border border-amber-500/40 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.25)]">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    AI-Verified Per-Kill Match
+                  </span>
+                )}
+              </div>
               <h1 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)]">
                 {tournament.title}
               </h1>
@@ -526,59 +685,105 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                  <Trophy className="w-3.5 h-3.5 text-yellow-400" /> Prize Distribution
+                  <Trophy className="w-3.5 h-3.5 text-yellow-400" /> {tournament.tournamentFormat === 'PER_KILL' ? 'Per-Kill Prize Distribution' : 'Prize Distribution'}
                 </h2>
                 <span className="text-xs font-medium text-zinc-500">
-                  Total Pool: <span className="font-bold text-zinc-300">{formatCurrency(prizePool)}</span>
+                  {tournament.tournamentFormat === 'PER_KILL' ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                      <Sparkles className="w-3 h-3 text-amber-400" /> Per-Kill Mode Active
+                    </span>
+                  ) : (
+                    <>Total Pool: <span className="font-bold text-zinc-300">{formatCurrency(prizePool)}</span></>
+                  )}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                {prizes.map((p) => {
-                  const is1st = p.place === '1st';
-                  const is2nd = p.place === '2nd';
-                  return (
-                    <div
-                      key={p.place}
-                      className={`relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl border transition-all duration-300 hover:scale-[1.02] ${
-                        is1st
-                          ? 'bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-zinc-950/60 border-yellow-500/30 shadow-[0_0_25px_rgba(234,179,8,0.12)]'
-                          : is2nd
-                          ? 'bg-gradient-to-br from-zinc-300/10 via-slate-400/5 to-zinc-950/60 border-zinc-400/25 shadow-[0_0_20px_rgba(200,200,200,0.08)]'
-                          : 'bg-gradient-to-br from-amber-600/10 via-orange-600/5 to-zinc-950/60 border-amber-600/25 shadow-[0_0_20px_rgba(217,119,6,0.08)]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div
-                          className={`p-2.5 rounded-xl shrink-0 backdrop-blur-md ${
-                            is1st
-                              ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 shadow-[0_0_12px_rgba(234,179,8,0.25)]'
-                              : is2nd
-                              ? 'bg-zinc-400/15 text-zinc-200 border border-zinc-400/25'
-                              : 'bg-amber-600/20 text-amber-400 border border-amber-600/30'
-                          }`}
-                        >
-                          <Trophy className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">{p.label}</p>
-                          <p
-                            className={`text-lg sm:text-xl font-black tracking-tight ${
-                              is1st
-                                ? 'bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(234,179,8,0.3)]'
-                                : is2nd
-                                ? 'bg-gradient-to-r from-zinc-100 via-slate-200 to-zinc-400 bg-clip-text text-transparent'
-                                : 'bg-gradient-to-r from-amber-300 via-orange-400 to-amber-500 bg-clip-text text-transparent'
-                            }`}
-                          >
-                            {formatCurrency(p.value)}
-                          </p>
-                        </div>
+              {tournament.tournamentFormat === 'PER_KILL' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Per-Kill Rate Card */}
+                  <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-zinc-950/80 border border-amber-500/30 shadow-[0_0_25px_rgba(245,158,11,0.15)]">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.3)] shrink-0">
+                        <Crosshair className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Bounty Rate</p>
+                        <p className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-amber-300 via-yellow-300 to-orange-400 bg-clip-text text-transparent">
+                          {formatCurrency(Number(tournament.perKillRate) || 0)} <span className="text-sm font-semibold text-zinc-400 font-sans">/ kill</span>
+                        </p>
+                        <p className="text-xs text-zinc-400 mt-1">Every verified enemy elimination directly credits to your wallet.</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+
+                  {/* Booyah / Total Pool Card */}
+                  <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-yellow-500/15 via-amber-600/10 to-zinc-950/80 border border-yellow-500/30 shadow-[0_0_25px_rgba(234,179,8,0.12)]">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-2xl bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.25)] shrink-0">
+                        <Crown className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-yellow-400">
+                          {Number(tournament.booyahPrize) > 0 ? 'Booyah Champion Bonus' : 'Total Tournament Pool'}
+                        </p>
+                        <p className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-500 bg-clip-text text-transparent">
+                          {Number(tournament.booyahPrize) > 0 ? `+${formatCurrency(Number(tournament.booyahPrize))}` : formatCurrency(prizePool)}
+                        </p>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          {Number(tournament.booyahPrize) > 0 ? 'Extra bonus for securing the match victory on top of your kills.' : 'Dynamic pool distributed strictly based on verified kill count.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  {prizes.map((p) => {
+                    const is1st = p.place === '1st';
+                    const is2nd = p.place === '2nd';
+                    return (
+                      <div
+                        key={p.place}
+                        className={`relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl border transition-all duration-300 hover:scale-[1.02] ${
+                          is1st
+                            ? 'bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-zinc-950/60 border-yellow-500/30 shadow-[0_0_25px_rgba(234,179,8,0.12)]'
+                            : is2nd
+                            ? 'bg-gradient-to-br from-zinc-300/10 via-slate-400/5 to-zinc-950/60 border-zinc-400/25 shadow-[0_0_20px_rgba(200,200,200,0.08)]'
+                            : 'bg-gradient-to-br from-amber-600/10 via-orange-600/5 to-zinc-950/60 border-amber-600/25 shadow-[0_0_20px_rgba(217,119,6,0.08)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <div
+                            className={`p-2.5 rounded-xl shrink-0 backdrop-blur-md ${
+                              is1st
+                                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 shadow-[0_0_12px_rgba(234,179,8,0.25)]'
+                                : is2nd
+                                ? 'bg-zinc-400/15 text-zinc-200 border border-zinc-400/25'
+                                : 'bg-amber-600/20 text-amber-400 border border-amber-600/30'
+                            }`}
+                          >
+                            <Trophy className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">{p.label}</p>
+                            <p
+                              className={`text-lg sm:text-xl font-black tracking-tight ${
+                                is1st
+                                  ? 'bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(234,179,8,0.3)]'
+                                  : is2nd
+                                  ? 'bg-gradient-to-r from-zinc-100 via-slate-200 to-zinc-400 bg-clip-text text-transparent'
+                                  : 'bg-gradient-to-r from-amber-300 via-orange-400 to-amber-500 bg-clip-text text-transparent'
+                              }`}
+                            >
+                              {formatCurrency(p.value)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Info Cards Grid — Floating Glassmorphic Cards with Gradient Typography */}
@@ -1121,153 +1326,378 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </div>
             )}
             {canSubmitResults && (
-              <div className="p-6 rounded-2xl bg-zinc-900/70 backdrop-blur-xl border border-white/10 space-y-4 shadow-xl">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-yellow-400" /> Submit Tournament Results
-                  </h3>
-                  {isTeam && (
-                    <span className="text-[11px] px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/25 font-semibold">
-                      {isDuo ? 'Duo' : 'Squad'} Match — Team Tag Mode
+              tournament.tournamentFormat === 'PER_KILL' ? (
+                <div className="p-6 sm:p-7 rounded-2xl bg-zinc-900/80 backdrop-blur-xl border border-amber-500/30 space-y-6 shadow-[0_0_35px_rgba(245,158,11,0.08)]">
+                  <div className="flex items-center justify-between flex-wrap gap-2 pb-4 border-b border-white/10">
+                    <div>
+                      <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2.5">
+                        <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                          <Sparkles className="w-4 h-4" />
+                        </span>
+                        AI Kill Counter — Host Result Verification
+                      </h3>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Upload your match gameplay recording. Gemini AI Vision will detect eliminate banners, match IGNs with registered players, and tally kills.
+                      </p>
+                    </div>
+                    <span className="text-xs px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold">
+                      ₹{Number(tournament.perKillRate) || 0} / kill
                     </span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-400">
-                  {isTeam
-                    ? 'Enter the Winning Team Tag for each placement. The registered team\'s full roster will be verified and displayed automatically.'
-                    : 'Enter the Free Fire UIDs of your winners. Each UID must belong to a registered participant.'}
-                </p>
+                  </div>
 
-                <div className="grid sm:grid-cols-3 gap-3.5">
-                  {([
-                    [isTeam ? '1st Winning Team Tag' : '1st Place', 'first', '🥇'],
-                    [isTeam ? '2nd Winning Team Tag (optional)' : '2nd Place (optional)', 'second', '🥈'],
-                    [isTeam ? '3rd Winning Team Tag (optional)' : '3rd Place (optional)', 'third', '🥉'],
-                  ] as const).map(([label, key, medal]) => {
-                    const enteredVal = resUids[key];
-                    const matchedTeam = isTeam ? lookupTeamForWinner(enteredVal) : null;
-                    const matchedSolo = !isTeam ? lookupSoloParticipant(enteredVal) : null;
-
-                    return (
-                      <div key={key} className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex flex-col justify-between space-y-2.5">
-                        <div>
-                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
-                            {medal} {label}
-                          </label>
-                          <input
-                            type="text"
-                            value={enteredVal}
-                            onChange={(e) => setResUids((prev) => ({ ...prev, [key]: e.target.value }))}
-                            placeholder={isTeam ? 'e.g. NEO or TM102' : 'Winner Free Fire UID'}
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-900/90 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 focus:outline-none transition-all uppercase placeholder:normal-case placeholder:font-sans"
-                          />
+                  {/* Video Upload Dropzone */}
+                  <div className="space-y-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300">
+                      Upload Match Recording (.mp4, .mkv, .mov, .webm)
+                    </label>
+                    <div className="relative border-2 border-dashed border-white/15 hover:border-amber-500/50 rounded-2xl p-6 text-center transition-all bg-black/40">
+                      <input
+                        type="file"
+                        accept="video/*"
+                        onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                        disabled={processingAi}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                      />
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <UploadCloud className="w-7 h-7" />
                         </div>
-
-                        {/* Preview for Duo / Squad Team */}
-                        {isTeam && enteredVal.trim() && (
-                          matchedTeam ? (
-                            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 space-y-2 text-xs">
-                              <div className="flex items-center justify-between pb-1.5 border-b border-emerald-500/20">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className="font-bold text-white truncate text-xs">
-                                    {matchedTeam.team.name}
-                                  </span>
-                                  {matchedTeam.team.tag && (
-                                    <span className="font-mono text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/30 shrink-0">
-                                      [{matchedTeam.team.tag}]
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-[10px] text-emerald-400 font-bold shrink-0 flex items-center gap-0.5">
-                                  <Check className="w-3 h-3" /> Matched
-                                </span>
-                              </div>
-
-                              <div className="space-y-1">
-                                {matchedTeam.team.members?.map((m: any, idx: number) => {
-                                  const isLeader = m.role === 'LEADER' || m.user?.id === (matchedTeam.team.leaderId || matchedTeam.entry?.userId);
-                                  return (
-                                    <div key={m.id || idx} className="flex items-center justify-between text-[11px] text-zinc-300">
-                                      <div className="flex items-center gap-1.5 min-w-0">
-                                        <span className="text-zinc-500 font-mono text-[10px]">#{idx + 1}</span>
-                                        <span className="font-semibold text-zinc-100 truncate">
-                                          {m.user?.inGameNickname || m.user?.ign || m.user?.username || 'Player'}
-                                        </span>
-                                        {isLeader && (
-                                          <span className="text-[9px] px-1 rounded bg-yellow-500/20 text-yellow-400 font-bold uppercase shrink-0">
-                                            Capt
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 shrink-0">
-                                        <span>{m.user?.freeFireId || 'No UID'}</span>
-                                        <span className="text-emerald-400 font-semibold bg-white/5 px-1 py-0.2 rounded">
-                                          Lvl {m.user?.gameLevel || 0}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 flex items-center gap-1.5">
-                              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                              <span>No registered team matches tag &quot;{enteredVal.trim()}&quot;</span>
-                            </div>
-                          )
-                        )}
-
-                        {/* Preview for Solo Participant */}
-                        {!isTeam && enteredVal.trim() && (
-                          matchedSolo ? (
-                            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 space-y-1 text-xs">
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-white truncate">
-                                  {matchedSolo.user?.inGameNickname || matchedSolo.user?.ign || matchedSolo.user?.username}
-                                </span>
-                                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5">
-                                  <Check className="w-3 h-3" /> Matched
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
-                                <span>UID: {matchedSolo.user?.freeFireId}</span>
-                                <span className="text-emerald-400 font-semibold">Lvl {matchedSolo.user?.gameLevel || 0}</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 flex items-center gap-1.5">
-                              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                              <span>No registered player matches UID &quot;{enteredVal.trim()}&quot;</span>
-                            </div>
-                          )
+                        {videoFile ? (
+                          <div>
+                            <p className="text-sm font-semibold text-white">{videoFile.name}</p>
+                            <p className="text-xs text-amber-400/80 font-mono mt-0.5">
+                              {(videoFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for AI analysis
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-sm font-semibold text-zinc-300">Drop your match video here or click to browse</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">Maximum file size: 250 MB</p>
+                          </div>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
-                    Winning Proof Screenshot
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleResultScreenshot}
-                    className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:bg-fire-500/20 file:text-fire-400 file:text-xs file:font-semibold hover:file:bg-fire-500/30 transition-all cursor-pointer"
-                  />
-                </div>
+                    {/* AI Process Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={handleProcessAiVideo}
+                      disabled={processingAi || !videoFile}
+                      className="w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 shadow-[0_0_25px_rgba(245,158,11,0.25)] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {processingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      {processingAi ? 'Running Gemini Vision AI Detection...' : 'Process with AI & Detect Kills'}
+                    </button>
 
-                <button
-                  onClick={handleSubmitResult}
-                  disabled={submittingResult || !resUids.first.trim() || (!resFile && !mySubmission?.screenshotUrl)}
-                  className="btn-fire w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all"
-                >
-                  {submittingResult ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <CheckCircle className="w-4 h-4 inline mr-2" />}
-                  {submittingResult ? 'Submit Results for Review' : 'Submit Results for Review'}
-                </button>
-              </div>
+                    {/* Processing Progress Bar */}
+                    {processingAi && (
+                      <div className="p-4 rounded-xl bg-black/60 border border-amber-500/30 space-y-2">
+                        <div className="flex items-center justify-between text-xs font-semibold text-amber-300">
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            {aiStatusMessage || 'Processing gameplay recording...'}
+                          </span>
+                          <span>{aiProgress}%</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-300 rounded-full"
+                            style={{ width: `${aiProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Kills List / Roster Table */}
+                  {aiKillsData && aiKillsData.length > 0 && (
+                    <div className="space-y-4 pt-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+                            <Crosshair className="w-4 h-4 text-amber-400" />
+                            Participants &amp; Kills Verification ({aiKillsData.length} Players)
+                          </h4>
+                          <p className="text-[11px] text-zinc-400 mt-0.5">
+                            Verify AI detected kill counts or adjust manually before submitting.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300 font-mono">
+                            Total Kills: <strong className="text-amber-400">{aiKillsData.reduce((s, p) => s + (Number(p.kills) || 0), 0)}</strong>
+                          </span>
+                          <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300 font-mono">
+                            Total Prize: <strong className="text-emerald-400">
+                              {formatCurrency(
+                                aiKillsData.reduce((s, p) => {
+                                  const kills = Number(p.kills) || 0;
+                                  const isBooyah = p.userId === booyahUserId || Boolean(p.isBooyah);
+                                  return s + (kills * (Number(tournament.perKillRate) || 0)) + (isBooyah ? (Number(tournament.booyahPrize) || 0) : 0);
+                                }, 0)
+                              )}
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-white/10 overflow-hidden bg-black/50 divide-y divide-white/5">
+                        {aiKillsData.map((player) => {
+                          const kills = Number(player.kills) || 0;
+                          const rate = Number(tournament.perKillRate) || 0;
+                          const isBooyah = player.userId === booyahUserId || Boolean(player.isBooyah);
+                          const prize = (kills * rate) + (isBooyah ? (Number(tournament.booyahPrize) || 0) : 0);
+
+                          return (
+                            <div key={player.userId} className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors">
+                              {/* Player details */}
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <Avatar alt={player.ign || player.username} size={32} />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-bold text-white truncate">{player.ign || player.username}</span>
+                                    {player.teamName && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                        {player.teamName}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[11px] text-zinc-400 font-mono mt-0.5">
+                                    <span>@{player.username}</span>
+                                    <span>·</span>
+                                    <span>UID: {player.freeFireId || 'No UID'}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Kills and Booyah controls */}
+                              <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                                {/* Booyah toggle */}
+                                <button
+                                  type="button"
+                                  onClick={() => setBooyahUserId(isBooyah ? '' : player.userId)}
+                                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                                    isBooyah
+                                      ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40 shadow-[0_0_12px_rgba(234,179,8,0.2)]'
+                                      : 'bg-white/5 text-zinc-400 border-white/10 hover:text-zinc-200'
+                                  }`}
+                                  title="Mark as Booyah Match Winner"
+                                >
+                                  <Crown className={`w-3.5 h-3.5 ${isBooyah ? 'text-yellow-400' : 'text-zinc-500'}`} />
+                                  <span>Booyah</span>
+                                </button>
+
+                                {/* Kills adjustment */}
+                                <div className="flex items-center gap-1 bg-zinc-900 border border-white/10 rounded-lg p-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdatePlayerKills(player.userId, kills - 1)}
+                                    disabled={kills <= 0}
+                                    className="w-6 h-6 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 text-sm font-bold cursor-pointer"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="w-8 text-center text-sm font-mono font-bold text-amber-400">
+                                    {kills}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdatePlayerKills(player.userId, kills + 1)}
+                                    className="w-6 h-6 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 text-sm font-bold cursor-pointer"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+
+                                {/* Prize total */}
+                                <div className="text-right min-w-[75px]">
+                                  <span className="text-sm font-black text-emerald-400 block font-mono">
+                                    {formatCurrency(prize)}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-500 block">
+                                    {kills} kill{kills === 1 ? '' : 's'}{isBooyah ? ' + Booyah' : ''}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Proof screenshot if needed */}
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
+                          Optional Proof Screenshot
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleResultScreenshot}
+                          className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:bg-fire-500/20 file:text-fire-400 file:text-xs file:font-semibold hover:file:bg-fire-500/30 transition-all cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Final submit button */}
+                      <button
+                        type="button"
+                        onClick={handleSubmitPerKillResult}
+                        disabled={submittingResult}
+                        className="btn-fire w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 shadow-[0_0_25px_rgba(245,158,11,0.25)] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {submittingResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                        {submittingResult ? 'Submitting AI Results...' : 'Submit AI Kill List for Super Admin Approval'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-6 rounded-2xl bg-zinc-900/70 backdrop-blur-xl border border-white/10 space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-yellow-400" /> Submit Tournament Results
+                    </h3>
+                    {isTeam && (
+                      <span className="text-[11px] px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/25 font-semibold">
+                        {isDuo ? 'Duo' : 'Squad'} Match — Team Tag Mode
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    {isTeam
+                      ? 'Enter the Winning Team Tag for each placement. The registered team\'s full roster will be verified and displayed automatically.'
+                      : 'Enter the Free Fire UIDs of your winners. Each UID must belong to a registered participant.'}
+                  </p>
+
+                  <div className="grid sm:grid-cols-3 gap-3.5">
+                    {([
+                      [isTeam ? '1st Winning Team Tag' : '1st Place', 'first', '🥇'],
+                      [isTeam ? '2nd Winning Team Tag (optional)' : '2nd Place (optional)', 'second', '🥈'],
+                      [isTeam ? '3rd Winning Team Tag (optional)' : '3rd Place (optional)', 'third', '🥉'],
+                    ] as const).map(([label, key, medal]) => {
+                      const enteredVal = resUids[key];
+                      const matchedTeam = isTeam ? lookupTeamForWinner(enteredVal) : null;
+                      const matchedSolo = !isTeam ? lookupSoloParticipant(enteredVal) : null;
+
+                      return (
+                        <div key={key} className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex flex-col justify-between space-y-2.5">
+                          <div>
+                            <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
+                              {medal} {label}
+                            </label>
+                            <input
+                              type="text"
+                              value={enteredVal}
+                              onChange={(e) => setResUids((prev) => ({ ...prev, [key]: e.target.value }))}
+                              placeholder={isTeam ? 'e.g. NEO or TM102' : 'Winner Free Fire UID'}
+                              className="w-full px-3 py-2 rounded-lg bg-zinc-900/90 border border-white/10 text-white text-sm font-mono focus:border-fire-500/50 focus:outline-none transition-all uppercase placeholder:normal-case placeholder:font-sans"
+                            />
+                          </div>
+
+                          {/* Preview for Duo / Squad Team */}
+                          {isTeam && enteredVal.trim() && (
+                            matchedTeam ? (
+                              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 space-y-2 text-xs">
+                                <div className="flex items-center justify-between pb-1.5 border-b border-emerald-500/20">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="font-bold text-white truncate text-xs">
+                                      {matchedTeam.team.name}
+                                    </span>
+                                    {matchedTeam.team.tag && (
+                                      <span className="font-mono text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/30 shrink-0">
+                                        [{matchedTeam.team.tag}]
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-emerald-400 font-bold shrink-0 flex items-center gap-0.5">
+                                    <Check className="w-3 h-3" /> Matched
+                                  </span>
+                                </div>
+
+                                <div className="space-y-1">
+                                  {matchedTeam.team.members?.map((m: any, idx: number) => {
+                                    const isLeader = m.role === 'LEADER' || m.user?.id === (matchedTeam.team.leaderId || matchedTeam.entry?.userId);
+                                    return (
+                                      <div key={m.id || idx} className="flex items-center justify-between text-[11px] text-zinc-300">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="text-zinc-500 font-mono text-[10px]">#{idx + 1}</span>
+                                          <span className="font-semibold text-zinc-100 truncate">
+                                            {m.user?.inGameNickname || m.user?.ign || m.user?.username || 'Player'}
+                                          </span>
+                                          {isLeader && (
+                                            <span className="text-[9px] px-1 rounded bg-yellow-500/20 text-yellow-400 font-bold uppercase shrink-0">
+                                              Capt
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 shrink-0">
+                                          <span>{m.user?.freeFireId || 'No UID'}</span>
+                                          <span className="text-emerald-400 font-semibold bg-white/5 px-1 py-0.2 rounded">
+                                            Lvl {m.user?.gameLevel || 0}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                                <span>No registered team matches tag &quot;{enteredVal.trim()}&quot;</span>
+                              </div>
+                            )
+                          )}
+
+                          {/* Preview for Solo Participant */}
+                          {!isTeam && enteredVal.trim() && (
+                            matchedSolo ? (
+                              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 space-y-1 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-white truncate">
+                                    {matchedSolo.user?.inGameNickname || matchedSolo.user?.ign || matchedSolo.user?.username}
+                                  </span>
+                                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5">
+                                    <Check className="w-3 h-3" /> Matched
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
+                                  <span>UID: {matchedSolo.user?.freeFireId}</span>
+                                  <span className="text-emerald-400 font-semibold">Lvl {matchedSolo.user?.gameLevel || 0}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                                <span>No registered player matches UID &quot;{enteredVal.trim()}&quot;</span>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
+                      Winning Proof Screenshot
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleResultScreenshot}
+                      className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:bg-fire-500/20 file:text-fire-400 file:text-xs file:font-semibold hover:file:bg-fire-500/30 transition-all cursor-pointer"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSubmitResult}
+                    disabled={submittingResult || !resUids.first.trim() || (!resFile && !mySubmission?.screenshotUrl)}
+                    className="btn-fire w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all cursor-pointer"
+                  >
+                    {submittingResult ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <CheckCircle className="w-4 h-4 inline mr-2" />}
+                    {submittingResult ? 'Submit Results for Review' : 'Submit Results for Review'}
+                  </button>
+                </div>
+              )
             )}
 
             {/* Registration / Active / Live Status Section */}

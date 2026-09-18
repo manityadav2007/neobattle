@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Trophy, AlertCircle, CheckCircle, XCircle, Loader2, Eye, RefreshCw, Users, X,
+  Sparkles, Crosshair, Crown, Video, Play, FileVideo,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { resultApi, formatCurrency, formatDate, type ResultSubmission } from '@/lib/services';
@@ -102,14 +103,33 @@ export default function AdminPendingResultsPage() {
 
   const handleApprove = async (sub: ResultSubmission) => {
     const t = sub.tournament;
-    const isTeam = t?.format === 'DUO' || t?.format === 'SQUAD';
-    const lines = [
-      Number(t?.prizeFirst) > 0 && `${isTeam ? '1st Winning Team' : '1st Place'} (${sub.firstUid}): ${formatCurrency(Number(t!.prizeFirst))}${isTeam ? ' (Full prize credited to Captain)' : ''}`,
-      Number(t?.prizeSecond) > 0 && `${isTeam ? '2nd Winning Team' : '2nd Place'} (${sub.secondUid || '—'}): ${formatCurrency(Number(t!.prizeSecond))}${isTeam && sub.secondUid ? ' (Full prize credited to Captain)' : ''}`,
-      Number(t?.prizeThird) > 0 && `${isTeam ? '3rd Winning Team' : '3rd Place'} (${sub.thirdUid || '—'}): ${formatCurrency(Number(t!.prizeThird))}${isTeam && sub.thirdUid ? ' (Full prize credited to Captain)' : ''}`,
-      Number(t?.hostCommission) > 0 && `Host commission: ${formatCurrency(Number(t!.hostCommission))}`,
-    ].filter(Boolean);
-    if (!confirm(`Approve & distribute prizes?\n\n${lines.join('\n')}\n\n${isTeam ? "Winning team prizes will be credited in full directly to the team captain's wallet." : "Winners' and host wallets will be credited instantly."}`)) return;
+    const isPerKill = t?.tournamentFormat === 'PER_KILL';
+
+    if (isPerKill) {
+      const rawKillList: any[] = Array.isArray(sub.killList) ? (sub.killList as any[]) : [];
+      const perKillRate = Number(t?.perKillRate) || 0;
+      const booyahPrize = Number(t?.booyahPrize) || 0;
+      let totalKills = 0;
+      let totalPrize = 0;
+      const lines = rawKillList.map((p) => {
+        const kills = Number(p.kills) || 0;
+        const isBooyah = Boolean(p.isBooyah || (sub.firstUid && (p.userId === sub.firstUid || p.freeFireId === sub.firstUid)));
+        const amt = (kills * perKillRate) + (isBooyah ? booyahPrize : 0);
+        totalKills += kills;
+        totalPrize += amt;
+        return `${p.ign || p.username || p.freeFireId}: ${kills} kill(s)${isBooyah ? ' + Booyah' : ''} → ${formatCurrency(amt)}`;
+      });
+      if (!confirm(`Approve & distribute Per-Kill prizes for "${t?.title}"?\n\nRate: ₹${perKillRate}/kill · Total Kills: ${totalKills}\nTotal Player Payout: ${formatCurrency(totalPrize)}\n\n${lines.slice(0, 8).join('\n')}${lines.length > 8 ? `\n...and ${lines.length - 8} more` : ''}\n\nThis will atomically credit each player's wallet.`)) return;
+    } else {
+      const isTeam = t?.format === 'DUO' || t?.format === 'SQUAD';
+      const lines = [
+        Number(t?.prizeFirst) > 0 && `${isTeam ? '1st Winning Team' : '1st Place'} (${sub.firstUid}): ${formatCurrency(Number(t!.prizeFirst))}${isTeam ? ' (Full prize credited to Captain)' : ''}`,
+        Number(t?.prizeSecond) > 0 && `${isTeam ? '2nd Winning Team' : '2nd Place'} (${sub.secondUid || '—'}): ${formatCurrency(Number(t!.prizeSecond))}${isTeam && sub.secondUid ? ' (Full prize credited to Captain)' : ''}`,
+        Number(t?.prizeThird) > 0 && `${isTeam ? '3rd Winning Team' : '3rd Place'} (${sub.thirdUid || '—'}): ${formatCurrency(Number(t!.prizeThird))}${isTeam && sub.thirdUid ? ' (Full prize credited to Captain)' : ''}`,
+        Number(t?.hostCommission) > 0 && `Host commission: ${formatCurrency(Number(t!.hostCommission))}`,
+      ].filter(Boolean);
+      if (!confirm(`Approve & distribute prizes?\n\n${lines.join('\n')}\n\n${isTeam ? "Winning team prizes will be credited in full directly to the team captain's wallet." : "Winners' and host wallets will be credited instantly."}`)) return;
+    }
 
     setBusy(sub.id);
     setError('');
@@ -193,20 +213,42 @@ export default function AdminPendingResultsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-white">{sub.tournament?.title}</p>
-                      {sub.tournament?.format && (
+                      {sub.tournament?.tournamentFormat === 'PER_KILL' ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold uppercase flex items-center gap-1">
+                          <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                          AI Per-Kill
+                        </span>
+                      ) : sub.tournament?.format ? (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase">
                           {sub.tournament.format}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     <p className="text-xs text-zinc-500 mt-0.5">
                       UID {sub.tournament?.uid} · Host: {sub.host?.username}
                     </p>
-                    <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
-                      <span className="text-yellow-300 font-mono">🥇 {sub.firstUid}</span>
-                      {sub.secondUid && <span className="text-zinc-300 font-mono">🥈 {sub.secondUid}</span>}
-                      {sub.thirdUid && <span className="text-zinc-300 font-mono">🥉 {sub.thirdUid}</span>}
-                    </div>
+                    {sub.tournament?.tournamentFormat === 'PER_KILL' ? (
+                      <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
+                        <span className="text-amber-300 font-mono flex items-center gap-1">
+                          <Crosshair className="w-3.5 h-3.5" />
+                          {Array.isArray(sub.killList) ? sub.killList.reduce((s: number, k: any) => s + (Number(k.kills) || 0), 0) : 0} total kills
+                        </span>
+                        <span className="text-zinc-400 font-mono">
+                          (₹{sub.tournament?.perKillRate || 0}/kill)
+                        </span>
+                        {sub.videoUrl && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/25 flex items-center gap-1">
+                            <Video className="w-2.5 h-2.5" /> Video Attached
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
+                        <span className="text-yellow-300 font-mono">🥇 {sub.firstUid}</span>
+                        {sub.secondUid && <span className="text-zinc-300 font-mono">🥈 {sub.secondUid}</span>}
+                        {sub.thirdUid && <span className="text-zinc-300 font-mono">🥉 {sub.thirdUid}</span>}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-lg font-black gradient-text">
@@ -232,154 +274,280 @@ export default function AdminPendingResultsPage() {
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-xl font-bold text-white pr-8">{selected.tournament.title}</h3>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="text-xl font-bold text-white pr-8">{selected.tournament.title}</h3>
+              {selected.tournament.tournamentFormat === 'PER_KILL' && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" /> AI Per-Kill Match
+                </span>
+              )}
+            </div>
             <p className="text-xs text-zinc-500 mt-1">
               Tournament ID: <span className="font-mono text-zinc-300">{selected.tournament.uid}</span> · Host:{' '}
               <span className="text-zinc-300">{selected.host?.username}</span> · Submitted {formatDate(selected.createdAt)}
             </p>
 
-            {/* Winners */}
+            {/* Winners / Kill List */}
             <div className="mt-5">
-              {(() => {
-                const isTeam = selected.tournament.format === 'DUO' || selected.tournament.format === 'SQUAD';
-                return (
-                  <>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Submitted Winners</p>
-                      {isTeam && (
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-semibold">
-                          {selected.tournament.format} Match — Full Prize to Captain
+              {selected.tournament.tournamentFormat === 'PER_KILL' ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-white/10">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                      <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+                      AI Verified Kills Breakdown
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 font-bold">
+                        ₹{Number(selected.tournament.perKillRate) || 0} / kill
+                      </span>
+                      {Number(selected.tournament.booyahPrize) > 0 && (
+                        <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300 border border-yellow-500/25 font-bold">
+                          Booyah: +₹{Number(selected.tournament.booyahPrize)}
                         </span>
                       )}
                     </div>
-                    <div className="space-y-3">
-                      {[
-                        { medal: '🥇', label: isTeam ? '1st Winning Team' : '1st Place', uid: selected.firstUid, prize: Number(selected.tournament.prizeFirst) },
-                        { medal: '🥈', label: isTeam ? '2nd Winning Team' : '2nd Place', uid: selected.secondUid, prize: Number(selected.tournament.prizeSecond) },
-                        { medal: '🥉', label: isTeam ? '3rd Winning Team' : '3rd Place', uid: selected.thirdUid, prize: Number(selected.tournament.prizeThird) },
-                      ]
-                        .filter((w) => w.uid)
-                        .map((w) => {
-                          const matchedTeam = isTeam ? findTeamForWinner(selected.tournament, selected.teams, w.uid) : null;
-                          const matchedSolo = !isTeam ? findSoloForWinner(selected.tournament, w.uid) : null;
+                  </div>
 
-                          if (isTeam) {
-                            const team = matchedTeam?.team;
-                            const members = team?.members || [];
-                            const leaderId = team?.leaderId || matchedTeam?.entry?.userId;
-                            const leaderMember = members.find((m: any) => m.role === 'LEADER' || m.user?.id === leaderId) || members[0];
-                            const leaderName = leaderMember?.user?.inGameNickname || leaderMember?.user?.ign || leaderMember?.user?.username || matchedTeam?.entry?.user?.username || 'Captain';
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {(Array.isArray(selected.killList) ? selected.killList : []).map((k: any, idx: number) => {
+                      const kills = Number(k.kills) || 0;
+                      const isBooyah = Boolean(k.isBooyah || (selected.firstUid && (k.userId === selected.firstUid || k.freeFireId === selected.firstUid)));
+                      const rate = Number(selected.tournament?.perKillRate) || 0;
+                      const prize = (kills * rate) + (isBooyah ? (Number(selected.tournament?.booyahPrize) || 0) : 0);
 
-                            return (
-                              <div key={w.label} className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                                <div className="flex items-center justify-between flex-wrap gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="text-base">{w.medal}</span>
-                                    <span className="text-sm font-bold text-white">{w.label}</span>
-                                    {team?.tag && (
-                                      <span className="font-mono text-xs font-bold text-fire-400 bg-fire-500/15 px-2 py-0.5 rounded border border-fire-500/25">
-                                        [{team.tag}]
-                                      </span>
-                                    )}
-                                    {team?.name && (
-                                      <span className="text-xs text-zinc-300 font-semibold truncate">
-                                        {team.name}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-sm font-black text-yellow-400">
-                                    {formatCurrency(w.prize)}
+                      return (
+                        <div
+                          key={k.userId || idx}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                            isBooyah
+                              ? 'bg-yellow-500/10 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]'
+                              : 'bg-white/5 border-white/10'
+                          }`}
+                        >
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span className="font-mono text-zinc-500 font-bold">#{idx + 1}</span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-white">{k.ign || k.username || 'Player'}</span>
+                                {k.teamName && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                    {k.teamName}
                                   </span>
-                                </div>
-
-                                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center justify-between gap-2">
-                                  <span>
-                                    Prize credited in full to captain:{' '}
-                                    <strong className="text-emerald-200">{leaderName}</strong>
-                                    {leaderMember?.user?.freeFireId && (
-                                      <span className="font-mono text-zinc-400 ml-1">
-                                        ({leaderMember.user.freeFireId})
-                                      </span>
-                                    )}
+                                )}
+                                {isBooyah && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-300 font-bold border border-yellow-500/30">
+                                    <Crown className="w-3 h-3 text-yellow-400" /> Booyah Winner
                                   </span>
-                                  <span className="font-bold text-emerald-400 shrink-0">{formatCurrency(w.prize)}</span>
-                                </div>
-
-                                {members.length > 0 ? (
-                                  <div className="space-y-1.5 pt-1">
-                                    <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                                      Team Roster ({members.length} Players)
-                                    </p>
-                                    <div className="grid sm:grid-cols-2 gap-2">
-                                      {members.map((m: any, idx: number) => {
-                                        const isCaptain = m.role === 'LEADER' || m.user?.id === leaderId;
-                                        return (
-                                          <div
-                                            key={m.id || idx}
-                                            className="p-2.5 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between text-xs"
-                                          >
-                                            <div className="min-w-0 flex items-center gap-1.5">
-                                              <span className="font-semibold text-white truncate">
-                                                {m.user?.inGameNickname || m.user?.ign || m.user?.username || 'Player'}
-                                              </span>
-                                              {isCaptain && (
-                                                <span className="text-[9px] px-1 rounded bg-yellow-500/20 text-yellow-400 font-bold uppercase shrink-0">
-                                                  Capt
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div className="flex items-center gap-2 font-mono text-[11px] shrink-0 text-zinc-400">
-                                              <span>{m.user?.freeFireId || 'No UID'}</span>
-                                              <span className="text-emerald-400 font-semibold bg-white/5 px-1 py-0.5 rounded text-[10px]">
-                                                Lvl {m.user?.gameLevel || 0}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-300 text-xs flex items-center gap-1.5">
-                                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                                    <span>Submitted Tag/UID: <strong className="font-mono">{w.uid}</strong> — Registered team details not found.</span>
-                                  </div>
                                 )}
                               </div>
-                            );
-                          }
+                              <div className="font-mono text-zinc-400 text-[11px]">
+                                <span>@{k.username}</span>
+                                {k.freeFireId && <span className="ml-1.5">· UID: {k.freeFireId}</span>}
+                              </div>
+                            </div>
+                          </div>
 
-                          // Solo format
-                          const player = matchedSolo?.user;
-                          return (
-                            <div key={w.label} className="flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/10">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm text-white font-medium">{w.medal} {w.label}</span>
-                                  {player && (
-                                    <span className="text-xs font-bold text-fire-400">
-                                      {player.inGameNickname || player.ign || player.username}
+                          <div className="flex items-center gap-4 text-right shrink-0">
+                            <div>
+                              <span className="text-amber-400 font-bold font-mono text-sm block">
+                                {kills} kill{kills === 1 ? '' : 's'}
+                              </span>
+                              <span className="text-[10px] text-zinc-500">
+                                @ ₹{rate}/kill
+                              </span>
+                            </div>
+                            <div className="min-w-[65px]">
+                              <span className="text-emerald-400 font-black text-sm block font-mono">
+                                {formatCurrency(prize)}
+                              </span>
+                              <span className="text-[10px] text-zinc-400 block">Payout</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                (() => {
+                  const isTeam = selected.tournament.format === 'DUO' || selected.tournament.format === 'SQUAD';
+                  return (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Submitted Winners</p>
+                        {isTeam && (
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-semibold">
+                            {selected.tournament.format} Match — Full Prize to Captain
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {[
+                          { medal: '🥇', label: isTeam ? '1st Winning Team' : '1st Place', uid: selected.firstUid, prize: Number(selected.tournament.prizeFirst) },
+                          { medal: '🥈', label: isTeam ? '2nd Winning Team' : '2nd Place', uid: selected.secondUid, prize: Number(selected.tournament.prizeSecond) },
+                          { medal: '🥉', label: isTeam ? '3rd Winning Team' : '3rd Place', uid: selected.thirdUid, prize: Number(selected.tournament.prizeThird) },
+                        ]
+                          .filter((w) => w.uid)
+                          .map((w) => {
+                            const matchedTeam = isTeam ? findTeamForWinner(selected.tournament, selected.teams, w.uid) : null;
+                            const matchedSolo = !isTeam ? findSoloForWinner(selected.tournament, w.uid) : null;
+
+                            if (isTeam) {
+                              const team = matchedTeam?.team;
+                              const members = team?.members || [];
+                              const leaderId = team?.leaderId || matchedTeam?.entry?.userId;
+                              const leaderMember = members.find((m: any) => m.role === 'LEADER' || m.user?.id === leaderId) || members[0];
+                              const leaderName = leaderMember?.user?.inGameNickname || leaderMember?.user?.ign || leaderMember?.user?.username || matchedTeam?.entry?.user?.username || 'Captain';
+
+                              return (
+                                <div key={w.label} className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                                  <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="text-base">{w.medal}</span>
+                                      <span className="text-sm font-bold text-white">{w.label}</span>
+                                      {team?.tag && (
+                                        <span className="font-mono text-xs font-bold text-fire-400 bg-fire-500/15 px-2 py-0.5 rounded border border-fire-500/25">
+                                          [{team.tag}]
+                                        </span>
+                                      )}
+                                      {team?.name && (
+                                        <span className="text-xs text-zinc-300 font-semibold truncate">
+                                          {team.name}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-sm font-black text-yellow-400">
+                                      {formatCurrency(w.prize)}
                                     </span>
-                                  )}
-                                  <span className="font-mono text-xs text-zinc-400">
-                                    (UID: {player?.freeFireId || w.uid})
-                                  </span>
-                                  {player?.gameLevel != null && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-emerald-400 font-semibold">
-                                      Lvl {player.gameLevel}
+                                  </div>
+
+                                  <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center justify-between gap-2">
+                                    <span>
+                                      Prize credited in full to captain:{' '}
+                                      <strong className="text-emerald-200">{leaderName}</strong>
+                                      {leaderMember?.user?.freeFireId && (
+                                        <span className="font-mono text-zinc-400 ml-1">
+                                          ({leaderMember.user.freeFireId})
+                                        </span>
+                                      )}
                                     </span>
+                                    <span className="font-bold text-emerald-400 shrink-0">{formatCurrency(w.prize)}</span>
+                                  </div>
+
+                                  {members.length > 0 ? (
+                                    <div className="space-y-1.5 pt-1">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                        Team Roster ({members.length} Players)
+                                      </p>
+                                      <div className="grid sm:grid-cols-2 gap-2">
+                                        {members.map((m: any, idx: number) => {
+                                          const isCaptain = m.role === 'LEADER' || m.user?.id === leaderId;
+                                          return (
+                                            <div
+                                              key={m.id || idx}
+                                              className="p-2.5 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between text-xs"
+                                            >
+                                              <div className="min-w-0 flex items-center gap-1.5">
+                                                <span className="font-semibold text-white truncate">
+                                                  {m.user?.inGameNickname || m.user?.ign || m.user?.username || 'Player'}
+                                                </span>
+                                                {isCaptain && (
+                                                  <span className="text-[9px] px-1 rounded bg-yellow-500/20 text-yellow-400 font-bold uppercase shrink-0">
+                                                    Capt
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="flex items-center gap-2 font-mono text-[11px] shrink-0 text-zinc-400">
+                                                <span>{m.user?.freeFireId || 'No UID'}</span>
+                                                <span className="text-emerald-400 font-semibold bg-white/5 px-1 py-0.5 rounded text-[10px]">
+                                                  Lvl {m.user?.gameLevel || 0}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="p-2 rounded-lg bg-amber-500/10 text-amber-300 text-xs flex items-center gap-1.5">
+                                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                      <span>Submitted Tag/UID: <strong className="font-mono">{w.uid}</strong> — Registered team details not found.</span>
+                                    </div>
                                   )}
                                 </div>
+                              );
+                            }
+
+                            // Solo format
+                            const player = matchedSolo?.user;
+                            return (
+                              <div key={w.label} className="flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/10">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm text-white font-medium">{w.medal} {w.label}</span>
+                                    {player && (
+                                      <span className="text-xs font-bold text-fire-400">
+                                        {player.inGameNickname || player.ign || player.username}
+                                      </span>
+                                    )}
+                                    <span className="font-mono text-xs text-zinc-400">
+                                      (UID: {player?.freeFireId || w.uid})
+                                    </span>
+                                    {player?.gameLevel != null && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-emerald-400 font-semibold">
+                                        Lvl {player.gameLevel}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className="text-sm font-bold text-yellow-400">{formatCurrency(w.prize)}</span>
                               </div>
-                              <span className="text-sm font-bold text-yellow-400">{formatCurrency(w.prize)}</span>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </>
-                );
-              })()}
+                            );
+                          })}
+                      </div>
+                    </>
+                  );
+                })()
+              )}
             </div>
+
+            {/* Video Proof Section */}
+            {selected.videoUrl && (
+              <div className="mt-5 p-4 rounded-xl bg-black/60 border border-amber-500/25 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                    <Video className="w-4 h-4 text-amber-400" /> Host Gameplay Video Recording
+                  </span>
+                  <a
+                    href={selected.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-fire-400 hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    Open Video in New Tab <Eye className="w-3 h-3" />
+                  </a>
+                </div>
+                <video
+                  src={selected.videoUrl}
+                  controls
+                  className="w-full max-h-72 rounded-lg bg-black border border-white/10"
+                />
+              </div>
+            )}
+
+            {/* Proof Screenshot */}
+            {selected.screenshotUrl && (
+              <div className="mt-4">
+                <a
+                  href={selected.screenshotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-fire-400 hover:text-fire-300"
+                >
+                  <Eye className="w-4 h-4" /> View Winning Proof Screenshot
+                </a>
+              </div>
+            )}
 
             {/* Commission breakdown */}
             <div className="mt-5 p-4 rounded-xl bg-white/[0.03] border border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
@@ -387,10 +555,20 @@ export default function AdminPendingResultsPage() {
               <div><p className="text-zinc-500">Platform ({selected.tournament.gameMode === 'CLASH_SQUAD' ? '8%' : '20%'})</p><p className="text-fire-400 font-bold">{formatCurrency(Number(selected.tournament.platformCommission))}</p></div>
               <div><p className="text-zinc-500">Host ({selected.tournament.gameMode === 'CLASH_SQUAD' ? '4%' : '8%'})</p><p className="text-green-400 font-bold">{formatCurrency(Number(selected.tournament.hostCommission))}</p></div>
               <div><p className="text-zinc-500">Total Prizes</p><p className="text-yellow-400 font-bold">
-                {formatCurrency(
-                  Number(selected.tournament.prizeFirst) +
-                  (Number(selected.tournament.prizeSecond) || 0) +
-                  (Number(selected.tournament.prizeThird) || 0)
+                {selected.tournament.tournamentFormat === 'PER_KILL' ? (
+                  formatCurrency(
+                    (Array.isArray(selected.killList) ? selected.killList : []).reduce((sum: number, k: any) => {
+                      const kills = Number(k.kills) || 0;
+                      const isBooyah = Boolean(k.isBooyah || (selected.firstUid && (k.userId === selected.firstUid || k.freeFireId === selected.firstUid)));
+                      return sum + (kills * (Number(selected.tournament?.perKillRate) || 0)) + (isBooyah ? (Number(selected.tournament?.booyahPrize) || 0) : 0);
+                    }, 0)
+                  )
+                ) : (
+                  formatCurrency(
+                    Number(selected.tournament.prizeFirst) +
+                    (Number(selected.tournament.prizeSecond) || 0) +
+                    (Number(selected.tournament.prizeThird) || 0)
+                  )
                 )}
               </p></div>
             </div>
@@ -410,14 +588,6 @@ export default function AdminPendingResultsPage() {
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Proof */}
-            <div className="mt-5">
-              <a href={selected.screenshotUrl} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-fire-400 hover:text-fire-300">
-                <Eye className="w-4 h-4" /> View Winning Proof Screenshot
-              </a>
             </div>
 
             {/* Actions */}

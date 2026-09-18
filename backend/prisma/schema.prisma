@@ -566,10 +566,12 @@ model ResultSubmission {
   id              String   @id @default(cuid())
   tournamentId    String   @unique
   hostId          String
-  firstUid        String
+  firstUid        String?
   secondUid       String?
   thirdUid        String?
-  screenshotUrl   String
+  screenshotUrl   String?
+  videoUrl        String?
+  killList        Json?
   status          String   @default("PENDING")
   rejectionReason String?
   reviewedBy      String?
