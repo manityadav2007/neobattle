@@ -162,9 +162,7 @@ export default function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-600">
             <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3">
-              <span className="text-zinc-500 font-semibold">&copy; 2026 NEOBATTLE Private Limited</span>
-              <span className="hidden sm:inline text-zinc-700">|</span>
-              <span>CIN: U92490KA2026PLC123456</span>
+              <span className="text-zinc-500 font-semibold">&copy; 2026 NEOBATTLE. All rights reserved.</span>
             </div>
             <div className="flex items-center gap-1 text-zinc-600">
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
