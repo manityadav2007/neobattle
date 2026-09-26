@@ -217,7 +217,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
         booyahUid: booyahUserId || undefined,
       });
 
-      setMessage('AI Per-Kill results submitted! Awaiting Super Admin review and payout distribution.');
+      setMessage('Results submitted successfully! Awaiting Super Admin review and payout distribution.');
       window.location.reload();
     } catch (err) {
       setRegisterError(getErrorMessage(err));
@@ -620,7 +620,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   { label: tournament.format, color: tagColorMap.format[tournament.format as keyof typeof tagColorMap.format], icon: tagIcons.format },
                   { label: tournament.platform === 'MOBILE' ? 'Mobile' : 'PC', color: tagColorMap.platform[tournament.platform as keyof typeof tagColorMap.platform], icon: tagIcons.platform },
                   { label: tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad', color: tagColorMap.gameMode[tournament.gameMode as keyof typeof tagColorMap.gameMode], icon: tagIcons.gameMode },
-                  ...(tournament.tournamentFormat === 'PER_KILL' ? [{ label: '⚡ AI-Verified Match', color: 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/30', icon: Sparkles }] : []),
                 ]}
                 className="justify-start drop-shadow-md"
               />
@@ -642,14 +641,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
             {/* Title & Host Meta */}
             <div className="absolute bottom-5 left-5 right-5 z-10">
-              <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                {tournament.tournamentFormat === 'PER_KILL' && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 border border-amber-500/40 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.25)]">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    AI-Verified Per-Kill Match
-                  </span>
-                )}
-              </div>
               <h1 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)]">
                 {tournament.title}
               </h1>
@@ -685,56 +676,60 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                  <Trophy className="w-3.5 h-3.5 text-yellow-400" /> {tournament.tournamentFormat === 'PER_KILL' ? 'Per-Kill Prize Distribution' : 'Prize Distribution'}
+                  <Trophy className="w-3.5 h-3.5 text-yellow-400" /> Prize Distribution
                 </h2>
                 <span className="text-xs font-medium text-zinc-500">
-                  {tournament.tournamentFormat === 'PER_KILL' ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300">
-                      <Sparkles className="w-3 h-3 text-amber-400" /> Per-Kill Mode Active
-                    </span>
-                  ) : (
-                    <>Total Pool: <span className="font-bold text-zinc-300">{formatCurrency(prizePool)}</span></>
-                  )}
+                  Total Pool: <span className="font-bold text-zinc-300">{formatCurrency(prizePool)}</span>
                 </span>
               </div>
 
               {tournament.tournamentFormat === 'PER_KILL' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   {/* Per-Kill Rate Card */}
-                  <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-zinc-950/80 border border-amber-500/30 shadow-[0_0_25px_rgba(245,158,11,0.15)]">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.3)] shrink-0">
-                        <Crosshair className="w-6 h-6" />
+                  <div className="relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl border transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-zinc-950/60 border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.08)]">
+                    <div className="flex items-center gap-3.5">
+                      <div className="p-2.5 rounded-xl shrink-0 backdrop-blur-md bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        <Crosshair className="w-5 h-5" />
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Bounty Rate</p>
-                        <p className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-amber-300 via-yellow-300 to-orange-400 bg-clip-text text-transparent">
-                          {formatCurrency(Number(tournament.perKillRate) || 0)} <span className="text-sm font-semibold text-zinc-400 font-sans">/ kill</span>
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Per-Kill</p>
+                        <p className="text-lg sm:text-xl font-black tracking-tight bg-gradient-to-r from-amber-300 via-yellow-300 to-orange-400 bg-clip-text text-transparent">
+                          {formatCurrency(Number(tournament.perKillRate) || 0)} <span className="text-xs font-semibold text-zinc-400 font-sans">/ kill</span>
                         </p>
-                        <p className="text-xs text-zinc-400 mt-1">Every verified enemy elimination directly credits to your wallet.</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Booyah / Total Pool Card */}
-                  <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-yellow-500/15 via-amber-600/10 to-zinc-950/80 border border-yellow-500/30 shadow-[0_0_25px_rgba(234,179,8,0.12)]">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-2xl bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.25)] shrink-0">
-                        <Crown className="w-6 h-6" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-yellow-400">
-                          {Number(tournament.booyahPrize) > 0 ? 'Booyah Champion Bonus' : 'Total Tournament Pool'}
-                        </p>
-                        <p className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-500 bg-clip-text text-transparent">
-                          {Number(tournament.booyahPrize) > 0 ? `+${formatCurrency(Number(tournament.booyahPrize))}` : formatCurrency(prizePool)}
-                        </p>
-                        <p className="text-xs text-zinc-400 mt-1">
-                          {Number(tournament.booyahPrize) > 0 ? 'Extra bonus for securing the match victory on top of your kills.' : 'Dynamic pool distributed strictly based on verified kill count.'}
-                        </p>
+                  {Number(tournament.booyahPrize) > 0 ? (
+                    <div className="relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl border transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-zinc-950/60 border-yellow-500/30 shadow-[0_0_25px_rgba(234,179,8,0.12)]">
+                      <div className="flex items-center gap-3.5">
+                        <div className="p-2.5 rounded-xl shrink-0 backdrop-blur-md bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 shadow-[0_0_12px_rgba(234,179,8,0.25)]">
+                          <Crown className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Booyah Bonus</p>
+                          <p className="text-lg sm:text-xl font-black tracking-tight bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(234,179,8,0.3)]">
+                            +{formatCurrency(Number(tournament.booyahPrize))}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl border transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-zinc-300/10 via-slate-400/5 to-zinc-950/60 border-zinc-400/25 shadow-[0_0_20px_rgba(200,200,200,0.08)]">
+                      <div className="flex items-center gap-3.5">
+                        <div className="p-2.5 rounded-xl shrink-0 backdrop-blur-md bg-zinc-400/15 text-zinc-200 border border-zinc-400/25">
+                          <Trophy className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Prize Pool</p>
+                          <p className="text-lg sm:text-xl font-black tracking-tight bg-gradient-to-r from-zinc-100 via-slate-200 to-zinc-400 bg-clip-text text-transparent">
+                            {formatCurrency(prizePool)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -1544,7 +1539,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                         className="btn-fire w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 shadow-[0_0_25px_rgba(245,158,11,0.25)] transition-all flex items-center justify-center gap-2 cursor-pointer"
                       >
                         {submittingResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                        {submittingResult ? 'Submitting AI Results...' : 'Submit AI Kill List for Super Admin Approval'}
+                        {submittingResult ? 'Submitting Results...' : 'Submit Kill List for Super Admin Approval'}
                       </button>
                     </div>
                   )}
