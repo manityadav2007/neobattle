@@ -13,8 +13,9 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import {
   killCounterApi, formatCurrency, formatDate, getStatusColor,
-  type Tournament,
+  type Tournament, type CropRegion,
 } from '@/lib/services';
+import { ScreenRegionCropper, DEFAULT_KILL_FEED_CROP } from '@/components/ScreenRegionCropper';
 import { getErrorMessage } from '@/lib/api';
 
 interface PlayerCandidate {
@@ -94,6 +95,11 @@ export default function AdminKillCounterPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [firstFrameDataUrl, setFirstFrameDataUrl] = useState<string | null>(null);
+  const [cropRegion, setCropRegion] = useState<CropRegion | null>(DEFAULT_KILL_FEED_CROP);
+  const [estimatedApiCalls, setEstimatedApiCalls] = useState<number | null>(null);
+  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const videoPlayerRef = useRef<HTMLVideoElement>(null);
 
   // Step 4: AI Analysis & Progress State
@@ -220,6 +226,11 @@ export default function AdminKillCounterPage() {
     setVideoFile(null);
     if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
     setVideoPreviewUrl(null);
+    setFirstFrameDataUrl(null);
+    setCropRegion(DEFAULT_KILL_FEED_CROP);
+    setEstimatedApiCalls(null);
+    setQuotaWarning(null);
+    setVideoDuration(null);
     setActiveJobId(null);
     setAnalysisStatus('idle');
     setMatchedKills({});
@@ -239,9 +250,52 @@ export default function AdminKillCounterPage() {
     setVideoFile(file);
     const objectUrl = URL.createObjectURL(file);
     setVideoPreviewUrl(objectUrl);
+    setFirstFrameDataUrl(null);
+    setCropRegion(DEFAULT_KILL_FEED_CROP);
+    setEstimatedApiCalls(null);
+    setQuotaWarning(null);
+    setVideoDuration(null);
     setAnalysisStatus('ready');
     setAnalysisError(null);
     setActiveJobId(null);
+
+    try {
+      const tempVideo = document.createElement('video');
+      tempVideo.preload = 'auto';
+      tempVideo.muted = true;
+      tempVideo.playsInline = true;
+      tempVideo.onloadedmetadata = () => {
+        const dur = tempVideo.duration;
+        if (dur && !isNaN(dur)) {
+          setVideoDuration(dur);
+          const estFrames = Math.ceil(dur / 8);
+          const estCalls = Math.ceil(estFrames / 20);
+          setEstimatedApiCalls(estCalls);
+          if (estCalls > 15) {
+            setQuotaWarning(
+              "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached."
+            );
+          }
+        }
+        tempVideo.currentTime = Math.min(1.0, Math.max(0.1, (tempVideo.duration || 1) * 0.02));
+      };
+      tempVideo.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = tempVideo.videoWidth || 640;
+          canvas.height = tempVideo.videoHeight || 360;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            setFirstFrameDataUrl(dataUrl);
+          }
+        } catch (captureErr) {
+          console.warn('[KillCounter] Failed to capture first frame for crop:', captureErr);
+        }
+      };
+      tempVideo.src = objectUrl;
+    } catch {}
   };
 
   // Start AI Video Analysis
@@ -258,6 +312,7 @@ export default function AdminKillCounterPage() {
       const uploadRes = await killCounterApi.uploadVideo(
         confirmedTournament.id,
         videoFile,
+        cropRegion || undefined,
         (percent) => setUploadProgress(percent)
       );
       if (!uploadRes.data?.jobId) {
@@ -275,10 +330,10 @@ export default function AdminKillCounterPage() {
         currentBatch: 0,
         totalBatches: 0,
         percent: 0,
-        statusText: 'Extracting video frames (1 frame every 4s)...',
+        statusText: 'Extracting video frames (1 frame every 8s)...',
       });
 
-      await killCounterApi.startAnalysis(jobId);
+      await killCounterApi.startAnalysis(jobId, cropRegion || undefined);
 
       // 3. Start Polling for Live Progress
       startPolling(jobId);
@@ -836,7 +891,16 @@ export default function AdminKillCounterPage() {
 
               {/* Video Player or Upload Zone */}
               <div className="flex-1 flex flex-col justify-center">
-                {videoPreviewUrl ? (
+                {firstFrameDataUrl ? (
+                  <div className="w-full">
+                    <ScreenRegionCropper
+                      imageUrl={firstFrameDataUrl}
+                      crop={cropRegion}
+                      onChange={setCropRegion}
+                      disabled={analyzing || uploading}
+                    />
+                  </div>
+                ) : videoPreviewUrl ? (
                   <div className="relative rounded-2xl overflow-hidden bg-black border border-white/10 flex flex-col items-center justify-center aspect-video w-full">
                     <video
                       ref={videoPlayerRef}
@@ -862,7 +926,7 @@ export default function AdminKillCounterPage() {
                       Upload the recorded match video (.mp4, .mkv, .mov, up to 500MB) to scan kill feed banners.
                     </p>
                     <span className="text-[11px] px-3 py-1 rounded-full bg-white/5 text-zinc-400 border border-white/10 font-mono">
-                      1 frame sampled every 4s
+                      1 frame sampled every 8s • 20 frames / batch
                     </span>
                   </label>
                 )}
@@ -942,6 +1006,27 @@ export default function AdminKillCounterPage() {
                       <p className="mt-1 text-[10px] text-zinc-400">
                         Any kills detected so far have been preserved. You can review them on the right or manually enter kills.
                       </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* API Quota Estimation & Warning */}
+                {estimatedApiCalls !== null && (
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-zinc-400 bg-white/[0.02] p-2.5 rounded-xl border border-white/5">
+                    <span>
+                      Estimated API Calls: <strong className="text-white font-mono">{estimatedApiCalls}</strong> / 20 daily limit
+                      {videoDuration && ` (~${(videoDuration / 60).toFixed(1)} mins)`}
+                    </span>
+                    <span className="text-[11px] text-zinc-500 font-mono">1 frame / 8s • 20 frames / batch</span>
+                  </div>
+                )}
+
+                {quotaWarning && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">AI Quota Notice</p>
+                      <p className="mt-0.5 text-amber-200/90 leading-relaxed">{quotaWarning}</p>
                     </div>
                   </div>
                 )}

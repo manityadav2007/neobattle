@@ -1221,10 +1221,18 @@ export const killCounterApi = {
     }>>(`/admin/kill-counter/tournaments/${id}`);
     return res.data;
   },
-  uploadVideo: async (tournamentId: string, file: File, onUploadProgress?: (percent: number) => void) => {
+  uploadVideo: async (
+    tournamentId: string,
+    file: File,
+    cropRegion?: CropRegion,
+    onUploadProgress?: (percent: number) => void
+  ) => {
     const formData = new FormData();
     formData.append('tournamentId', tournamentId);
     formData.append('video', file);
+    if (cropRegion) {
+      formData.append('cropRegion', JSON.stringify(cropRegion));
+    }
 
     const res = await api.post<ApiResponse<{
       jobId: string;
@@ -1242,12 +1250,14 @@ export const killCounterApi = {
     });
     return res.data;
   },
-  startAnalysis: async (jobId: string) => {
+  startAnalysis: async (jobId: string, cropRegion?: CropRegion) => {
     const res = await api.post<ApiResponse<{
       jobId: string;
       status: string;
       progress: any;
-    }>>(`/admin/kill-counter/jobs/${jobId}/start`);
+    }>>(`/admin/kill-counter/jobs/${jobId}/start`, {
+      cropRegion,
+    });
     return res.data;
   },
   getJobStatus: async (jobId: string) => {

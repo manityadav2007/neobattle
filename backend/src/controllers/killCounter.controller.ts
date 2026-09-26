@@ -8,7 +8,7 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { findBestPlayerMatch, PlayerCandidate, MatchResult } from '../utils/stringSimilarity';
 
 // Import kill detection service from local services
-import { detectKillsFromVideo } from '../services/killDetectionService';
+import { detectKillsFromVideo, CropRegion } from '../services/killDetectionService';
 
 // Setup upload directory for kill counter videos
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'kill-counter');
@@ -73,6 +73,7 @@ export interface KillJob {
     bestCandidate?: PlayerCandidate | null;
     score: number;
   }>;
+  cropRegion?: CropRegion | null;
   error?: string | null;
   startedAt?: number;
   completedAt?: number;
@@ -272,6 +273,17 @@ export async function uploadVideo(req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
+    let cropRegion: CropRegion | undefined;
+    if (req.body.cropRegion) {
+      try {
+        cropRegion = typeof req.body.cropRegion === 'string'
+          ? JSON.parse(req.body.cropRegion)
+          : req.body.cropRegion;
+      } catch (e) {
+        console.warn('[KillCounter] Failed to parse cropRegion in uploadVideo:', e);
+      }
+    }
+
     const jobId = uuidv4();
     const job: KillJob = {
       id: jobId,
@@ -289,6 +301,7 @@ export async function uploadVideo(req: AuthenticatedRequest, res: Response): Pro
       rawDetections: [],
       matchedKills: {},
       unmatchedDetections: [],
+      cropRegion,
       error: null,
     };
 
@@ -461,6 +474,16 @@ export async function startAnalysis(req: AuthenticatedRequest, res: Response): P
     }
   }
 
+  if (req.body.cropRegion) {
+    try {
+      job.cropRegion = typeof req.body.cropRegion === 'string'
+        ? JSON.parse(req.body.cropRegion)
+        : req.body.cropRegion;
+    } catch (e) {
+      console.warn('[KillCounter] Failed to parse cropRegion in startAnalysis:', e);
+    }
+  }
+
   job.status = 'processing';
   job.startedAt = Date.now();
   job.error = null;
@@ -476,18 +499,22 @@ export async function startAnalysis(req: AuthenticatedRequest, res: Response): P
     try {
       console.log(`[KillCounter] Starting background analysis for job ${jobId}`);
 
-      const finalKills = await detectKillsFromVideo(job.videoPath, (prog: any) => {
-        const percent = prog.totalBatches > 0 ? Math.round((prog.currentBatch / prog.totalBatches) * 100) : 0;
-        job.progress = {
-          currentBatch: prog.currentBatch,
-          totalBatches: prog.totalBatches,
-          percent,
-          statusText: `Analyzing batch ${prog.currentBatch} of ${prog.totalBatches} (${percent}%)...`,
-        };
+      const finalKills = await detectKillsFromVideo(
+        job.videoPath,
+        (prog: any) => {
+          const percent = prog.totalBatches > 0 ? Math.round((prog.currentBatch / prog.totalBatches) * 100) : 0;
+          job.progress = {
+            currentBatch: prog.currentBatch,
+            totalBatches: prog.totalBatches,
+            percent,
+            statusText: `Analyzing batch ${prog.currentBatch} of ${prog.totalBatches} (${percent}%)...`,
+          };
 
-        // Live update matched & unmatched kills
-        processDetectionsIntoJob(job, prog.allKillsSoFar || [], candidates);
-      });
+          // Live update matched & unmatched kills
+          processDetectionsIntoJob(job, prog.allKillsSoFar || [], candidates);
+        },
+        job.cropRegion || undefined
+      );
 
       // Final processing pass
       processDetectionsIntoJob(job, finalKills, candidates);

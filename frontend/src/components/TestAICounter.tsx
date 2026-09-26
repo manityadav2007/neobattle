@@ -228,15 +228,9 @@ export default function TestAICounter() {
               <Sparkles className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-white font-display">AI Kill Counter Playground</h2>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                  Sandbox
-                </span>
-              </div>
-              <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-                Test the Gemini AI multimodal kill feed detection engine on <strong>any random gameplay video</strong> (e.g. YouTube clips or screen captures).
-                All tournament restrictions, player database lookups, and roster checks are bypassed.
+              <h2 className="text-xl font-bold text-white font-display">AI Kill Counter Playground</h2>
+              <p className="text-xs text-zinc-400 mt-1">
+                Test video kill feed detection on any gameplay clip without tournament restrictions
               </p>
             </div>
           </div>
