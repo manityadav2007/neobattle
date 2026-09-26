@@ -109,14 +109,9 @@ export default function TestAICounter() {
         const dur = tempVideo.duration;
         if (dur && !isNaN(dur)) {
           setVideoDuration(dur);
-          const estFrames = Math.ceil(dur / 8);
-          const estCalls = Math.ceil(estFrames / 20);
+          const estFrames = Math.ceil(dur / 1.5);
+          const estCalls = Math.ceil(estFrames / 30);
           setEstimatedApiCalls(estCalls);
-          if (estCalls > 15) {
-            setQuotaWarning(
-              "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached."
-            );
-          }
         }
         // Seek slightly forward to grab a clear first frame (skips initial black frames)
         tempVideo.currentTime = Math.min(1.0, Math.max(0.1, (tempVideo.duration || 1) * 0.02));
@@ -353,24 +348,13 @@ export default function TestAICounter() {
               </div>
             ) : null}
 
-            {/* API Quota Estimation & Warning */}
+            {/* Pre-Processing Estimation */}
             {estimatedApiCalls !== null && (
               <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-zinc-400 bg-white/[0.02] p-2.5 rounded-xl border border-white/5">
                 <span>
-                  Estimated API Calls: <strong className="text-white font-mono">{estimatedApiCalls}</strong> / 20 daily limit
-                  {videoDuration && ` (~${(videoDuration / 60).toFixed(1)} mins)`}
+                  This video is approximately <strong className="text-white font-mono">{videoDuration ? (videoDuration / 60).toFixed(1) : 0} minutes</strong> long and will use approximately <strong className="text-violet-400 font-mono">{estimatedApiCalls}</strong> API request{estimatedApiCalls === 1 ? '' : 's'}.
                 </span>
-                <span className="text-[11px] text-zinc-500 font-mono">1 frame / 8s • 20 frames / batch</span>
-              </div>
-            )}
-
-            {quotaWarning && (
-              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">AI Quota Notice</p>
-                  <p className="mt-0.5 text-amber-200/90 leading-relaxed">{quotaWarning}</p>
-                </div>
+                <span className="text-[11px] text-zinc-500 font-mono">1 frame / 1.5s • 30 frames / batch</span>
               </div>
             )}
 

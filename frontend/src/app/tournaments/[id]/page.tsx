@@ -98,14 +98,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           const dur = tempVideo.duration;
           if (dur && !isNaN(dur)) {
             setVideoDuration(dur);
-            const estFrames = Math.ceil(dur / 8);
-            const estCalls = Math.ceil(estFrames / 20);
+            const estFrames = Math.ceil(dur / 1.5);
+            const estCalls = Math.ceil(estFrames / 30);
             setEstimatedApiCalls(estCalls);
-            if (estCalls > 15) {
-              setQuotaWarning(
-                "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached."
-              );
-            }
           }
           tempVideo.currentTime = Math.min(1.0, Math.max(0.1, (tempVideo.duration || 1) * 0.02));
         };
@@ -1421,7 +1416,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                             <p className="text-xs text-amber-400/80 font-mono mt-0.5">
                               {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
                               {videoDuration && ` · ~${(videoDuration / 60).toFixed(1)} mins`}
-                              {estimatedApiCalls !== null && ` · Est. ${estimatedApiCalls} API calls (daily quota: 20)`}
+                              {estimatedApiCalls !== null && ` · Est. ${estimatedApiCalls} API requests (1 frame/1.5s · 30 frames/batch)`}
                             </p>
                           </div>
                         ) : (
@@ -1432,17 +1427,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                         )}
                       </div>
                     </div>
-
-                    {/* Quota Warning if Estimated Calls > 15 */}
-                    {quotaWarning && (
-                      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
-                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold">AI Quota Notice</p>
-                          <p className="mt-0.5 text-amber-200/90 leading-relaxed">{quotaWarning}</p>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Screen Region Cropper for Kill-Feed */}
                     {firstFrameDataUrl && (

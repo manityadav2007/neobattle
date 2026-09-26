@@ -42,16 +42,13 @@ if (!process.env.GEMINI_API_KEY) {
   }
 }
 
-// Model & Detection Configuration
+// Model & Detection Configuration (Gemini 2.5 Flash on Paid Tier)
 export const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
-export const BATCH_SIZE = 20; // 20 sequential frames per Gemini request (increased from 12 to fit within daily RPD)
-export const FRAME_INTERVAL_SECONDS = 8; // 1 frame every 8 seconds (increased from 4s to minimize API quota)
-export const RATE_LIMIT_DELAY_MS = 13000; // ~13s between requests to strictly respect <= 5 requests/minute
-export const DAILY_REQUEST_LIMIT = 20; // Gemini 2.5 Flash free tier daily limit (RPD)
-export const SAFE_API_CALL_THRESHOLD = 15; // Safe threshold leaving buffer for retries / daily quota
-export const DEDUPLICATION_WINDOW_SECONDS = 14; // Window to deduplicate same killer-victim pair across adjacent frames (8s interval)
-export const QUOTA_WARNING_MESSAGE =
-  "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached.";
+export const BATCH_SIZE = 30; // 30 frames per Gemini request (optimal with cropped kill-feed images on paid tier)
+export const FRAME_INTERVAL_SECONDS = 1.5; // 1 frame every 1.5s (captures 2-3s kill feed banners without missing)
+export const RATE_LIMIT_DELAY_MS = 1000; // 1s pause between requests (well within paid tier's 1,000 RPM)
+export const DEDUPLICATION_WINDOW_SECONDS = 3.5; // 3.5s window to deduplicate same kill event across adjacent 1.5s frames
+export const MAX_ALLOWED_BATCHES_PER_VIDEO = 100; // Practical safety ceiling (~75 minutes of video at 1.5s/frame)
 
 /**
  * Returns dynamic user-specified prompt for Gemini multimodal vision
@@ -393,21 +390,14 @@ export async function detectKillsFromVideo(
       `[KillDetection] Video duration: ~${Math.round(probedDuration)}s (${(probedDuration / 60).toFixed(1)} mins). Estimated frames: ~${expectedFrames} (1 every ${FRAME_INTERVAL_SECONDS}s).`
     );
     console.log(
-      `[KillDetection] This video will require approximately ${expectedApiCalls} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+      `[KillDetection] Video will require approximately ${expectedApiCalls} Gemini API request(s).`
     );
-
-    if (expectedApiCalls > SAFE_API_CALL_THRESHOLD) {
-      console.warn(
-        `[KillDetection] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
-        `(Estimated ${expectedApiCalls} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
-      );
-    }
   }
 
   const collectedKills: Array<DetectedKill & { _batchIndex: number; _batchStartFrameIndex: number; _batchFrameCount: number }> = [];
 
   try {
-    // 1. Extract frames from video (1 frame every 8 seconds)
+    // 1. Extract frames from video (1 frame every 1.5 seconds)
     const frameFiles = await extractFramesFromVideo(resolvedVideoPath, tempDir);
 
     if (frameFiles.length === 0) {
@@ -422,9 +412,9 @@ export async function detectKillsFromVideo(
       await cropExtractedFrames(frameFiles, cropRegion);
     }
 
-    // 2. Group frames into batches of 20 (in chronological order)
+    // 2. Group frames into batches of 30 (in chronological order)
     const batches = [];
-    for (let i = 0; i < frameFiles.length; i += BATCH_SIZE) {
+    for (let i = 0; i < frameFiles.length && batches.length < MAX_ALLOWED_BATCHES_PER_VIDEO; i += BATCH_SIZE) {
       batches.push({
         batchIndex: batches.length, // 0-based
         frames: frameFiles.slice(i, i + BATCH_SIZE),
@@ -433,17 +423,10 @@ export async function detectKillsFromVideo(
     }
 
     const totalBatches = batches.length;
-    console.log(`[KillDetection] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each.`);
+    console.log(`[KillDetection] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each (1 frame every ${FRAME_INTERVAL_SECONDS}s).`);
     console.log(
-      `[KillDetection] This video will require approximately ${totalBatches} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+      `[KillDetection] Processing will use ${totalBatches} Gemini API request(s).`
     );
-
-    if (totalBatches > SAFE_API_CALL_THRESHOLD) {
-      console.warn(
-        `[KillDetection] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
-        `(Total ${totalBatches} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
-      );
-    }
 
     // 3. Process each batch sequentially
     for (const batch of batches) {
@@ -721,22 +704,14 @@ export async function detectKillsForTestFeed(
       `[TestAIFeed] Video duration: ~${Math.round(probedDuration)}s (${(probedDuration / 60).toFixed(1)} mins). Estimated frames: ~${expectedFrames} (1 every ${FRAME_INTERVAL_SECONDS}s).`
     );
     console.log(
-      `[TestAIFeed] This video will require approximately ${expectedApiCalls} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+      `[TestAIFeed] Video will require approximately ${expectedApiCalls} Gemini API request(s).`
     );
-
-    if (expectedApiCalls > SAFE_API_CALL_THRESHOLD) {
-      quotaWarning = QUOTA_WARNING_MESSAGE;
-      console.warn(
-        `[TestAIFeed] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
-        `(Estimated ${expectedApiCalls} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
-      );
-    }
   }
 
   const collectedKills: Array<TestDetectedKill & { _batchIndex: number; _batchStartFrameIndex: number; _batchFrameCount: number }> = [];
 
   try {
-    // 1. Extract frames from video (1 frame every 8s)
+    // 1. Extract frames from video (1 frame every 1.5s)
     const frameFiles = await extractFramesFromVideo(resolvedVideoPath, tempDir);
 
     if (frameFiles.length === 0) {
@@ -751,10 +726,9 @@ export async function detectKillsForTestFeed(
       await cropExtractedFrames(frameFiles, cropRegion);
     }
 
-    // 2. Group frames into batches of 20 (up to SAFE_API_CALL_THRESHOLD batches / ~40 minutes of gameplay)
+    // 2. Group frames into batches of 30 (up to MAX_ALLOWED_BATCHES_PER_VIDEO / ~75 minutes of gameplay)
     const batches = [];
-    const maxBatches = SAFE_API_CALL_THRESHOLD;
-    for (let i = 0; i < frameFiles.length && batches.length < maxBatches; i += BATCH_SIZE) {
+    for (let i = 0; i < frameFiles.length && batches.length < MAX_ALLOWED_BATCHES_PER_VIDEO; i += BATCH_SIZE) {
       batches.push({
         batchIndex: batches.length,
         frames: frameFiles.slice(i, i + BATCH_SIZE),
@@ -763,18 +737,10 @@ export async function detectKillsForTestFeed(
     }
 
     const totalBatches = batches.length;
-    console.log(`[TestAIFeed] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each.`);
+    console.log(`[TestAIFeed] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each (1 frame every ${FRAME_INTERVAL_SECONDS}s).`);
     console.log(
-      `[TestAIFeed] This video will require approximately ${totalBatches} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+      `[TestAIFeed] Processing will use ${totalBatches} Gemini API request(s).`
     );
-
-    if (totalBatches > SAFE_API_CALL_THRESHOLD) {
-      quotaWarning = QUOTA_WARNING_MESSAGE;
-      console.warn(
-        `[TestAIFeed] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
-        `(Total ${totalBatches} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
-      );
-    }
 
     // 3. Process each batch sequentially
     for (const batch of batches) {
