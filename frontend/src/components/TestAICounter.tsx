@@ -35,6 +35,10 @@ export default function TestAICounter() {
   const [viewMode, setViewMode] = useState<'structured' | 'json'>('structured');
   const [copiedJson, setCopiedJson] = useState(false);
 
+  const [estimatedApiCalls, setEstimatedApiCalls] = useState<number | null>(null);
+  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -70,6 +74,9 @@ export default function TestAICounter() {
   const handleSelectFile = (selectedFile: File) => {
     setError('');
     setResponse(null);
+    setEstimatedApiCalls(null);
+    setQuotaWarning(null);
+    setVideoDuration(null);
 
     const allowed = /\.(mp4|mkv|mov|webm|avi)$/i;
     if (!allowed.test(selectedFile.name) && !selectedFile.type.startsWith('video/')) {
@@ -90,6 +97,24 @@ export default function TestAICounter() {
     try {
       const url = URL.createObjectURL(selectedFile);
       setVideoPreviewUrl(url);
+
+      const tempVideo = document.createElement('video');
+      tempVideo.preload = 'metadata';
+      tempVideo.onloadedmetadata = () => {
+        const dur = tempVideo.duration;
+        if (dur && !isNaN(dur)) {
+          setVideoDuration(dur);
+          const estFrames = Math.ceil(dur / 8);
+          const estCalls = Math.ceil(estFrames / 20);
+          setEstimatedApiCalls(estCalls);
+          if (estCalls > 15) {
+            setQuotaWarning(
+              "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached."
+            );
+          }
+        }
+      };
+      tempVideo.src = url;
     } catch {
       setVideoPreviewUrl(null);
     }
@@ -121,6 +146,9 @@ export default function TestAICounter() {
     setVideoPreviewUrl(null);
     setResponse(null);
     setError('');
+    setEstimatedApiCalls(null);
+    setQuotaWarning(null);
+    setVideoDuration(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -295,6 +323,27 @@ export default function TestAICounter() {
                   controls
                   className="w-full max-h-56 object-contain"
                 />
+              </div>
+            )}
+
+            {/* API Quota Estimation & Warning */}
+            {estimatedApiCalls !== null && (
+              <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-zinc-400 bg-white/[0.02] p-2.5 rounded-xl border border-white/5">
+                <span>
+                  Estimated API Calls: <strong className="text-white font-mono">{estimatedApiCalls}</strong> / 20 daily limit
+                  {videoDuration && ` (~${(videoDuration / 60).toFixed(1)} mins)`}
+                </span>
+                <span className="text-[11px] text-zinc-500 font-mono">1 frame / 8s • 20 frames / batch</span>
+              </div>
+            )}
+
+            {quotaWarning && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">AI Quota Notice</p>
+                  <p className="mt-0.5 text-amber-200/90 leading-relaxed">{quotaWarning}</p>
+                </div>
               </div>
             )}
 

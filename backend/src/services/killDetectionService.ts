@@ -34,18 +34,56 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 // Model & Detection Configuration
-const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
-const BATCH_SIZE = 12; // 12 sequential frames per Gemini request
-const FRAME_INTERVAL_SECONDS = 4; // 1 frame every 4 seconds
-const RATE_LIMIT_DELAY_MS = 13000; // ~13s between requests to strictly respect <= 5 requests/minute
+export const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
+export const BATCH_SIZE = 20; // 20 sequential frames per Gemini request (increased from 12 to fit within daily RPD)
+export const FRAME_INTERVAL_SECONDS = 8; // 1 frame every 8 seconds (increased from 4s to minimize API quota)
+export const RATE_LIMIT_DELAY_MS = 13000; // ~13s between requests to strictly respect <= 5 requests/minute
+export const DAILY_REQUEST_LIMIT = 20; // Gemini 2.5 Flash free tier daily limit (RPD)
+export const SAFE_API_CALL_THRESHOLD = 15; // Safe threshold leaving buffer for retries / daily quota
+export const DEDUPLICATION_WINDOW_SECONDS = 14; // Window to deduplicate same killer-victim pair across adjacent frames (8s interval)
+export const QUOTA_WARNING_MESSAGE =
+  "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached.";
 
-// Exact user-specified prompt for Gemini multimodal vision
-const GEMINI_PROMPT =
-  'These are 12 sequential screenshots from a Free Fire match, taken a few seconds apart, in chronological order. ' +
-  'For each image where a kill feed notification is visible (text usually near the top of the screen showing one player ' +
-  "eliminated another), extract the eliminator's name and the eliminated player's name. " +
-  'Return a JSON array of all kills found across these images, in this format: [{"eliminator": "name", "eliminated": "name"}]. ' +
-  'If no kill feed is visible in any image, return an empty array [].';
+/**
+ * Returns dynamic user-specified prompt for Gemini multimodal vision
+ */
+export function getGeminiPrompt(frameCount: number = BATCH_SIZE): string {
+  return (
+    `These are ${frameCount} sequential screenshots from a Free Fire match, taken approximately ${FRAME_INTERVAL_SECONDS} seconds apart, in chronological order. ` +
+    'For each image where a kill feed notification is visible (text usually near the top of the screen showing one player ' +
+    "eliminated another), extract the eliminator's name and the eliminated player's name. " +
+    'Return a JSON array of all kills found across these images, in this format: [{"eliminator": "name", "eliminated": "name"}]. ' +
+    'If no kill feed is visible in any image, return an empty array [].'
+  );
+}
+
+// Fallback constant for backwards compatibility
+export const GEMINI_PROMPT = getGeminiPrompt(BATCH_SIZE);
+
+/**
+ * Probes the video duration in seconds using ffprobe.
+ * Returns 0 if probing fails.
+ */
+export function probeVideoDuration(videoPath: string): Promise<number> {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (!err && metadata && metadata.format && typeof metadata.format.duration === 'number' && metadata.format.duration > 0) {
+        resolve(metadata.format.duration);
+      } else {
+        resolve(0);
+      }
+    });
+  });
+}
+
+/**
+ * Calculates estimated frames and required API calls for a given duration.
+ */
+export function estimateApiCalls(durationSeconds: number, frameCount?: number): { expectedFrames: number; expectedApiCalls: number } {
+  const expectedFrames = frameCount ?? (durationSeconds > 0 ? Math.ceil(durationSeconds / FRAME_INTERVAL_SECONDS) : 0);
+  const expectedApiCalls = expectedFrames > 0 ? Math.ceil(expectedFrames / BATCH_SIZE) : 0;
+  return { expectedFrames, expectedApiCalls };
+}
 
 // Track the timestamp of the last Gemini API call to enforce the rate limit
 let lastApiCallTimestamp = 0;
@@ -259,10 +297,29 @@ export async function detectKillsFromVideo(
   console.log(`[KillDetection] Starting detection pipeline for: ${resolvedVideoPath}`);
   console.log(`[KillDetection] Temp frames directory: ${tempDir}`);
 
+  // Recalculate and log expected API calls based on probed video duration
+  const probedDuration = await probeVideoDuration(resolvedVideoPath);
+  if (probedDuration > 0) {
+    const { expectedFrames, expectedApiCalls } = estimateApiCalls(probedDuration);
+    console.log(
+      `[KillDetection] Video duration: ~${Math.round(probedDuration)}s (${(probedDuration / 60).toFixed(1)} mins). Estimated frames: ~${expectedFrames} (1 every ${FRAME_INTERVAL_SECONDS}s).`
+    );
+    console.log(
+      `[KillDetection] This video will require approximately ${expectedApiCalls} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+    );
+
+    if (expectedApiCalls > SAFE_API_CALL_THRESHOLD) {
+      console.warn(
+        `[KillDetection] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
+        `(Estimated ${expectedApiCalls} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
+      );
+    }
+  }
+
   const collectedKills: Array<DetectedKill & { _batchIndex: number; _batchStartFrameIndex: number; _batchFrameCount: number }> = [];
 
   try {
-    // 1. Extract frames from video
+    // 1. Extract frames from video (1 frame every 8 seconds)
     const frameFiles = await extractFramesFromVideo(resolvedVideoPath, tempDir);
 
     if (frameFiles.length === 0) {
@@ -272,7 +329,7 @@ export async function detectKillsFromVideo(
 
     console.log(`[KillDetection] Total frames extracted: ${frameFiles.length}`);
 
-    // 2. Group frames into batches of 12 (in chronological order)
+    // 2. Group frames into batches of 20 (in chronological order)
     const batches = [];
     for (let i = 0; i < frameFiles.length; i += BATCH_SIZE) {
       batches.push({
@@ -284,6 +341,16 @@ export async function detectKillsFromVideo(
 
     const totalBatches = batches.length;
     console.log(`[KillDetection] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each.`);
+    console.log(
+      `[KillDetection] This video will require approximately ${totalBatches} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+    );
+
+    if (totalBatches > SAFE_API_CALL_THRESHOLD) {
+      console.warn(
+        `[KillDetection] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
+        `(Total ${totalBatches} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
+      );
+    }
 
     // 3. Process each batch sequentially
     for (const batch of batches) {
@@ -297,10 +364,11 @@ export async function detectKillsFromVideo(
         },
       }));
 
-      // Send batch to Gemini with retry
+      // Send batch to Gemini with retry using dynamic batch prompt
+      const batchPrompt = getGeminiPrompt(batch.frames.length);
       const rawBatchKills = await processBatchWithRetry(
         model,
-        GEMINI_PROMPT,
+        batchPrompt,
         imageParts,
         batchNumber,
         totalBatches
@@ -343,12 +411,12 @@ export async function detectKillsFromVideo(
 
           if (!samePair) continue;
 
-          // 1. Timestamp difference within 10 seconds
+          // 1. Timestamp difference within deduplication window (14s matching 8s frame sampling)
           const timeDiff = Math.abs(killTimestamp - existing.timestamp);
-          if (timeDiff <= 10) {
+          if (timeDiff <= DEDUPLICATION_WINDOW_SECONDS) {
             isDuplicate = true;
             console.log(
-              `[KillDetection] Deduplicating kill (within 10s window): ${kill.eliminator} eliminated ${kill.eliminated} ` +
+              `[KillDetection] Deduplicating kill (within ${DEDUPLICATION_WINDOW_SECONDS}s window): ${kill.eliminator} eliminated ${kill.eliminated} ` +
                 `(prev: ${existing.timestamp}s, current: ${killTimestamp}s)`
             );
             break;
@@ -361,7 +429,7 @@ export async function detectKillsFromVideo(
             const currentBatchStart = batch.startFrameIndex * FRAME_INTERVAL_SECONDS;
             const boundaryGap = Math.abs(currentBatchStart - prevBatchEnd);
 
-            if (boundaryGap <= 10) {
+            if (boundaryGap <= DEDUPLICATION_WINDOW_SECONDS) {
               isDuplicate = true;
               console.log(
                 `[KillDetection] Deduplicating kill across consecutive batch boundary (${existing._batchIndex + 1} -> ${batchNumber}): ` +
@@ -452,6 +520,8 @@ export interface TestAiFeedResult {
   kills: TestDetectedKill[];
   framesAnalyzed: number;
   batchesProcessed: number;
+  estimatedApiCalls?: number;
+  quotaWarning?: string | null;
 }
 
 const TEST_FEED_PROMPT =
@@ -545,22 +615,43 @@ export async function detectKillsForTestFeed(
   console.log(`[TestAIFeed] Starting test detection pipeline for: ${resolvedVideoPath}`);
   console.log(`[TestAIFeed] Temp frames directory: ${tempDir}`);
 
+  // Recalculate and log expected API calls based on probed video duration
+  const probedDuration = await probeVideoDuration(resolvedVideoPath);
+  let quotaWarning: string | null = null;
+  if (probedDuration > 0) {
+    const { expectedFrames, expectedApiCalls } = estimateApiCalls(probedDuration);
+    console.log(
+      `[TestAIFeed] Video duration: ~${Math.round(probedDuration)}s (${(probedDuration / 60).toFixed(1)} mins). Estimated frames: ~${expectedFrames} (1 every ${FRAME_INTERVAL_SECONDS}s).`
+    );
+    console.log(
+      `[TestAIFeed] This video will require approximately ${expectedApiCalls} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+    );
+
+    if (expectedApiCalls > SAFE_API_CALL_THRESHOLD) {
+      quotaWarning = QUOTA_WARNING_MESSAGE;
+      console.warn(
+        `[TestAIFeed] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
+        `(Estimated ${expectedApiCalls} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
+      );
+    }
+  }
+
   const collectedKills: Array<TestDetectedKill & { _batchIndex: number; _batchStartFrameIndex: number; _batchFrameCount: number }> = [];
 
   try {
-    // 1. Extract frames from video (1 frame every 4s)
+    // 1. Extract frames from video (1 frame every 8s)
     const frameFiles = await extractFramesFromVideo(resolvedVideoPath, tempDir);
 
     if (frameFiles.length === 0) {
       console.warn('[TestAIFeed] No frames were extracted from the video.');
-      return { totalKillsFound: 0, kills: [], framesAnalyzed: 0, batchesProcessed: 0 };
+      return { totalKillsFound: 0, kills: [], framesAnalyzed: 0, batchesProcessed: 0, estimatedApiCalls: 0, quotaWarning: null };
     }
 
     console.log(`[TestAIFeed] Total frames extracted: ${frameFiles.length}`);
 
-    // 2. Group frames into batches of 12 (up to 4 batches / 48 frames for snappy test turnaround)
+    // 2. Group frames into batches of 20 (up to SAFE_API_CALL_THRESHOLD batches / ~40 minutes of gameplay)
     const batches = [];
-    const maxBatches = 6; // Max 72 frames (~4.8 minutes of gameplay)
+    const maxBatches = SAFE_API_CALL_THRESHOLD;
     for (let i = 0; i < frameFiles.length && batches.length < maxBatches; i += BATCH_SIZE) {
       batches.push({
         batchIndex: batches.length,
@@ -571,6 +662,17 @@ export async function detectKillsForTestFeed(
 
     const totalBatches = batches.length;
     console.log(`[TestAIFeed] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each.`);
+    console.log(
+      `[TestAIFeed] This video will require approximately ${totalBatches} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+    );
+
+    if (totalBatches > SAFE_API_CALL_THRESHOLD) {
+      quotaWarning = QUOTA_WARNING_MESSAGE;
+      console.warn(
+        `[TestAIFeed] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
+        `(Total ${totalBatches} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
+      );
+    }
 
     // 3. Process each batch sequentially
     for (const batch of batches) {
@@ -638,18 +740,18 @@ export async function detectKillsForTestFeed(
 
           if (!samePair) continue;
 
-          // 10s window check
-          if (Math.abs(killTimestamp - existing.timestamp) <= 10) {
+          // 1. Deduplication window check (14s matching 8s frame sampling)
+          if (Math.abs(killTimestamp - existing.timestamp) <= DEDUPLICATION_WINDOW_SECONDS) {
             isDuplicate = true;
             break;
           }
 
-          // Consecutive batch boundary check
+          // 2. Consecutive batch boundary check
           if (batch.batchIndex === existing._batchIndex + 1) {
             const prevBatchEnd =
               (existing._batchStartFrameIndex + existing._batchFrameCount - 1) * FRAME_INTERVAL_SECONDS;
             const currentBatchStart = batch.startFrameIndex * FRAME_INTERVAL_SECONDS;
-            if (Math.abs(currentBatchStart - prevBatchEnd) <= 10) {
+            if (Math.abs(currentBatchStart - prevBatchEnd) <= DEDUPLICATION_WINDOW_SECONDS) {
               isDuplicate = true;
               break;
             }
@@ -696,7 +798,7 @@ export async function detectKillsForTestFeed(
       victim: k.victim,
       weapon: k.weapon,
       timestamp: k.timestamp,
-      formattedTime: k.formattedTime,
+      formattedTime: formatSeconds(k.timestamp),
       eliminator: k.killer,
       eliminated: k.victim,
     }));
@@ -707,6 +809,8 @@ export async function detectKillsForTestFeed(
       kills: finalKills,
       framesAnalyzed: frameFiles.length,
       batchesProcessed: batches.length,
+      estimatedApiCalls: batches.length,
+      quotaWarning,
     };
   } finally {
     // Clean up temporary extracted frames

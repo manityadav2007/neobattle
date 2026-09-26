@@ -37,17 +37,61 @@ if (!process.env.GEMINI_API_KEY) {
 
 // Model & Detection Configuration
 const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
-const BATCH_SIZE = 12; // 12 sequential frames per Gemini request
-const FRAME_INTERVAL_SECONDS = 4; // 1 frame every 4 seconds
+const BATCH_SIZE = 20; // 20 sequential frames per Gemini request (increased from 12 to fit within daily RPD)
+const FRAME_INTERVAL_SECONDS = 8; // 1 frame every 8 seconds (increased from 4s to minimize API quota)
 const RATE_LIMIT_DELAY_MS = 13000; // ~13s between requests to strictly respect <= 5 requests/minute
+const DAILY_REQUEST_LIMIT = 20; // Gemini 2.5 Flash free tier daily limit (RPD)
+const SAFE_API_CALL_THRESHOLD = 15; // Safe threshold leaving buffer for retries / daily quota
+const DEDUPLICATION_WINDOW_SECONDS = 14; // Window to deduplicate same killer-victim pair across adjacent frames (8s interval)
+const QUOTA_WARNING_MESSAGE =
+  "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached.";
 
-// Exact user-specified prompt for Gemini multimodal vision
-const GEMINI_PROMPT =
-  'These are 12 sequential screenshots from a Free Fire match, taken a few seconds apart, in chronological order. ' +
-  'For each image where a kill feed notification is visible (text usually near the top of the screen showing one player ' +
-  "eliminated another), extract the eliminator's name and the eliminated player's name. " +
-  'Return a JSON array of all kills found across these images, in this format: [{"eliminator": "name", "eliminated": "name"}]. ' +
-  'If no kill feed is visible in any image, return an empty array [].';
+/**
+ * Returns dynamic user-specified prompt for Gemini multimodal vision
+ * @param {number} [frameCount=20]
+ * @returns {string}
+ */
+function getGeminiPrompt(frameCount = BATCH_SIZE) {
+  return (
+    `These are ${frameCount} sequential screenshots from a Free Fire match, taken approximately ${FRAME_INTERVAL_SECONDS} seconds apart, in chronological order. ` +
+    'For each image where a kill feed notification is visible (text usually near the top of the screen showing one player ' +
+    "eliminated another), extract the eliminator's name and the eliminated player's name. " +
+    'Return a JSON array of all kills found across these images, in this format: [{"eliminator": "name", "eliminated": "name"}]. ' +
+    'If no kill feed is visible in any image, return an empty array [].'
+  );
+}
+
+// Fallback constant for backwards compatibility
+const GEMINI_PROMPT = getGeminiPrompt(BATCH_SIZE);
+
+/**
+ * Probes the video duration in seconds using ffprobe.
+ * @param {string} videoPath
+ * @returns {Promise<number>}
+ */
+function probeVideoDuration(videoPath) {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (!err && metadata && metadata.format && typeof metadata.format.duration === 'number' && metadata.format.duration > 0) {
+        resolve(metadata.format.duration);
+      } else {
+        resolve(0);
+      }
+    });
+  });
+}
+
+/**
+ * Calculates estimated frames and required API calls for a given duration.
+ * @param {number} durationSeconds
+ * @param {number} [frameCount]
+ * @returns {{ expectedFrames: number, expectedApiCalls: number }}
+ */
+function estimateApiCalls(durationSeconds, frameCount) {
+  const expectedFrames = frameCount !== undefined ? frameCount : (durationSeconds > 0 ? Math.ceil(durationSeconds / FRAME_INTERVAL_SECONDS) : 0);
+  const expectedApiCalls = expectedFrames > 0 ? Math.ceil(expectedFrames / BATCH_SIZE) : 0;
+  return { expectedFrames, expectedApiCalls };
+}
 
 // Track the timestamp of the last Gemini API call to enforce the rate limit
 let lastApiCallTimestamp = 0;
@@ -256,8 +300,27 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
   console.log(`[KillDetection] Starting detection pipeline for: ${resolvedVideoPath}`);
   console.log(`[KillDetection] Temp frames directory: ${tempDir}`);
 
+  // Recalculate and log expected API calls based on probed video duration
+  const probedDuration = await probeVideoDuration(resolvedVideoPath);
+  if (probedDuration > 0) {
+    const { expectedFrames, expectedApiCalls } = estimateApiCalls(probedDuration);
+    console.log(
+      `[KillDetection] Video duration: ~${Math.round(probedDuration)}s (${(probedDuration / 60).toFixed(1)} mins). Estimated frames: ~${expectedFrames} (1 every ${FRAME_INTERVAL_SECONDS}s).`
+    );
+    console.log(
+      `[KillDetection] This video will require approximately ${expectedApiCalls} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+    );
+
+    if (expectedApiCalls > SAFE_API_CALL_THRESHOLD) {
+      console.warn(
+        `[KillDetection] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
+        `(Estimated ${expectedApiCalls} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
+      );
+    }
+  }
+
   try {
-    // 1. Extract frames from video
+    // 1. Extract frames from video (1 frame every 8 seconds)
     const frameFiles = await extractFramesFromVideo(resolvedVideoPath, tempDir);
 
     if (frameFiles.length === 0) {
@@ -267,7 +330,7 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
 
     console.log(`[KillDetection] Total frames extracted: ${frameFiles.length}`);
 
-    // 2. Group frames into batches of 12 (in chronological order)
+    // 2. Group frames into batches of 20 (in chronological order)
     const batches = [];
     for (let i = 0; i < frameFiles.length; i += BATCH_SIZE) {
       batches.push({
@@ -279,6 +342,16 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
 
     const totalBatches = batches.length;
     console.log(`[KillDetection] Grouped into ${totalBatches} batch(es) of up to ${BATCH_SIZE} frames each.`);
+    console.log(
+      `[KillDetection] This video will require approximately ${totalBatches} API calls out of the daily limit of ${DAILY_REQUEST_LIMIT}.`
+    );
+
+    if (totalBatches > SAFE_API_CALL_THRESHOLD) {
+      console.warn(
+        `[KillDetection] WARNING: ${QUOTA_WARNING_MESSAGE} ` +
+        `(Total ${totalBatches} calls exceeds safe threshold of ${SAFE_API_CALL_THRESHOLD})`
+      );
+    }
 
     const collectedKills = [];
 
@@ -294,10 +367,11 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
         },
       }));
 
-      // Send batch to Gemini with retry
+      // Send batch to Gemini with retry using dynamic batch prompt
+      const batchPrompt = getGeminiPrompt(batch.frames.length);
       const rawBatchKills = await processBatchWithRetry(
         model,
-        GEMINI_PROMPT,
+        batchPrompt,
         imageParts,
         batchNumber,
         totalBatches
@@ -334,7 +408,7 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
 
         // Deduplication check against previously collected kills:
         // If the same eliminator+eliminated pair was detected in consecutive batches
-        // or within a 10-second window, skip it to avoid counting the same kill twice.
+        // or within deduplication window, skip it to avoid counting the same kill twice.
         let isDuplicate = false;
 
         for (const existing of collectedKills) {
@@ -344,12 +418,12 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
 
           if (!samePair) continue;
 
-          // 1. Timestamp difference within 10 seconds
+          // 1. Timestamp difference within deduplication window (14s matching 8s frame sampling)
           const timeDiff = Math.abs(killTimestamp - existing.timestamp);
-          if (timeDiff <= 10) {
+          if (timeDiff <= DEDUPLICATION_WINDOW_SECONDS) {
             isDuplicate = true;
             console.log(
-              `[KillDetection] Deduplicating kill (within 10s window): ${kill.eliminator} eliminated ${kill.eliminated} ` +
+              `[KillDetection] Deduplicating kill (within ${DEDUPLICATION_WINDOW_SECONDS}s window): ${kill.eliminator} eliminated ${kill.eliminated} ` +
                 `(prev: ${existing.timestamp}s, current: ${killTimestamp}s)`
             );
             break;
@@ -363,7 +437,7 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
             const currentBatchStart = batch.startFrameIndex * FRAME_INTERVAL_SECONDS;
             const boundaryGap = Math.abs(currentBatchStart - prevBatchEnd);
 
-            if (boundaryGap <= 10) {
+            if (boundaryGap <= DEDUPLICATION_WINDOW_SECONDS) {
               isDuplicate = true;
               console.log(
                 `[KillDetection] Deduplicating kill across consecutive batch boundary (${existing._batchIndex + 1} -> ${batchNumber}): ` +

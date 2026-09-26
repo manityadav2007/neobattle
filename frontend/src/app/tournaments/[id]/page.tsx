@@ -72,6 +72,40 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [aiVideoUrl, setAiVideoUrl] = useState<string>('');
   const [aiVideoStats, setAiVideoStats] = useState<any>(null);
   const [booyahUserId, setBooyahUserId] = useState<string>('');
+  const [estimatedApiCalls, setEstimatedApiCalls] = useState<number | null>(null);
+  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+
+  const handleVideoFileSelect = (selectedFile: File | null) => {
+    setVideoFile(selectedFile);
+    setEstimatedApiCalls(null);
+    setQuotaWarning(null);
+    setVideoDuration(null);
+
+    if (selectedFile) {
+      try {
+        const url = URL.createObjectURL(selectedFile);
+        const tempVideo = document.createElement('video');
+        tempVideo.preload = 'metadata';
+        tempVideo.onloadedmetadata = () => {
+          URL.revokeObjectURL(url);
+          const dur = tempVideo.duration;
+          if (dur && !isNaN(dur)) {
+            setVideoDuration(dur);
+            const estFrames = Math.ceil(dur / 8);
+            const estCalls = Math.ceil(estFrames / 20);
+            setEstimatedApiCalls(estCalls);
+            if (estCalls > 15) {
+              setQuotaWarning(
+                "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached."
+              );
+            }
+          }
+        };
+        tempVideo.src = url;
+      } catch {}
+    }
+  };
 
   useEffect(() => {
     if (!user || !tournament || user.id !== tournament.creatorId) return;
@@ -1349,7 +1383,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                       <input
                         type="file"
                         accept="video/*"
-                        onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                        onChange={(e) => handleVideoFileSelect(e.target.files?.[0] || null)}
                         disabled={processingAi}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                       />
@@ -1361,7 +1395,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                           <div>
                             <p className="text-sm font-semibold text-white">{videoFile.name}</p>
                             <p className="text-xs text-amber-400/80 font-mono mt-0.5">
-                              {(videoFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for AI analysis
+                              {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
+                              {videoDuration && ` · ~${(videoDuration / 60).toFixed(1)} mins`}
+                              {estimatedApiCalls !== null && ` · Est. ${estimatedApiCalls} API calls (daily quota: 20)`}
                             </p>
                           </div>
                         ) : (
@@ -1372,6 +1408,17 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                         )}
                       </div>
                     </div>
+
+                    {/* Quota Warning if Estimated Calls > 15 */}
+                    {quotaWarning && (
+                      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
+                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">AI Quota Notice</p>
+                          <p className="mt-0.5 text-amber-200/90 leading-relaxed">{quotaWarning}</p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* AI Process Trigger Button */}
                     <button
