@@ -9,7 +9,7 @@ import { UserRole, TournamentStatus, TransactionType, TransactionStatus, Prisma,
 import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
 import { notificationService } from '../services/notification.service';
-import { detectKillsForTestFeed } from '../services/killDetectionService';
+import { detectKillsForTestFeed, CropRegion } from '../services/killDetectionService';
 
 function formatCurrency(n: number): string {
   return `₹${n.toLocaleString('en-IN')}`;
@@ -1141,13 +1141,28 @@ export async function testAiFeed(req: AuthenticatedRequest, res: Response): Prom
     return;
   }
 
+  let cropRegion: CropRegion | undefined;
+  if (req.body.cropRegion) {
+    try {
+      cropRegion = typeof req.body.cropRegion === 'string'
+        ? JSON.parse(req.body.cropRegion)
+        : req.body.cropRegion;
+    } catch (parseErr) {
+      console.warn('[TestAIFeed] Failed to parse cropRegion, using full frames:', parseErr);
+    }
+  }
+
   const startTime = Date.now();
   const videoPath = file.path;
 
   try {
-    console.log(`[TestAIFeed] Analyzing uploaded video: ${file.originalname} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`);
+    console.log(
+      `[TestAIFeed] Analyzing uploaded video: ${file.originalname} (${(file.size / (1024 * 1024)).toFixed(2)} MB)${
+        cropRegion ? ` with crop region: ${JSON.stringify(cropRegion)}` : ''
+      }`
+    );
 
-    const result = await detectKillsForTestFeed(videoPath);
+    const result = await detectKillsForTestFeed(videoPath, cropRegion);
     const durationSeconds = Math.round((Date.now() - startTime) / 1000);
 
     console.log(`[TestAIFeed] Completed in ${durationSeconds}s. Found ${result.totalKillsFound} kills.`);

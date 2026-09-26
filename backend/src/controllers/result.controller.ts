@@ -8,7 +8,7 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { TournamentStatus, TransactionType, TransactionStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { notificationService } from '../services/notification.service';
-import { detectKillsForTestFeed } from '../services/killDetectionService';
+import { detectKillsForTestFeed, CropRegion } from '../services/killDetectionService';
 import { findBestPlayerMatch, PlayerCandidate } from '../utils/stringSimilarity';
 
 const resultUploadDir = path.join(process.cwd(), 'uploads', 'kill-counter');
@@ -288,12 +288,23 @@ export async function processAiVideo(req: AuthenticatedRequest, res: Response): 
     }
   }
 
+  let cropRegion: CropRegion | undefined;
+  if (req.body.cropRegion) {
+    try {
+      cropRegion = typeof req.body.cropRegion === 'string'
+        ? JSON.parse(req.body.cropRegion)
+        : req.body.cropRegion;
+    } catch (parseErr) {
+      console.warn('[ProcessAiVideo] Failed to parse cropRegion, using full frames:', parseErr);
+    }
+  }
+
   const startTime = Date.now();
   const videoPath = file.path;
   const relativeVideoUrl = `/uploads/kill-counter/${path.basename(file.path)}`;
 
   try {
-    const aiResult = await detectKillsForTestFeed(videoPath);
+    const aiResult = await detectKillsForTestFeed(videoPath, cropRegion);
     const durationSeconds = Math.round((Date.now() - startTime) / 1000);
 
     const killsCountMap = new Map<string, { kills: number; details: any[] }>();

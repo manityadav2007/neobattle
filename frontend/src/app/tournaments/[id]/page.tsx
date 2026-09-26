@@ -13,7 +13,8 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/hooks/useTournaments';
 import TournamentTags, { tagColorMap, tagIcons } from '@/components/TournamentTags';
-import { tournamentApi, teamApi, type Team, resolveAssetUrl, gameApi, userApi, adminApi, uploadApi, resultApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, TOURNAMENT_PLAY_GRACE_MS, type UserStats, type ResultSubmission } from '@/lib/services';
+import { tournamentApi, teamApi, type Team, resolveAssetUrl, gameApi, userApi, adminApi, uploadApi, resultApi, formatCurrency, formatDate, getMapTheme, getEffectiveStatus, getStatusColor, TOURNAMENT_PLAY_GRACE_MS, type UserStats, type ResultSubmission, type CropRegion } from '@/lib/services';
+import { ScreenRegionCropper, DEFAULT_KILL_FEED_CROP } from '@/components/ScreenRegionCropper';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
 import TeamManagementModal from '@/components/TeamManagementModal';
@@ -75,20 +76,25 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [estimatedApiCalls, setEstimatedApiCalls] = useState<number | null>(null);
   const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [firstFrameDataUrl, setFirstFrameDataUrl] = useState<string | null>(null);
+  const [cropRegion, setCropRegion] = useState<CropRegion | null>(DEFAULT_KILL_FEED_CROP);
 
   const handleVideoFileSelect = (selectedFile: File | null) => {
     setVideoFile(selectedFile);
     setEstimatedApiCalls(null);
     setQuotaWarning(null);
     setVideoDuration(null);
+    setFirstFrameDataUrl(null);
+    setCropRegion(DEFAULT_KILL_FEED_CROP);
 
     if (selectedFile) {
       try {
         const url = URL.createObjectURL(selectedFile);
         const tempVideo = document.createElement('video');
-        tempVideo.preload = 'metadata';
+        tempVideo.preload = 'auto';
+        tempVideo.muted = true;
+        tempVideo.playsInline = true;
         tempVideo.onloadedmetadata = () => {
-          URL.revokeObjectURL(url);
           const dur = tempVideo.duration;
           if (dur && !isNaN(dur)) {
             setVideoDuration(dur);
@@ -100,6 +106,24 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 "This video is long and may exceed today's AI processing quota. Consider processing a shorter clip, or proceeding may fail partway if the daily limit is reached."
               );
             }
+          }
+          tempVideo.currentTime = Math.min(1.0, Math.max(0.1, (tempVideo.duration || 1) * 0.02));
+        };
+        tempVideo.onseeked = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = tempVideo.videoWidth || 640;
+            canvas.height = tempVideo.videoHeight || 360;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+              setFirstFrameDataUrl(dataUrl);
+            }
+          } catch (captureErr) {
+            console.warn('[TournamentDetails] Failed to capture first frame for crop:', captureErr);
+          } finally {
+            URL.revokeObjectURL(url);
           }
         };
         tempVideo.src = url;
@@ -184,7 +208,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     setAiProgress(15);
     setAiStatusMessage('Uploading gameplay recording to server...');
     try {
-      const res = await resultApi.processAi(tournament.id, videoFile, (percent) => {
+      const res = await resultApi.processAi(tournament.id, videoFile, cropRegion || undefined, (percent) => {
         setAiProgress(Math.min(85, Math.max(15, Math.round(percent * 0.85))));
         if (percent >= 100) {
           setAiStatusMessage('Extracting frames & running Gemini 2.5 Vision OCR...');
@@ -1418,6 +1442,16 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                           <p className="mt-0.5 text-amber-200/90 leading-relaxed">{quotaWarning}</p>
                         </div>
                       </div>
+                    )}
+
+                    {/* Screen Region Cropper for Kill-Feed */}
+                    {firstFrameDataUrl && (
+                      <ScreenRegionCropper
+                        imageUrl={firstFrameDataUrl}
+                        crop={cropRegion}
+                        onChange={setCropRegion}
+                        disabled={processingAi}
+                      />
                     )}
 
                     {/* AI Process Trigger Button */}

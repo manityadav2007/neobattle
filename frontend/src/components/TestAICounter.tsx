@@ -20,7 +20,8 @@ import {
   LayoutList,
   Trash2,
 } from 'lucide-react';
-import { testAiCounterApi, TestAiDetectedKill, TestAiFeedResponse } from '@/lib/services';
+import { testAiCounterApi, TestAiDetectedKill, TestAiFeedResponse, CropRegion } from '@/lib/services';
+import { ScreenRegionCropper, DEFAULT_KILL_FEED_CROP } from './ScreenRegionCropper';
 import { getErrorMessage } from '@/lib/api';
 
 export default function TestAICounter() {
@@ -38,6 +39,8 @@ export default function TestAICounter() {
   const [estimatedApiCalls, setEstimatedApiCalls] = useState<number | null>(null);
   const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [firstFrameDataUrl, setFirstFrameDataUrl] = useState<string | null>(null);
+  const [cropRegion, setCropRegion] = useState<CropRegion | null>(DEFAULT_KILL_FEED_CROP);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -99,7 +102,9 @@ export default function TestAICounter() {
       setVideoPreviewUrl(url);
 
       const tempVideo = document.createElement('video');
-      tempVideo.preload = 'metadata';
+      tempVideo.preload = 'auto';
+      tempVideo.muted = true;
+      tempVideo.playsInline = true;
       tempVideo.onloadedmetadata = () => {
         const dur = tempVideo.duration;
         if (dur && !isNaN(dur)) {
@@ -113,7 +118,26 @@ export default function TestAICounter() {
             );
           }
         }
+        // Seek slightly forward to grab a clear first frame (skips initial black frames)
+        tempVideo.currentTime = Math.min(1.0, Math.max(0.1, (tempVideo.duration || 1) * 0.02));
       };
+
+      tempVideo.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = tempVideo.videoWidth || 640;
+          canvas.height = tempVideo.videoHeight || 360;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            setFirstFrameDataUrl(dataUrl);
+          }
+        } catch (captureErr) {
+          console.warn('[TestAICounter] Failed to capture first frame for crop preview:', captureErr);
+        }
+      };
+
       tempVideo.src = url;
     } catch {
       setVideoPreviewUrl(null);
@@ -144,6 +168,8 @@ export default function TestAICounter() {
     }
     setFile(null);
     setVideoPreviewUrl(null);
+    setFirstFrameDataUrl(null);
+    setCropRegion(DEFAULT_KILL_FEED_CROP);
     setResponse(null);
     setError('');
     setEstimatedApiCalls(null);
@@ -166,7 +192,7 @@ export default function TestAICounter() {
     setUploadPercent(0);
 
     try {
-      const data = await testAiCounterApi.testFeed(file, (percent) => {
+      const data = await testAiCounterApi.testFeed(file, cropRegion || undefined, (percent) => {
         setUploadPercent(percent);
       });
       setResponse(data);
@@ -315,8 +341,15 @@ export default function TestAICounter() {
               )}
             </div>
 
-            {/* Video Player Preview if Available */}
-            {videoPreviewUrl && (
+            {/* Interactive Screen Region Cropper (or fallback video preview) */}
+            {firstFrameDataUrl ? (
+              <ScreenRegionCropper
+                imageUrl={firstFrameDataUrl}
+                crop={cropRegion}
+                onChange={setCropRegion}
+                disabled={isAnalyzing}
+              />
+            ) : videoPreviewUrl ? (
               <div className="rounded-xl overflow-hidden bg-black/60 border border-white/10 max-w-lg mx-auto">
                 <video
                   src={videoPreviewUrl}
@@ -324,7 +357,7 @@ export default function TestAICounter() {
                   className="w-full max-h-56 object-contain"
                 />
               </div>
-            )}
+            ) : null}
 
             {/* API Quota Estimation & Warning */}
             {estimatedApiCalls !== null && (

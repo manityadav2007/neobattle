@@ -748,10 +748,26 @@ export interface ResultSubmission {
   }>;
 }
 
+export interface CropRegion {
+  x: number; // percentage (0-100) or pixel value
+  y: number; // percentage (0-100) or pixel value
+  width: number;
+  height: number;
+  unit?: 'percent' | 'pixel';
+}
+
 export const resultApi = {
-  processAi: async (tournamentId: string, videoFile: File, onProgress?: (percent: number) => void) => {
+  processAi: async (
+    tournamentId: string,
+    videoFile: File,
+    cropRegion?: CropRegion,
+    onProgress?: (percent: number) => void
+  ) => {
     const formData = new FormData();
     formData.append('video', videoFile);
+    if (cropRegion) {
+      formData.append('cropRegion', JSON.stringify(cropRegion));
+    }
     const res = await api.post(`/results/tournament/${tournamentId}/process-ai`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000,
@@ -1308,10 +1324,14 @@ export interface TestAiFeedResponse {
 export const testAiCounterApi = {
   testFeed: async (
     file: File,
+    cropRegion?: CropRegion,
     onUploadProgress?: (percent: number) => void
   ): Promise<TestAiFeedResponse> => {
     const formData = new FormData();
     formData.append('video', file);
+    if (cropRegion) {
+      formData.append('cropRegion', JSON.stringify(cropRegion));
+    }
 
     const res = await api.post<TestAiFeedResponse>('/admin/test-ai-feed', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

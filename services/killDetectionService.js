@@ -6,6 +6,14 @@ const path = require('path');
 const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  try {
+    sharp = require(path.resolve(__dirname, 'backend', 'node_modules', 'sharp'));
+  } catch (e2) {}
+}
 
 // Configure ffmpeg binary path: try ffmpeg-static first (needed on Render/cloud Linux containers), otherwise fallback to system PATH
 try {
@@ -157,6 +165,86 @@ async function extractFramesFromVideo(videoPath, outputDir) {
 }
 
 /**
+ * Crops extracted frames to the specified region using sharp.
+ * If crop fails on any frame or region is invalid, returns the original frame.
+ * @param {string[]} frameFiles
+ * @param {{x: number, y: number, width: number, height: number, unit?: string}} [cropRegion]
+ * @returns {Promise<string[]>}
+ */
+async function cropExtractedFrames(frameFiles, cropRegion) {
+  if (!cropRegion || typeof cropRegion !== 'object') {
+    return frameFiles;
+  }
+
+  const { x, y, width, height, unit = 'percent' } = cropRegion;
+  if (width <= 0 || height <= 0) {
+    console.warn('[KillDetection] Invalid crop dimensions, skipping crop:', cropRegion);
+    return frameFiles;
+  }
+
+  if (!sharp) {
+    console.warn('[KillDetection] Warning: sharp library not loaded, skipping crop.');
+    return frameFiles;
+  }
+
+  console.log(
+    `[KillDetection] Cropping ${frameFiles.length} frames to region: ` +
+    `X=${x}, Y=${y}, W=${width}, H=${height} (${unit}) using sharp...`
+  );
+
+  let successCount = 0;
+
+  for (const framePath of frameFiles) {
+    try {
+      const metadata = await sharp(framePath).metadata();
+      const imgWidth = metadata.width || 0;
+      const imgHeight = metadata.height || 0;
+
+      if (!imgWidth || !imgHeight) continue;
+
+      let pixelLeft = 0;
+      let pixelTop = 0;
+      let pixelWidth = imgWidth;
+      let pixelHeight = imgHeight;
+
+      if (unit === 'percent' || (x <= 100 && y <= 100 && width <= 100 && height <= 100)) {
+        pixelLeft = Math.round((Math.max(0, x) / 100) * imgWidth);
+        pixelTop = Math.round((Math.max(0, y) / 100) * imgHeight);
+        pixelWidth = Math.round((Math.min(100 - x, width) / 100) * imgWidth);
+        pixelHeight = Math.round((Math.min(100 - y, height) / 100) * imgHeight);
+      } else {
+        pixelLeft = Math.round(Math.max(0, x));
+        pixelTop = Math.round(Math.max(0, y));
+        pixelWidth = Math.round(Math.min(imgWidth - pixelLeft, width));
+        pixelHeight = Math.round(Math.min(imgHeight - pixelTop, height));
+      }
+
+      // Safety bounds clamp
+      pixelWidth = Math.max(10, Math.min(imgWidth - pixelLeft, pixelWidth));
+      pixelHeight = Math.max(10, Math.min(imgHeight - pixelTop, pixelHeight));
+
+      if (
+        pixelWidth > 0 &&
+        pixelHeight > 0 &&
+        pixelLeft + pixelWidth <= imgWidth &&
+        pixelTop + pixelHeight <= imgHeight
+      ) {
+        const croppedBuffer = await sharp(framePath)
+          .extract({ left: pixelLeft, top: pixelTop, width: pixelWidth, height: pixelHeight })
+          .toBuffer();
+        fs.writeFileSync(framePath, croppedBuffer);
+        successCount++;
+      }
+    } catch (cropErr) {
+      console.warn(`[KillDetection] Error cropping frame ${path.basename(framePath)}:`, cropErr.message);
+    }
+  }
+
+  console.log(`[KillDetection] Successfully cropped ${successCount} of ${frameFiles.length} frames.`);
+  return frameFiles;
+}
+
+/**
  * Parses and sanitizes Gemini JSON response.
  *
  * @param {string} rawText - Response text from Gemini API.
@@ -268,7 +356,10 @@ async function processBatchWithRetry(model, prompt, imageParts, batchNumber, tot
  * @param {(progress: {batchIndex: number, currentBatch: number, totalBatches: number, batchKills: Array<{eliminator: string, eliminated: string}>, allKillsSoFar: Array<{eliminator: string, eliminated: string, timestamp: number}>}) => void} [onProgress] - Optional progress callback.
  * @returns {Promise<Array<{eliminator: string, eliminated: string, timestamp: number}>>}
  */
-async function detectKillsFromVideo(videoFilePath, onProgress) {
+async function detectKillsFromVideo(videoFilePath, onProgressOrCrop, cropRegionArg) {
+  const onProgress = typeof onProgressOrCrop === 'function' ? onProgressOrCrop : undefined;
+  const cropRegion = typeof onProgressOrCrop === 'object' && onProgressOrCrop !== null ? onProgressOrCrop : cropRegionArg;
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -329,6 +420,11 @@ async function detectKillsFromVideo(videoFilePath, onProgress) {
     }
 
     console.log(`[KillDetection] Total frames extracted: ${frameFiles.length}`);
+
+    // Optional: Crop frames to selected screen region (e.g. kill-feed area)
+    if (cropRegion) {
+      await cropExtractedFrames(frameFiles, cropRegion);
+    }
 
     // 2. Group frames into batches of 20 (in chronological order)
     const batches = [];
