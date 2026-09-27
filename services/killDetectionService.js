@@ -46,10 +46,10 @@ if (!process.env.GEMINI_API_KEY) {
 // Model & Detection Configuration (Gemini 2.5 Flash on Paid Tier)
 const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
 const BATCH_SIZE = 30; // 30 frames per Gemini request (optimal with cropped kill-feed images on paid tier)
-const FRAME_INTERVAL_SECONDS = 1.5; // 1 frame every 1.5s (captures 2-3s kill feed banners without missing)
+const FRAME_INTERVAL_SECONDS = 1.0; // 1 frame every 1.0s (captures 2-3s kill feed banners without missing)
 const RATE_LIMIT_DELAY_MS = 1000; // 1s pause between requests (well within paid tier's 1,000 RPM)
-const DEDUPLICATION_WINDOW_SECONDS = 3.5; // 3.5s window to deduplicate same kill event across adjacent 1.5s frames
-const MAX_ALLOWED_BATCHES_PER_VIDEO = 100; // Practical safety ceiling (~75 minutes of video at 1.5s/frame)
+const DEDUPLICATION_WINDOW_SECONDS = 3.0; // 3.0s window to deduplicate same kill event across adjacent 1.0s frames
+const MAX_ALLOWED_BATCHES_PER_VIDEO = 100; // Practical safety ceiling (~50 minutes of video at 1.0s/frame)
 
 /**
  * Returns dynamic user-specified prompt for Gemini multimodal vision
@@ -226,6 +226,14 @@ async function cropExtractedFrames(frameFiles, cropRegion) {
         pixelLeft + pixelWidth <= imgWidth &&
         pixelTop + pixelHeight <= imgHeight
       ) {
+        if (successCount === 0) {
+          const areaPercent = ((pixelWidth * pixelHeight) / (imgWidth * imgHeight)) * 100;
+          console.log(
+            `[KillDetection] Crop calculated: Source=${imgWidth}x${imgHeight}px, ` +
+            `Crop Rect: left=${pixelLeft}, top=${pixelTop}, width=${pixelWidth}, height=${pixelHeight} ` +
+            `(${areaPercent.toFixed(1)}% of frame)`
+          );
+        }
         const croppedBuffer = await sharp(framePath)
           .extract({ left: pixelLeft, top: pixelTop, width: pixelWidth, height: pixelHeight })
           .toBuffer();
@@ -307,6 +315,7 @@ async function processBatchWithRetry(model, prompt, imageParts, batchNumber, tot
       const result = await model.generateContent([prompt, ...imageParts]);
       const response = await result.response;
       const text = response.text();
+      console.log(`[KillDetection] Batch ${batchNumber} raw response:\n`, text);
 
       const batchKills = parseGeminiResponse(text);
       console.log(

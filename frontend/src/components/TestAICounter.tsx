@@ -41,6 +41,7 @@ export default function TestAICounter() {
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [firstFrameDataUrl, setFirstFrameDataUrl] = useState<string | null>(null);
   const [cropRegion, setCropRegion] = useState<CropRegion | null>(DEFAULT_KILL_FEED_CROP);
+  const [isCropping, setIsCropping] = useState<boolean>(true);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -97,6 +98,7 @@ export default function TestAICounter() {
     }
 
     setFile(selectedFile);
+    setIsCropping(true);
     try {
       const url = URL.createObjectURL(selectedFile);
       setVideoPreviewUrl(url);
@@ -109,7 +111,7 @@ export default function TestAICounter() {
         const dur = tempVideo.duration;
         if (dur && !isNaN(dur)) {
           setVideoDuration(dur);
-          const estFrames = Math.ceil(dur / 1.5);
+          const estFrames = Math.ceil(dur / 1.0);
           const estCalls = Math.ceil(estFrames / 30);
           setEstimatedApiCalls(estCalls);
         }
@@ -165,6 +167,7 @@ export default function TestAICounter() {
     setVideoPreviewUrl(null);
     setFirstFrameDataUrl(null);
     setCropRegion(DEFAULT_KILL_FEED_CROP);
+    setIsCropping(true);
     setResponse(null);
     setError('');
     setEstimatedApiCalls(null);
@@ -330,21 +333,41 @@ export default function TestAICounter() {
               )}
             </div>
 
-            {/* Interactive Screen Region Cropper (or fallback video preview) */}
-            {firstFrameDataUrl ? (
+            {/* Interactive Screen Region Cropper OR Full Playable Video View */}
+            {firstFrameDataUrl && isCropping ? (
               <ScreenRegionCropper
                 imageUrl={firstFrameDataUrl}
                 crop={cropRegion}
                 onChange={setCropRegion}
+                onConfirm={() => setIsCropping(false)}
                 disabled={isAnalyzing}
               />
             ) : videoPreviewUrl ? (
-              <div className="rounded-xl overflow-hidden bg-black/60 border border-white/10 max-w-lg mx-auto">
-                <video
-                  src={videoPreviewUrl}
-                  controls
-                  className="w-full max-h-56 object-contain"
-                />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-zinc-300 flex items-center gap-1.5 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    {cropRegion ? 'Kill-feed crop area confirmed' : 'Full-frame scan selected'}
+                  </span>
+                  {firstFrameDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCropping(true)}
+                      disabled={isAnalyzing}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 border border-violet-500/30 transition-all cursor-pointer"
+                    >
+                      <Crosshair className="w-3.5 h-3.5" /> Adjust Crop Area
+                    </button>
+                  )}
+                </div>
+                <div className="rounded-xl overflow-hidden bg-black/90 border border-white/10 max-w-xl mx-auto shadow-lg">
+                  <video
+                    src={videoPreviewUrl}
+                    controls
+                    playsInline
+                    className="w-full max-h-72 object-contain"
+                  />
+                </div>
               </div>
             ) : null}
 
@@ -354,7 +377,7 @@ export default function TestAICounter() {
                 <span>
                   This video is approximately <strong className="text-white font-mono">{videoDuration ? (videoDuration / 60).toFixed(1) : 0} minutes</strong> long and will use approximately <strong className="text-violet-400 font-mono">{estimatedApiCalls}</strong> API request{estimatedApiCalls === 1 ? '' : 's'}.
                 </span>
-                <span className="text-[11px] text-zinc-500 font-mono">1 frame / 1.5s • 30 frames / batch</span>
+                <span className="text-[11px] text-zinc-500 font-mono">1 frame / 1.0s • 30 frames / batch</span>
               </div>
             )}
 

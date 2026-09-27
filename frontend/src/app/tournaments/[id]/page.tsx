@@ -78,18 +78,30 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [firstFrameDataUrl, setFirstFrameDataUrl] = useState<string | null>(null);
   const [cropRegion, setCropRegion] = useState<CropRegion | null>(DEFAULT_KILL_FEED_CROP);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+  const [isCropping, setIsCropping] = useState<boolean>(true);
+
+  // Cleanup video preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    };
+  }, [videoPreviewUrl]);
 
   const handleVideoFileSelect = (selectedFile: File | null) => {
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
     setVideoFile(selectedFile);
     setEstimatedApiCalls(null);
     setQuotaWarning(null);
     setVideoDuration(null);
     setFirstFrameDataUrl(null);
     setCropRegion(DEFAULT_KILL_FEED_CROP);
+    setIsCropping(true);
 
     if (selectedFile) {
       try {
         const url = URL.createObjectURL(selectedFile);
+        setVideoPreviewUrl(url);
         const tempVideo = document.createElement('video');
         tempVideo.preload = 'auto';
         tempVideo.muted = true;
@@ -98,7 +110,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           const dur = tempVideo.duration;
           if (dur && !isNaN(dur)) {
             setVideoDuration(dur);
-            const estFrames = Math.ceil(dur / 1.5);
+            const estFrames = Math.ceil(dur / 1.0);
             const estCalls = Math.ceil(estFrames / 30);
             setEstimatedApiCalls(estCalls);
           }
@@ -117,12 +129,14 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             }
           } catch (captureErr) {
             console.warn('[TournamentDetails] Failed to capture first frame for crop:', captureErr);
-          } finally {
-            URL.revokeObjectURL(url);
           }
         };
         tempVideo.src = url;
-      } catch {}
+      } catch {
+        setVideoPreviewUrl(null);
+      }
+    } else {
+      setVideoPreviewUrl(null);
     }
   };
 
@@ -1416,7 +1430,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                             <p className="text-xs text-amber-400/80 font-mono mt-0.5">
                               {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
                               {videoDuration && ` · ~${(videoDuration / 60).toFixed(1)} mins`}
-                              {estimatedApiCalls !== null && ` · Est. ${estimatedApiCalls} API requests (1 frame/1.5s · 30 frames/batch)`}
+                              {estimatedApiCalls !== null && ` · Est. ${estimatedApiCalls} API requests (1 frame/1.0s · 30 frames/batch)`}
                             </p>
                           </div>
                         ) : (
@@ -1428,15 +1442,43 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                       </div>
                     </div>
 
-                    {/* Screen Region Cropper for Kill-Feed */}
-                    {firstFrameDataUrl && (
+                    {/* Screen Region Cropper OR Full Playable Video View */}
+                    {firstFrameDataUrl && isCropping ? (
                       <ScreenRegionCropper
                         imageUrl={firstFrameDataUrl}
                         crop={cropRegion}
                         onChange={setCropRegion}
+                        onConfirm={() => setIsCropping(false)}
                         disabled={processingAi}
                       />
-                    )}
+                    ) : videoPreviewUrl ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-xs text-zinc-300 flex items-center gap-1.5 font-medium">
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                            {cropRegion ? 'Kill-feed crop area confirmed' : 'Full-frame scan selected'}
+                          </span>
+                          {firstFrameDataUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setIsCropping(true)}
+                              disabled={processingAi}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all cursor-pointer"
+                            >
+                              <Crosshair className="w-3.5 h-3.5" /> Adjust Crop Area
+                            </button>
+                          )}
+                        </div>
+                        <div className="rounded-xl overflow-hidden bg-black/90 border border-white/10 max-w-xl mx-auto shadow-lg">
+                          <video
+                            src={videoPreviewUrl}
+                            controls
+                            playsInline
+                            className="w-full max-h-72 object-contain"
+                          />
+                        </div>
+                      </div>
+                    ) : null}
 
                     {/* AI Process Trigger Button */}
                     <button

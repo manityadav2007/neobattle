@@ -97,6 +97,7 @@ export default function AdminKillCounterPage() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [firstFrameDataUrl, setFirstFrameDataUrl] = useState<string | null>(null);
   const [cropRegion, setCropRegion] = useState<CropRegion | null>(DEFAULT_KILL_FEED_CROP);
+  const [isCropping, setIsCropping] = useState<boolean>(true);
   const [estimatedApiCalls, setEstimatedApiCalls] = useState<number | null>(null);
   const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
@@ -228,6 +229,7 @@ export default function AdminKillCounterPage() {
     setVideoPreviewUrl(null);
     setFirstFrameDataUrl(null);
     setCropRegion(DEFAULT_KILL_FEED_CROP);
+    setIsCropping(true);
     setEstimatedApiCalls(null);
     setQuotaWarning(null);
     setVideoDuration(null);
@@ -252,6 +254,7 @@ export default function AdminKillCounterPage() {
     setVideoPreviewUrl(objectUrl);
     setFirstFrameDataUrl(null);
     setCropRegion(DEFAULT_KILL_FEED_CROP);
+    setIsCropping(true);
     setEstimatedApiCalls(null);
     setQuotaWarning(null);
     setVideoDuration(null);
@@ -268,7 +271,7 @@ export default function AdminKillCounterPage() {
         const dur = tempVideo.duration;
         if (dur && !isNaN(dur)) {
           setVideoDuration(dur);
-          const estFrames = Math.ceil(dur / 1.5);
+          const estFrames = Math.ceil(dur / 1.0);
           const estCalls = Math.ceil(estFrames / 30);
           setEstimatedApiCalls(estCalls);
         }
@@ -886,24 +889,43 @@ export default function AdminKillCounterPage() {
 
               {/* Video Player or Upload Zone */}
               <div className="flex-1 flex flex-col justify-center">
-                {firstFrameDataUrl ? (
+                {firstFrameDataUrl && isCropping ? (
                   <div className="w-full">
                     <ScreenRegionCropper
                       imageUrl={firstFrameDataUrl}
                       crop={cropRegion}
                       onChange={setCropRegion}
+                      onConfirm={() => setIsCropping(false)}
                       disabled={analyzing || uploading}
                     />
                   </div>
                 ) : videoPreviewUrl ? (
-                  <div className="relative rounded-2xl overflow-hidden bg-black border border-white/10 flex flex-col items-center justify-center aspect-video w-full">
-                    <video
-                      ref={videoPlayerRef}
-                      src={videoPreviewUrl}
-                      controls
-                      playsInline
-                      className="w-full h-full object-contain max-h-[360px]"
-                    />
+                  <div className="space-y-2 w-full">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs text-zinc-300 flex items-center gap-1.5 font-medium">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        {cropRegion ? 'Kill-feed crop area confirmed' : 'Full-frame scan selected'}
+                      </span>
+                      {firstFrameDataUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setIsCropping(true)}
+                          disabled={analyzing || uploading}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-fire-500/20 hover:bg-fire-500/30 text-fire-300 border border-fire-500/30 transition-all cursor-pointer"
+                        >
+                          <Crosshair className="w-3.5 h-3.5" /> Adjust Crop Area
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative rounded-2xl overflow-hidden bg-black border border-white/10 flex flex-col items-center justify-center aspect-video w-full shadow-lg">
+                      <video
+                        ref={videoPlayerRef}
+                        src={videoPreviewUrl}
+                        controls
+                        playsInline
+                        className="w-full h-full object-contain max-h-[360px]"
+                      />
+                    </div>
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-white/15 rounded-2xl p-8 text-center hover:border-fire-500/50 hover:bg-fire-500/[0.02] transition-all cursor-pointer flex flex-col items-center justify-center h-full min-h-[300px]">
@@ -921,7 +943,7 @@ export default function AdminKillCounterPage() {
                       Upload the recorded match video (.mp4, .mkv, .mov, up to 500MB) to scan kill feed banners.
                     </p>
                     <span className="text-[11px] px-3 py-1 rounded-full bg-white/5 text-zinc-400 border border-white/10 font-mono">
-                      1 frame sampled every 1.5s • 30 frames / batch
+                      1 frame sampled every 1.0s • 30 frames / batch
                     </span>
                   </label>
                 )}
