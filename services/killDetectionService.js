@@ -43,8 +43,9 @@ if (!process.env.GEMINI_API_KEY) {
   }
 }
 
-// Model & Detection Configuration (Gemini 2.5 Flash on Paid Tier)
-const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
+// Model & Detection Configuration (Gemini 3.8 Flash on Paid Tier with automatic fallback)
+const GEMINI_MODEL_NAME = process.env.GEMINI_MODEL_NAME || 'gemini-3.8-flash';
+const GEMINI_FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash'];
 const BATCH_SIZE = 30; // 30 frames per Gemini request (optimal with cropped kill-feed images on paid tier)
 const FRAME_INTERVAL_SECONDS = 1.0; // 1 frame every 1.0s (captures 2-3s kill feed banners without missing)
 const RATE_LIMIT_DELAY_MS = 1000; // 1s pause between requests (well within paid tier's 1,000 RPM)
@@ -300,61 +301,115 @@ function parseGeminiResponse(rawText) {
 }
 
 /**
- * Sends a batch of images to Gemini API with retry logic.
- * Retries once if the batch fails, and skips if still failing without crashing.
- *
- * @param {any} model - GoogleGenerativeAI model instance.
- * @param {string} prompt - Multimodal prompt text.
- * @param {Array<{inlineData: {data: string, mimeType: string}}>} imageParts - 12 base64 encoded images.
- * @param {number} batchNumber - 1-based batch index.
- * @param {number} totalBatches - Total count of batches.
- * @returns {Promise<Array<{eliminator: string, eliminated: string}>>}
+ * Calls Gemini Multimodal Vision API with detailed pre-flight logging,
+ * response timing, raw response logging, error catching with stack traces,
+ * and automatic fallback across candidate models on 503/404 errors.
  */
-async function processBatchWithRetry(model, prompt, imageParts, batchNumber, totalBatches) {
-  const maxAttempts = 2; // Initial attempt + 1 retry
+async function callGeminiMultimodalWithLogging(
+  apiKey,
+  prompt,
+  imageParts,
+  batchNumber,
+  totalBatches,
+  tag = '[KillDetection]'
+) {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const maskedKey = apiKey ? `...${apiKey.slice(-4)}` : 'MISSING';
+  const candidateModels = [GEMINI_MODEL_NAME, ...GEMINI_FALLBACK_MODELS.filter((m) => m !== GEMINI_MODEL_NAME)];
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  let lastError = null;
+
+  for (let modelIdx = 0; modelIdx < candidateModels.length; modelIdx++) {
+    const currentModel = candidateModels[modelIdx];
+    const isFallback = modelIdx > 0;
+
+    await enforceRateLimit();
+
+    const endpointUrl = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent`;
+    console.log(`\n======================================================`);
+    console.log(`${tag} [Gemini API Pre-Flight] Batch ${batchNumber} of ${totalBatches}${isFallback ? ' (Fallback Model)' : ''}`);
+    console.log(`${tag} API Key Defined: ${Boolean(apiKey)} | Length: ${apiKey ? apiKey.length : 0} | Suffix: ${maskedKey}`);
+    console.log(`${tag} Exact Model String: "${currentModel}"`);
+    console.log(`${tag} HTTP Request: POST ${endpointUrl}`);
+    console.log(`${tag} Payload: ${imageParts.length} image(s), prompt length ${prompt.length} chars`);
+    console.log(`======================================================`);
+
+    const t0 = Date.now();
     try {
-      await enforceRateLimit();
-
-      const attemptSuffix = attempt > 1 ? ` (Retry attempt ${attempt})` : '';
-      console.log(`[KillDetection] Processing batch ${batchNumber} of ${totalBatches}${attemptSuffix}...`);
+      const model = genAI.getGenerativeModel({
+        model: currentModel,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      });
 
       const result = await model.generateContent([prompt, ...imageParts]);
       const response = await result.response;
-      const text = response.text();
-      console.log(`[KillDetection] Batch ${batchNumber} raw response:\n`, text);
+      const rawText = response.text();
+      const durationMs = Date.now() - t0;
 
-      const batchKills = parseGeminiResponse(text);
       console.log(
-        `[KillDetection] Batch ${batchNumber} of ${totalBatches} completed: ${batchKills.length} kill(s) found.`
+        `${tag} [Gemini API Response] Batch ${batchNumber} of ${totalBatches} -> HTTP Status: 200 OK | Duration: ${durationMs}ms | Model: ${currentModel}`
       );
-      return batchKills;
-    } catch (err) {
-      console.error(
-        `[KillDetection] Error processing batch ${batchNumber} on attempt ${attempt}:`,
-        err.message || err
-      );
+      console.log(`${tag} --- COMPLETE RAW TEXT RESPONSE START (Batch ${batchNumber}) ---`);
+      console.log(rawText);
+      console.log(`${tag} --- COMPLETE RAW TEXT RESPONSE END (Batch ${batchNumber}) ---\n`);
 
-      if (attempt < maxAttempts) {
-        const isRateLimit =
-          err.message &&
-          (err.message.includes('429') ||
-            err.message.includes('quota') ||
-            err.message.includes('RESOURCE_EXHAUSTED'));
-        const retryDelayMs = isRateLimit ? 15000 : 5000;
-        console.log(`[KillDetection] Retrying batch ${batchNumber} after ${retryDelayMs / 1000}s delay...`);
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-      } else {
-        console.warn(
-          `[KillDetection] Batch ${batchNumber} failed after ${maxAttempts} attempts. Skipping batch to continue pipeline.`
+      return { rawText, modelUsed: currentModel, durationMs };
+    } catch (err) {
+      lastError = err;
+      const httpStatus =
+        err.status ||
+        err.statusCode ||
+        (err.message && err.message.match(/\[(\d{3})\s/)?.[1]) ||
+        'N/A';
+      console.error(`\n======================================================`);
+      console.error(`${tag} [Gemini API ERROR] Batch ${batchNumber} of ${totalBatches}`);
+      console.error(`${tag} Model Attempted: ${currentModel}`);
+      console.error(`${tag} HTTP Status / Code: ${httpStatus}`);
+      console.error(`${tag} Error Message: ${err.message || err}`);
+      console.error(`${tag} Full Stack Trace:\n`, err.stack || err);
+      console.error(`======================================================\n`);
+
+      if (modelIdx < candidateModels.length - 1) {
+        console.log(
+          `${tag} Model ${currentModel} encountered error. Attempting fallback to ${candidateModels[modelIdx + 1]} for Batch ${batchNumber}...`
         );
-        return [];
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
       }
     }
   }
 
-  return [];
+  throw lastError || new Error(`All Gemini candidate models failed for batch ${batchNumber}`);
+}
+
+/**
+ * Sends a batch of images to Gemini API with retry logic and full debug logging.
+ */
+async function processBatchWithRetry(apiKey, prompt, imageParts, batchNumber, totalBatches) {
+  try {
+    const { rawText } = await callGeminiMultimodalWithLogging(
+      apiKey,
+      prompt,
+      imageParts,
+      batchNumber,
+      totalBatches,
+      '[KillDetection]'
+    );
+    const batchKills = parseGeminiResponse(rawText);
+    console.log(
+      `[KillDetection] Batch ${batchNumber} of ${totalBatches} completed: ${batchKills.length} kill(s) found.`
+    );
+    return batchKills;
+  } catch (err) {
+    console.error(
+      `[KillDetection] Batch ${batchNumber} failed after exhausting candidate models:`,
+      err.message || err
+    );
+    return [];
+  }
 }
 
 /**
@@ -466,7 +521,7 @@ async function detectKillsFromVideo(videoFilePath, onProgressOrCrop, cropRegionA
       // Send batch to Gemini with retry using dynamic batch prompt
       const batchPrompt = getGeminiPrompt(batch.frames.length);
       const rawBatchKills = await processBatchWithRetry(
-        model,
+        apiKey,
         batchPrompt,
         imageParts,
         batchNumber,
