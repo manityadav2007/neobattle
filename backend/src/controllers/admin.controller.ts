@@ -1172,9 +1172,11 @@ export async function testAiFeed(req: AuthenticatedRequest, res: Response): Prom
       message: `Successfully analyzed gameplay video. Found ${result.totalKillsFound} kill feed event(s).`,
       totalKillsFound: result.totalKillsFound,
       kills: result.kills,
+      cropDetails: result.cropDetails,
       data: {
         totalKillsFound: result.totalKillsFound,
         kills: result.kills,
+        cropDetails: result.cropDetails,
         videoDetails: {
           fileName: file.originalname,
           fileSize: file.size,

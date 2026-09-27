@@ -183,6 +183,9 @@ async function cropExtractedFrames(frameFiles, cropRegion) {
     console.warn('[KillDetection] Warning: sharp library not loaded, skipping crop.');
     return frameFiles;
   }
+  try {
+    sharp.cache(false);
+  } catch (e) {}
 
   console.log(
     `[KillDetection] Cropping ${frameFiles.length} frames to region: ` +
@@ -193,7 +196,9 @@ async function cropExtractedFrames(frameFiles, cropRegion) {
 
   for (const framePath of frameFiles) {
     try {
-      const metadata = await sharp(framePath).metadata();
+      // Read file into Buffer first to prevent file-locking on Windows (EBUSY / UNKNOWN errors)
+      const inputBuffer = fs.readFileSync(framePath);
+      const metadata = await sharp(inputBuffer).metadata();
       const imgWidth = metadata.width || 0;
       const imgHeight = metadata.height || 0;
 
@@ -229,12 +234,15 @@ async function cropExtractedFrames(frameFiles, cropRegion) {
         if (successCount === 0) {
           const areaPercent = ((pixelWidth * pixelHeight) / (imgWidth * imgHeight)) * 100;
           console.log(
-            `[KillDetection] Crop calculated: Source=${imgWidth}x${imgHeight}px, ` +
-            `Crop Rect: left=${pixelLeft}, top=${pixelTop}, width=${pixelWidth}, height=${pixelHeight} ` +
-            `(${areaPercent.toFixed(1)}% of frame)`
+            `[KillDetection] ========================================================\n` +
+            `[KillDetection] CROP RECTANGLE CONFIRMED AND APPLIED:\n` +
+            `[KillDetection] Source Resolution: ${imgWidth}x${imgHeight}px\n` +
+            `[KillDetection] Cropped Kill-Feed Area: left=${pixelLeft}px, top=${pixelTop}px, width=${pixelWidth}px, height=${pixelHeight}px\n` +
+            `[KillDetection] Image Payload: ${areaPercent.toFixed(1)}% of original frame size\n` +
+            `[KillDetection] ========================================================`
           );
         }
-        const croppedBuffer = await sharp(framePath)
+        const croppedBuffer = await sharp(inputBuffer)
           .extract({ left: pixelLeft, top: pixelTop, width: pixelWidth, height: pixelHeight })
           .toBuffer();
         fs.writeFileSync(framePath, croppedBuffer);

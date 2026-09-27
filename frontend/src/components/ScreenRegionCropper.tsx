@@ -31,6 +31,7 @@ export const ScreenRegionCropper: React.FC<ScreenRegionCropperProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const dragStartRef = useRef<{
     clientX: number;
     clientY: number;
@@ -40,6 +41,13 @@ export const ScreenRegionCropper: React.FC<ScreenRegionCropperProps> = ({
   // Active crop (if null, defaults to full frame)
   const currentCrop = crop || { x: 0, y: 0, width: 100, height: 100, unit: 'percent' };
   const isFullFrame = crop === null;
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth && img.naturalHeight) {
+      setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+    }
+  };
 
   const handlePointerDown = (
     e: React.PointerEvent<HTMLDivElement>,
@@ -161,9 +169,14 @@ export const ScreenRegionCropper: React.FC<ScreenRegionCropperProps> = ({
             <h4 className="text-xs sm:text-sm font-semibold text-slate-100">
               Crop Kill-Feed Area
             </h4>
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono font-medium">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-medium">
               {isFullFrame ? 'Full Frame' : 'Cropped'}
             </span>
+            {imageDimensions && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-mono font-medium">
+                {imageDimensions.width}×{imageDimensions.height} ({imageDimensions.height > imageDimensions.width ? 'Vertical' : 'Landscape'})
+              </span>
+            )}
           </div>
         </div>
 
@@ -218,6 +231,7 @@ export const ScreenRegionCropper: React.FC<ScreenRegionCropperProps> = ({
           <img
             src={imageUrl}
             alt="Video Preview Frame"
+            onLoad={handleImageLoad}
             className="block max-w-full max-h-[36vh] sm:max-h-[46vh] w-auto h-auto pointer-events-none select-none"
             draggable={false}
           />
@@ -334,9 +348,16 @@ export const ScreenRegionCropper: React.FC<ScreenRegionCropperProps> = ({
           {isFullFrame ? (
             <span className="text-slate-300">Full frame mode (100% video resolution).</span>
           ) : (
-            <div className="font-mono text-slate-300 flex items-center gap-1.5">
+            <div className="font-mono text-slate-300 flex items-center gap-1.5 flex-wrap">
               <span className="text-amber-400 font-semibold">Region:</span>
-              <span>{currentCrop.x}%, {currentCrop.y}% • {currentCrop.width}x{currentCrop.height}%</span>
+              <span>
+                X: {currentCrop.x}% • Y: {currentCrop.y}% • W: {currentCrop.width}% • H: {currentCrop.height}%
+                {imageDimensions && (
+                  <span className="text-white ml-1.5 font-bold">
+                    ({Math.round((currentCrop.width / 100) * imageDimensions.width)} × {Math.round((currentCrop.height / 100) * imageDimensions.height)} px)
+                  </span>
+                )}
+              </span>
             </div>
           )}
         </div>

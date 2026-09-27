@@ -1318,9 +1318,29 @@ export interface TestAiFeedResponse {
   message: string;
   totalKillsFound: number;
   kills: TestAiDetectedKill[];
+  cropDetails?: {
+    applied: boolean;
+    sourceWidth: number;
+    sourceHeight: number;
+    pixelLeft: number;
+    pixelTop: number;
+    pixelWidth: number;
+    pixelHeight: number;
+    areaPercent: number;
+  } | null;
   data?: {
     totalKillsFound: number;
     kills: TestAiDetectedKill[];
+    cropDetails?: {
+      applied: boolean;
+      sourceWidth: number;
+      sourceHeight: number;
+      pixelLeft: number;
+      pixelTop: number;
+      pixelWidth: number;
+      pixelHeight: number;
+      areaPercent: number;
+    } | null;
     videoDetails?: {
       fileName: string;
       fileSize: number;

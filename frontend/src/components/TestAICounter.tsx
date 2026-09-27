@@ -42,9 +42,92 @@ export default function TestAICounter() {
   const [firstFrameDataUrl, setFirstFrameDataUrl] = useState<string | null>(null);
   const [cropRegion, setCropRegion] = useState<CropRegion | null>(DEFAULT_KILL_FEED_CROP);
   const [isCropping, setIsCropping] = useState<boolean>(true);
+  const [croppedSliceDataUrl, setCroppedSliceDataUrl] = useState<string | null>(null);
+  const [cropPixelDimensions, setCropPixelDimensions] = useState<{
+    sourceWidth: number;
+    sourceHeight: number;
+    pixelLeft: number;
+    pixelTop: number;
+    pixelWidth: number;
+    pixelHeight: number;
+    areaPercent: number;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoPlayerRef = useRef<HTMLVideoElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Compute exact pixel dimensions and generate live cropped slice preview
+  useEffect(() => {
+    if (!firstFrameDataUrl) {
+      setCroppedSliceDataUrl(null);
+      setCropPixelDimensions(null);
+      return;
+    }
+
+    const img = new window.Image();
+    img.onload = () => {
+      const srcW = img.naturalWidth || img.width;
+      const srcH = img.naturalHeight || img.height;
+      if (!srcW || !srcH) return;
+
+      const current = cropRegion || { x: 0, y: 0, width: 100, height: 100, unit: 'percent' };
+      const pLeft = Math.round((Math.max(0, current.x) / 100) * srcW);
+      const pTop = Math.round((Math.max(0, current.y) / 100) * srcH);
+      const pWidth = Math.round((Math.min(100 - current.x, current.width) / 100) * srcW);
+      const pHeight = Math.round((Math.min(100 - current.y, current.height) / 100) * srcH);
+      const areaPct = Number((((pWidth * pHeight) / (srcW * srcH)) * 100).toFixed(1));
+
+      setCropPixelDimensions({
+        sourceWidth: srcW,
+        sourceHeight: srcH,
+        pixelLeft: pLeft,
+        pixelTop: pTop,
+        pixelWidth: pWidth,
+        pixelHeight: pHeight,
+        areaPercent: areaPct,
+      });
+
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, pWidth);
+        canvas.height = Math.max(1, pHeight);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, pLeft, pTop, pWidth, pHeight, 0, 0, pWidth, pHeight);
+          setCroppedSliceDataUrl(canvas.toDataURL('image/jpeg', 0.9));
+        }
+      } catch (err) {
+        console.warn('[TestAICounter] Failed to slice crop preview:', err);
+      }
+    };
+    img.src = firstFrameDataUrl;
+  }, [firstFrameDataUrl, cropRegion]);
+
+  // Immediately auto-play video as soon as crop area is confirmed
+  useEffect(() => {
+    if (!isCropping && videoPreviewUrl && videoPlayerRef.current) {
+      const vid = videoPlayerRef.current;
+      const playVideo = () => {
+        const playPromise = vid.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err: any) => {
+            console.warn('[TestAICounter] Sound autoplay blocked, attempting muted autoplay:', err);
+            vid.muted = true;
+            vid.play().catch(() => {});
+          });
+        }
+      };
+
+      if (vid.readyState >= 2) {
+        playVideo();
+      } else {
+        vid.onloadeddata = () => {
+          playVideo();
+        };
+      }
+    }
+  }, [isCropping, videoPreviewUrl]);
 
   // Clean up object URL on unmount or file change
   useEffect(() => {
@@ -107,6 +190,26 @@ export default function TestAICounter() {
       tempVideo.preload = 'auto';
       tempVideo.muted = true;
       tempVideo.playsInline = true;
+
+      const captureFrame = () => {
+        const w = tempVideo.videoWidth;
+        const h = tempVideo.videoHeight;
+        if (!w || !h) return;
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(tempVideo, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            setFirstFrameDataUrl(dataUrl);
+          }
+        } catch (captureErr) {
+          console.warn('[TestAICounter] Failed to capture first frame for crop preview:', captureErr);
+        }
+      };
+
       tempVideo.onloadedmetadata = () => {
         const dur = tempVideo.duration;
         if (dur && !isNaN(dur)) {
@@ -120,19 +223,10 @@ export default function TestAICounter() {
       };
 
       tempVideo.onseeked = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = tempVideo.videoWidth || 640;
-          canvas.height = tempVideo.videoHeight || 360;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-            setFirstFrameDataUrl(dataUrl);
-          }
-        } catch (captureErr) {
-          console.warn('[TestAICounter] Failed to capture first frame for crop preview:', captureErr);
-        }
+        captureFrame();
+      };
+      tempVideo.onloadeddata = () => {
+        captureFrame();
       };
 
       tempVideo.src = url;
@@ -168,6 +262,8 @@ export default function TestAICounter() {
     setFirstFrameDataUrl(null);
     setCropRegion(DEFAULT_KILL_FEED_CROP);
     setIsCropping(true);
+    setCroppedSliceDataUrl(null);
+    setCropPixelDimensions(null);
     setResponse(null);
     setError('');
     setEstimatedApiCalls(null);
@@ -343,8 +439,8 @@ export default function TestAICounter() {
                 disabled={isAnalyzing}
               />
             ) : videoPreviewUrl ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between px-1">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1 flex-wrap gap-2">
                   <span className="text-xs text-zinc-300 flex items-center gap-1.5 font-medium">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                     {cropRegion ? 'Kill-feed crop area confirmed' : 'Full-frame scan selected'}
@@ -360,13 +456,61 @@ export default function TestAICounter() {
                     </button>
                   )}
                 </div>
-                <div className="rounded-xl overflow-hidden bg-black/90 border border-white/10 max-w-xl mx-auto shadow-lg">
-                  <video
-                    src={videoPreviewUrl}
-                    controls
-                    playsInline
-                    className="w-full max-h-72 object-contain"
-                  />
+
+                {/* Isolated Cropped Kill-Feed Area Preview Banner */}
+                {cropRegion && croppedSliceDataUrl && cropPixelDimensions && (
+                  <div className="p-3 rounded-xl bg-slate-950/90 border border-amber-500/40 space-y-2 shadow-inner">
+                    <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                      <span className="font-semibold text-amber-300 flex items-center gap-1.5">
+                        <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+                        Isolated Kill-Feed Crop Slice (Only this region is sent to AI)
+                      </span>
+                      <span className="text-[11px] font-mono text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                        {cropPixelDimensions.areaPercent}% of full frame
+                      </span>
+                    </div>
+
+                    {/* Visual Cropped Slice */}
+                    <div className="w-full flex justify-center bg-black/90 rounded-lg p-2 border border-slate-800 overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={croppedSliceDataUrl}
+                        alt="Cropped Kill Feed Region"
+                        className="max-h-24 object-contain rounded border border-amber-400/50 shadow-md"
+                      />
+                    </div>
+
+                    {/* Exact Pixel Resolution Readout */}
+                    <div className="flex flex-wrap items-center justify-between text-[11px] font-mono text-zinc-300 pt-1 border-t border-slate-800/80 gap-2">
+                      <span>
+                        Crop Size: <strong className="text-amber-300">{cropPixelDimensions.pixelWidth} × {cropPixelDimensions.pixelHeight} px</strong>
+                      </span>
+                      <span>
+                        Offset: <strong className="text-white">X={cropPixelDimensions.pixelLeft}px, Y={cropPixelDimensions.pixelTop}px</strong>
+                      </span>
+                      <span>
+                        Source: <strong className="text-zinc-400">{cropPixelDimensions.sourceWidth} × {cropPixelDimensions.sourceHeight} px</strong>
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Auto-Playing Native Video Player */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-medium text-zinc-400 flex items-center gap-1 px-1">
+                    <FileVideo className="w-3 h-3 text-zinc-500" />
+                    Full Video Playback (Playing automatically)
+                  </div>
+                  <div className="rounded-xl overflow-hidden bg-black border border-white/10 max-w-xl mx-auto shadow-lg">
+                    <video
+                      ref={videoPlayerRef}
+                      src={videoPreviewUrl}
+                      controls
+                      autoPlay
+                      playsInline
+                      className="w-full max-h-72 object-contain"
+                    />
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -478,6 +622,25 @@ export default function TestAICounter() {
                 </p>
               </div>
             </div>
+
+            {/* Backend-Confirmed Crop Coordinates Readout */}
+            {(response.cropDetails || response.data?.cropDetails) && (
+              <div className="flex flex-wrap items-center justify-between text-xs px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 gap-2 shadow-sm">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Crosshair className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="font-semibold">AI Vision Screen Crop Applied:</span>
+                  <span className="font-mono text-white">
+                    {(response.cropDetails || response.data?.cropDetails)?.pixelWidth} × {(response.cropDetails || response.data?.cropDetails)?.pixelHeight} px
+                  </span>
+                  <span className="text-zinc-400">
+                    (Offset: X={(response.cropDetails || response.data?.cropDetails)?.pixelLeft}px, Y={(response.cropDetails || response.data?.cropDetails)?.pixelTop}px)
+                  </span>
+                </div>
+                <div className="font-mono text-emerald-400 text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  {(response.cropDetails || response.data?.cropDetails)?.areaPercent}% of { (response.cropDetails || response.data?.cropDetails)?.sourceWidth}×{(response.cropDetails || response.data?.cropDetails)?.sourceHeight}px frame
+                </div>
+              </div>
+            )}
 
             {/* Results Details Card */}
             <div className="glass-card rounded-2xl p-6 border border-white/10 shadow-xl space-y-4">

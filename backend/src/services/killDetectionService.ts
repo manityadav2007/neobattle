@@ -152,6 +152,19 @@ async function extractFramesFromVideo(videoPath: string, outputDir: string): Pro
   return files;
 }
 
+sharp.cache(false);
+
+export interface CropCalculatedDetails {
+  applied: boolean;
+  sourceWidth: number;
+  sourceHeight: number;
+  pixelLeft: number;
+  pixelTop: number;
+  pixelWidth: number;
+  pixelHeight: number;
+  areaPercent: number;
+}
+
 /**
  * Crops extracted frames to the specified region using sharp.
  * If crop fails on any frame or region is invalid, returns the original frame.
@@ -159,15 +172,15 @@ async function extractFramesFromVideo(videoPath: string, outputDir: string): Pro
 export async function cropExtractedFrames(
   frameFiles: string[],
   cropRegion?: CropRegion | null
-): Promise<string[]> {
+): Promise<{ frameFiles: string[]; cropDetails: CropCalculatedDetails | null }> {
   if (!cropRegion || typeof cropRegion !== 'object') {
-    return frameFiles;
+    return { frameFiles, cropDetails: null };
   }
 
   const { x, y, width, height, unit = 'percent' } = cropRegion;
   if (width <= 0 || height <= 0) {
     console.warn('[KillDetection] Invalid crop dimensions, skipping crop:', cropRegion);
-    return frameFiles;
+    return { frameFiles, cropDetails: null };
   }
 
   console.log(
@@ -176,10 +189,13 @@ export async function cropExtractedFrames(
   );
 
   let successCount = 0;
+  let firstFrameDetails: CropCalculatedDetails | null = null;
 
   for (const framePath of frameFiles) {
     try {
-      const metadata = await sharp(framePath).metadata();
+      // Read file into Buffer first to prevent file-locking on Windows (EBUSY / UNKNOWN errors)
+      const inputBuffer = fs.readFileSync(framePath);
+      const metadata = await sharp(inputBuffer).metadata();
       const imgWidth = metadata.width || 0;
       const imgHeight = metadata.height || 0;
 
@@ -212,15 +228,28 @@ export async function cropExtractedFrames(
         pixelLeft + pixelWidth <= imgWidth &&
         pixelTop + pixelHeight <= imgHeight
       ) {
-        if (successCount === 0) {
-          const areaPercent = ((pixelWidth * pixelHeight) / (imgWidth * imgHeight)) * 100;
+        const areaPercent = Number((((pixelWidth * pixelHeight) / (imgWidth * imgHeight)) * 100).toFixed(1));
+        if (!firstFrameDetails) {
+          firstFrameDetails = {
+            applied: true,
+            sourceWidth: imgWidth,
+            sourceHeight: imgHeight,
+            pixelLeft,
+            pixelTop,
+            pixelWidth,
+            pixelHeight,
+            areaPercent,
+          };
           console.log(
-            `[KillDetection] Crop calculated: Source=${imgWidth}x${imgHeight}px, ` +
-            `Crop Rect: left=${pixelLeft}, top=${pixelTop}, width=${pixelWidth}, height=${pixelHeight} ` +
-            `(${areaPercent.toFixed(1)}% of frame)`
+            `[KillDetection] ========================================================\n` +
+            `[KillDetection] CROP RECTANGLE CONFIRMED AND APPLIED:\n` +
+            `[KillDetection] Source Resolution: ${imgWidth}x${imgHeight}px\n` +
+            `[KillDetection] Cropped Kill-Feed Area: left=${pixelLeft}px, top=${pixelTop}px, width=${pixelWidth}px, height=${pixelHeight}px\n` +
+            `[KillDetection] Image Payload: ${areaPercent}% of original frame size\n` +
+            `[KillDetection] ========================================================`
           );
         }
-        const croppedBuffer = await sharp(framePath)
+        const croppedBuffer = await sharp(inputBuffer)
           .extract({ left: pixelLeft, top: pixelTop, width: pixelWidth, height: pixelHeight })
           .toBuffer();
         fs.writeFileSync(framePath, croppedBuffer);
@@ -232,7 +261,7 @@ export async function cropExtractedFrames(
   }
 
   console.log(`[KillDetection] Successfully cropped ${successCount} of ${frameFiles.length} frames.`);
-  return frameFiles;
+  return { frameFiles, cropDetails: firstFrameDetails };
 }
 
 /**
@@ -607,6 +636,7 @@ export interface TestAiFeedResult {
   batchesProcessed: number;
   estimatedApiCalls?: number;
   quotaWarning?: string | null;
+  cropDetails?: CropCalculatedDetails | null;
 }
 
 const TEST_FEED_PROMPT =
@@ -731,8 +761,10 @@ export async function detectKillsForTestFeed(
     console.log(`[TestAIFeed] Total frames extracted: ${frameFiles.length}`);
 
     // Optional: Crop frames to selected screen region (e.g. kill-feed area)
+    let cropDetails: CropCalculatedDetails | null = null;
     if (cropRegion) {
-      await cropExtractedFrames(frameFiles, cropRegion);
+      const cropResult = await cropExtractedFrames(frameFiles, cropRegion);
+      cropDetails = cropResult.cropDetails;
     }
 
     // 2. Group frames into batches of 30 (up to MAX_ALLOWED_BATCHES_PER_VIDEO / ~75 minutes of gameplay)
@@ -889,6 +921,7 @@ export async function detectKillsForTestFeed(
       batchesProcessed: batches.length,
       estimatedApiCalls: batches.length,
       quotaWarning,
+      cropDetails,
     };
   } finally {
     // Clean up temporary extracted frames

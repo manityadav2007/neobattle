@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, use, useState } from 'react';
+import { useEffect, use, useState, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -80,6 +80,89 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [cropRegion, setCropRegion] = useState<CropRegion | null>(DEFAULT_KILL_FEED_CROP);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [isCropping, setIsCropping] = useState<boolean>(true);
+  const [croppedSliceDataUrl, setCroppedSliceDataUrl] = useState<string | null>(null);
+  const [cropPixelDimensions, setCropPixelDimensions] = useState<{
+    sourceWidth: number;
+    sourceHeight: number;
+    pixelLeft: number;
+    pixelTop: number;
+    pixelWidth: number;
+    pixelHeight: number;
+    areaPercent: number;
+  } | null>(null);
+  const videoPlayerRef = useRef<HTMLVideoElement | null>(null);
+
+  // Compute exact pixel dimensions and generate live cropped slice preview
+  useEffect(() => {
+    if (!firstFrameDataUrl) {
+      setCroppedSliceDataUrl(null);
+      setCropPixelDimensions(null);
+      return;
+    }
+
+    const img = new window.Image();
+    img.onload = () => {
+      const srcW = img.naturalWidth || img.width;
+      const srcH = img.naturalHeight || img.height;
+      if (!srcW || !srcH) return;
+
+      const current = cropRegion || { x: 0, y: 0, width: 100, height: 100, unit: 'percent' };
+      const pLeft = Math.round((Math.max(0, current.x) / 100) * srcW);
+      const pTop = Math.round((Math.max(0, current.y) / 100) * srcH);
+      const pWidth = Math.round((Math.min(100 - current.x, current.width) / 100) * srcW);
+      const pHeight = Math.round((Math.min(100 - current.y, current.height) / 100) * srcH);
+      const areaPct = Number((((pWidth * pHeight) / (srcW * srcH)) * 100).toFixed(1));
+
+      setCropPixelDimensions({
+        sourceWidth: srcW,
+        sourceHeight: srcH,
+        pixelLeft: pLeft,
+        pixelTop: pTop,
+        pixelWidth: pWidth,
+        pixelHeight: pHeight,
+        areaPercent: areaPct,
+      });
+
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, pWidth);
+        canvas.height = Math.max(1, pHeight);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, pLeft, pTop, pWidth, pHeight, 0, 0, pWidth, pHeight);
+          setCroppedSliceDataUrl(canvas.toDataURL('image/jpeg', 0.9));
+        }
+      } catch (err) {
+        console.warn('[TournamentDetails] Failed to slice crop preview:', err);
+      }
+    };
+    img.src = firstFrameDataUrl;
+  }, [firstFrameDataUrl, cropRegion]);
+
+  // Immediately auto-play video as soon as crop area is confirmed
+  useEffect(() => {
+    if (!isCropping && videoPreviewUrl && videoPlayerRef.current) {
+      const vid = videoPlayerRef.current;
+      const playVideo = () => {
+        const playPromise = vid.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err: any) => {
+            console.warn('[TournamentDetails] Sound autoplay blocked, attempting muted autoplay:', err);
+            vid.muted = true;
+            vid.play().catch(() => {});
+          });
+        }
+      };
+
+      if (vid.readyState >= 2) {
+        playVideo();
+      } else {
+        vid.onloadeddata = () => {
+          playVideo();
+        };
+      }
+    }
+  }, [isCropping, videoPreviewUrl]);
 
   // Cleanup video preview URL on unmount
   useEffect(() => {
@@ -106,6 +189,26 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
         tempVideo.preload = 'auto';
         tempVideo.muted = true;
         tempVideo.playsInline = true;
+
+        const captureFrame = () => {
+          const w = tempVideo.videoWidth;
+          const h = tempVideo.videoHeight;
+          if (!w || !h) return;
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(tempVideo, 0, 0, w, h);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+              setFirstFrameDataUrl(dataUrl);
+            }
+          } catch (captureErr) {
+            console.warn('[TournamentDetails] Failed to capture first frame for crop:', captureErr);
+          }
+        };
+
         tempVideo.onloadedmetadata = () => {
           const dur = tempVideo.duration;
           if (dur && !isNaN(dur)) {
@@ -116,21 +219,14 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           }
           tempVideo.currentTime = Math.min(1.0, Math.max(0.1, (tempVideo.duration || 1) * 0.02));
         };
+
         tempVideo.onseeked = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            canvas.width = tempVideo.videoWidth || 640;
-            canvas.height = tempVideo.videoHeight || 360;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-              setFirstFrameDataUrl(dataUrl);
-            }
-          } catch (captureErr) {
-            console.warn('[TournamentDetails] Failed to capture first frame for crop:', captureErr);
-          }
+          captureFrame();
         };
+        tempVideo.onloadeddata = () => {
+          captureFrame();
+        };
+
         tempVideo.src = url;
       } catch {
         setVideoPreviewUrl(null);
@@ -1452,8 +1548,8 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                         disabled={processingAi}
                       />
                     ) : videoPreviewUrl ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between px-1">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between px-1 flex-wrap gap-2">
                           <span className="text-xs text-zinc-300 flex items-center gap-1.5 font-medium">
                             <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                             {cropRegion ? 'Kill-feed crop area confirmed' : 'Full-frame scan selected'}
@@ -1469,10 +1565,51 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                             </button>
                           )}
                         </div>
+
+                        {/* Isolated Cropped Kill-Feed Area Preview Banner */}
+                        {cropRegion && croppedSliceDataUrl && cropPixelDimensions && (
+                          <div className="p-3 rounded-xl bg-slate-950/90 border border-amber-500/40 space-y-2 shadow-inner">
+                            <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                              <span className="font-semibold text-amber-300 flex items-center gap-1.5">
+                                <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+                                Isolated Kill-Feed Crop Slice (Only this region is sent to AI)
+                              </span>
+                              <span className="text-[11px] font-mono text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                {cropPixelDimensions.areaPercent}% of full frame
+                              </span>
+                            </div>
+
+                            {/* Visual Cropped Slice */}
+                            <div className="w-full flex justify-center bg-black/90 rounded-lg p-2 border border-slate-800 overflow-hidden">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={croppedSliceDataUrl}
+                                alt="Cropped Kill Feed Region"
+                                className="max-h-24 object-contain rounded border border-amber-400/50 shadow-md"
+                              />
+                            </div>
+
+                            {/* Exact Pixel Resolution Readout */}
+                            <div className="flex flex-wrap items-center justify-between text-[11px] font-mono text-zinc-300 pt-1 border-t border-slate-800/80 gap-2">
+                              <span>
+                                Crop Size: <strong className="text-amber-300">{cropPixelDimensions.pixelWidth} × {cropPixelDimensions.pixelHeight} px</strong>
+                              </span>
+                              <span>
+                                Offset: <strong className="text-white">X={cropPixelDimensions.pixelLeft}px, Y={cropPixelDimensions.pixelTop}px</strong>
+                              </span>
+                              <span>
+                                Source: <strong className="text-zinc-400">{cropPixelDimensions.sourceWidth} × {cropPixelDimensions.sourceHeight} px</strong>
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="rounded-xl overflow-hidden bg-black/90 border border-white/10 max-w-xl mx-auto shadow-lg">
                           <video
+                            ref={videoPlayerRef}
                             src={videoPreviewUrl}
                             controls
+                            autoPlay
                             playsInline
                             className="w-full max-h-72 object-contain"
                           />
