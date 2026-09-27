@@ -781,6 +781,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 items={[
                   { label: effectiveStatus, color: getStatusColor(effectiveStatus), icon: tagIcons.status },
                   { label: tournament.format, color: tagColorMap.format[tournament.format as keyof typeof tagColorMap.format], icon: tagIcons.format },
+                  {
+                    label: tournament.tournamentFormat === 'PER_KILL' ? 'Per Kill' : 'Placement',
+                    color: tournament.tournamentFormat === 'PER_KILL' ? tagColorMap.tournamentFormat.PER_KILL : tagColorMap.tournamentFormat.PLACEMENT,
+                    icon: tournament.tournamentFormat === 'PER_KILL' ? tagIcons.tournamentFormat : tagIcons.format,
+                  },
                   { label: tournament.platform === 'MOBILE' ? 'Mobile' : 'PC', color: tagColorMap.platform[tournament.platform as keyof typeof tagColorMap.platform], icon: tagIcons.platform },
                   { label: tournament.gameMode === 'FULL_MAP' ? 'Full Map' : 'Clash Squad', color: tagColorMap.gameMode[tournament.gameMode as keyof typeof tagColorMap.gameMode], icon: tagIcons.gameMode },
                 ]}

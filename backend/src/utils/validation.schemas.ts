@@ -53,7 +53,7 @@ export const reviewJoinRequestSchema = z.object({
   action: z.enum(['ACCEPT', 'REJECT']),
 });
 
-export const createTournamentSchema = z.object({
+const baseCreateTournamentSchema = z.object({
   title: z.string().min(5).max(100),
   description: z.string().max(2000).optional(),
   format: z.enum(['SOLO', 'DUO', 'SQUAD']),
@@ -78,7 +78,15 @@ export const createTournamentSchema = z.object({
   isFree: z.boolean().optional(),
 });
 
-export const updateTournamentSchema = createTournamentSchema.partial().extend({
+export const createTournamentSchema = baseCreateTournamentSchema.refine(
+  (data) => !(data.tournamentFormat === 'PER_KILL' && data.format !== 'SOLO'),
+  {
+    message: 'Per-Kill prize mode is only allowed for Solo tournaments',
+    path: ['tournamentFormat'],
+  }
+);
+
+export const updateTournamentSchema = baseCreateTournamentSchema.partial().extend({
   status: z.enum(['DRAFT', 'REGISTRATION', 'ACTIVE', 'COMPLETED', 'CANCELLED']).optional(),
   roomId: z.string().optional(),
   roomPassword: z.string().optional(),
@@ -129,6 +137,8 @@ export const paginationSchema = z.object({
   format: z.string().optional(),
   platform: z.string().optional(),
   gameMode: z.string().optional(),
+  tournamentFormat: z.string().optional(),
+  type: z.string().optional(),
   search: z.string().optional(),
   all: z.union([z.string(), z.boolean()]).optional(),
 });

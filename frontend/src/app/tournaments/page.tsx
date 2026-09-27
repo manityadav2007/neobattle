@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Trophy, Filter, Plus, Shield, Smartphone, Monitor, Gamepad2 } from 'lucide-react';
+import { Trophy, Filter, Plus, Shield, Smartphone, Monitor, Gamepad2, Crosshair } from 'lucide-react';
 import TournamentCard from '@/components/TournamentCard';
 import { useTournaments } from '@/hooks/useTournaments';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,30 +17,42 @@ const statusLabels: Record<string, string> = {
   COMPLETED: 'Completed History',
 };
 const formatFilters = ['', 'SOLO', 'DUO', 'SQUAD'];
+const prizeTypeFilters = ['', 'PLACEMENT', 'PER_KILL'];
+const prizeTypeLabels: Record<string, string> = {
+  '': 'All',
+  PLACEMENT: 'Placement Prize',
+  PER_KILL: 'Per Kill',
+};
 const platformFilters = ['', 'MOBILE', 'PC'];
 const gameModeFilters = ['', 'FULL_MAP', 'CLASH_SQUAD'];
 
 export default function TournamentsPage() {
   const [status, setStatus] = useState('');
   const [format, setFormat] = useState('');
+  const [prizeType, setPrizeType] = useState('');
   const [platform, setPlatform] = useState('');
   const [gameMode, setGameMode] = useState('');
   const { user, isSuperAdmin, isHost } = useAuth();
   const canCreate = user && (isSuperAdmin || isHost);
-  const hasFilters = status || format || platform || gameMode;
+  const hasFilters = status || format || prizeType || platform || gameMode;
   const { tournaments: fetchedTournaments, loading, error, refetch } = useTournaments({
     status: status || undefined,
     format: format || undefined,
+    tournamentFormat: prizeType || undefined,
     platform: platform || undefined,
     gameMode: gameMode || undefined,
   });
 
   // Ended / completed / >1h-past-start tournaments never appear in the active tabs —
   // they live exclusively under the 'Completed History' tab.
-  const tournaments =
+  let tournaments =
     status === 'COMPLETED'
       ? fetchedTournaments
       : fetchedTournaments.filter((t) => !isTournamentEnded(t));
+
+  if (prizeType) {
+    tournaments = tournaments.filter((t) => (t.tournamentFormat || 'PLACEMENT') === prizeType);
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -76,7 +88,7 @@ export default function TournamentsPage() {
                 key={s || 'all'}
                 onClick={() => {
                   setStatus(s);
-                  refetch(1, { status: s || undefined, format: format || undefined, platform: platform || undefined, gameMode: gameMode || undefined });
+                  refetch(1, { status: s || undefined, format: format || undefined, tournamentFormat: prizeType || undefined, platform: platform || undefined, gameMode: gameMode || undefined });
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   status === s ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-zinc-400 hover:text-white'
@@ -93,7 +105,7 @@ export default function TournamentsPage() {
                 key={f || 'all'}
                 onClick={() => {
                   setFormat(f);
-                  refetch(1, { status: status || undefined, format: f || undefined, platform: platform || undefined, gameMode: gameMode || undefined });
+                  refetch(1, { status: status || undefined, format: f || undefined, tournamentFormat: prizeType || undefined, platform: platform || undefined, gameMode: gameMode || undefined });
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   format === f ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-zinc-400 hover:text-white'
@@ -104,13 +116,37 @@ export default function TournamentsPage() {
             ))}
           </div>
           <div className="flex gap-2 flex-wrap">
+            <span className="text-xs text-zinc-500 self-center mr-1">Type:</span>
+            {prizeTypeFilters.map((pt) => (
+              <button
+                key={pt || 'all'}
+                onClick={() => {
+                  setPrizeType(pt);
+                  refetch(1, {
+                    status: status || undefined,
+                    format: format || undefined,
+                    tournamentFormat: pt || undefined,
+                    platform: platform || undefined,
+                    gameMode: gameMode || undefined,
+                  });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  prizeType === pt ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-zinc-400 hover:text-white'
+                }`}
+              >
+                {pt === 'PER_KILL' ? <Crosshair className="w-3 h-3 inline mr-1" /> : pt === 'PLACEMENT' ? <Trophy className="w-3 h-3 inline mr-1" /> : null}
+                {prizeTypeLabels[pt] || pt || 'All'}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 flex-wrap">
             <span className="text-xs text-zinc-500 self-center mr-1">Platform:</span>
             {platformFilters.map((p) => (
               <button
                 key={p || 'all'}
                 onClick={() => {
                   setPlatform(p);
-                  refetch(1, { status: status || undefined, format: format || undefined, platform: p || undefined, gameMode: gameMode || undefined });
+                  refetch(1, { status: status || undefined, format: format || undefined, tournamentFormat: prizeType || undefined, platform: p || undefined, gameMode: gameMode || undefined });
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   platform === p ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-zinc-400 hover:text-white'
@@ -128,7 +164,7 @@ export default function TournamentsPage() {
                 key={m || 'all'}
                 onClick={() => {
                   setGameMode(m);
-                  refetch(1, { status: status || undefined, format: format || undefined, platform: platform || undefined, gameMode: m || undefined });
+                  refetch(1, { status: status || undefined, format: format || undefined, tournamentFormat: prizeType || undefined, platform: platform || undefined, gameMode: m || undefined });
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   gameMode === m ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-zinc-400 hover:text-white'

@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Shield, Trophy, AlertCircle, RefreshCw, Loader2, Users, DollarSign, MapPin, Clock,
   Plus, CheckCircle, XCircle, Gift, Save, ToggleLeft, ToggleRight, Search, ExternalLink, X, Copy, Check, Trash2,
-  Crosshair, Target,
+  Crosshair, Target, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentApi, adminApi, formatCurrency, formatDate, getStatusColor, resolveAssetUrl, type Tournament } from '@/lib/services';
@@ -187,7 +187,8 @@ export default function AdminTournamentsPage() {
   }, [form.entryFee, effectiveMaxParticipants, effectiveFree, form.gameMode]);
 
   // Clean & Direct Prize Calculation and Validation
-  const isPerKill = tournamentFormat === 'PER_KILL';
+  const isSolo = form.gameMode === 'CLASH_SQUAD' ? form.teamSize === '1v1' : form.format === 'SOLO';
+  const isPerKill = isSolo && tournamentFormat === 'PER_KILL';
   const prize1Num = Number(prizes.first) || 0;
   const prize2Num = prizeCount >= 2 ? (Number(prizes.second) || 0) : 0;
   const prize3Num = prizeCount >= 3 ? (Number(prizes.third) || 0) : 0;
@@ -204,17 +205,19 @@ export default function AdminTournamentsPage() {
   const totalPrizes = isPerKill ? totalPerKillPrize : totalDistribution;
 
   const isPrizesBalanced = isPerKill
-    ? (effectiveFree || (maxPrizePool > 0 && totalPerKillPrize > 0 && totalPerKillPrize <= maxPrizePool))
+    ? (effectiveFree || (maxPrizePool > 0 && totalPerKillPrize === maxPrizePool))
     : (effectiveFree || Number(totalDistribution) === Number(maxPrizePool));
 
   const prizeError = isPerKill
-    ? (maxPrizePool > 0 && totalPerKillPrize > maxPrizePool
-        ? `Total estimated prize (₹${totalPerKillPrize}) exceeds Max Prize Pool: ₹${maxPrizePool}`
-        : (maxPrizePool > 0 && totalPerKillPrize <= 0
+    ? (!effectiveFree && maxPrizePool > 0 && totalPerKillPrize !== maxPrizePool
+        ? (totalPerKillPrize <= 0
             ? 'Please enter Booyah prize and/or per kill rate'
-            : ''))
-    : (maxPrizePool > 0 && !isPrizesBalanced
-        ? `Prize distribution must equal the Max Prize Pool: ₹${maxPrizePool} (currently ₹${totalDistribution})`
+            : totalPerKillPrize < maxPrizePool
+                ? `Prize distribution must exactly equal Max Prize Pool: ₹${maxPrizePool.toLocaleString('en-IN')} (currently ₹${totalPerKillPrize.toLocaleString('en-IN')} — ₹${(maxPrizePool - totalPerKillPrize).toLocaleString('en-IN')} short)`
+                : `Prize distribution must exactly equal Max Prize Pool: ₹${maxPrizePool.toLocaleString('en-IN')} (currently ₹${totalPerKillPrize.toLocaleString('en-IN')} — ₹${(totalPerKillPrize - maxPrizePool).toLocaleString('en-IN')} over)`)
+        : '')
+    : (!effectiveFree && maxPrizePool > 0 && !isPrizesBalanced
+        ? `Prize distribution must equal the Max Prize Pool: ₹${maxPrizePool.toLocaleString('en-IN')} (currently ₹${totalDistribution.toLocaleString('en-IN')})`
         : '');
 
   const filteredTournaments = tournaments.filter((t) => {
@@ -268,22 +271,26 @@ export default function AdminTournamentsPage() {
       const isClashSquad = form.gameMode === 'CLASH_SQUAD';
       const teamSizeMap: Record<string, number> = { '1v1': 2, '2v2': 4, '4v4': 8, '6v6': 12 };
       const clashFormatMap: Record<string, string> = { '1v1': 'SOLO', '2v2': 'DUO', '4v4': 'SQUAD', '6v6': 'SQUAD' };
+      const effectiveFormat = isClashSquad ? (clashFormatMap[form.teamSize] || 'SQUAD') : form.format;
+      const isCreatingSolo = effectiveFormat === 'SOLO';
+      const effectiveTourFormat = isCreatingSolo && tournamentFormat === 'PER_KILL' ? 'PER_KILL' : 'PLACEMENT';
+      const isEffectivePerKill = effectiveTourFormat === 'PER_KILL';
       const prizePoolTotal = totalPrizes;
       const payload: any = {
         ...form,
         requiredLevel: Number(form.requiredLevel) || 0,
         minLevel: Number(form.requiredLevel) || 0,
-        format: isClashSquad ? (clashFormatMap[form.teamSize] || 'SQUAD') : form.format,
-        tournamentFormat,
-        perKillRate: isPerKill ? round2(perKillRate) : null,
-        booyahPrize: isPerKill ? round2(booyahPrize) : null,
+        format: effectiveFormat,
+        tournamentFormat: effectiveTourFormat,
+        perKillRate: isEffectivePerKill ? round2(perKillRate) : null,
+        booyahPrize: isEffectivePerKill ? round2(booyahPrize) : null,
         platform: form.platform,
         gameMode: form.gameMode,
         entryFee: isFree ? 0 : Number(form.entryFee),
         prizePool: prizePoolTotal,
-        prizeFirst: isPerKill ? round2(booyahPrize) : round2(prizes.first),
-        prizeSecond: isPerKill ? null : (prizeCount >= 2 ? round2(prizes.second) : null),
-        prizeThird: isPerKill ? null : (prizeCount >= 3 ? round2(prizes.third) : null),
+        prizeFirst: isEffectivePerKill ? round2(booyahPrize) : round2(prizes.first),
+        prizeSecond: isEffectivePerKill ? null : (prizeCount >= 2 ? round2(prizes.second) : null),
+        prizeThird: isEffectivePerKill ? null : (prizeCount >= 3 ? round2(prizes.third) : null),
         maxParticipants: isClashSquad ? teamSizeMap[form.teamSize] || 2 : Number(form.maxParticipants),
         registrationStart: new Date(form.registrationStart).toISOString(),
         registrationEnd: new Date(form.registrationEnd).toISOString(),
@@ -455,11 +462,16 @@ export default function AdminTournamentsPage() {
                   value={form.gameMode}
                   onChange={(e) => {
                     const gm = e.target.value;
+                    const newTeamSize = gm === 'CLASH_SQUAD' ? (form.teamSize || '4v4') : form.teamSize;
+                    const isNewSolo = gm === 'CLASH_SQUAD' ? newTeamSize === '1v1' : form.format === 'SOLO';
                     setForm((f) => ({
                       ...f,
                       gameMode: gm,
-                      teamSize: gm === 'CLASH_SQUAD' ? (f.teamSize || '4v4') : f.teamSize,
+                      teamSize: newTeamSize,
                     }));
+                    if (!isNewSolo) {
+                      setTournamentFormat('PLACEMENT');
+                    }
                   }}
                   className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm"
                 >
@@ -498,7 +510,18 @@ export default function AdminTournamentsPage() {
               {form.gameMode === 'CLASH_SQUAD' ? (
                 <div>
                   <label className="text-xs text-zinc-400 mb-1 block">Squad Size <span className="text-zinc-600">(Clash Squad)</span></label>
-                  <select value={form.teamSize} onChange={(e) => setForm({ ...form, teamSize: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm" required>
+                  <select
+                    value={form.teamSize}
+                    onChange={(e) => {
+                      const ts = e.target.value;
+                      setForm({ ...form, teamSize: ts });
+                      if (ts !== '1v1') {
+                        setTournamentFormat('PLACEMENT');
+                      }
+                    }}
+                    className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm"
+                    required
+                  >
                     <option value="1v1" className="bg-gray-800 text-white">1v1 (2 players)</option>
                     <option value="2v2" className="bg-gray-800 text-white">2v2 (4 players)</option>
                     <option value="4v4" className="bg-gray-800 text-white">4v4 (8 players)</option>
@@ -509,7 +532,18 @@ export default function AdminTournamentsPage() {
                 <>
                   <div>
                     <label className="text-xs text-zinc-400 mb-1 block">Format</label>
-                    <select value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value })} className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm" required>
+                    <select
+                      value={form.format}
+                      onChange={(e) => {
+                        const newFormat = e.target.value;
+                        setForm({ ...form, format: newFormat });
+                        if (newFormat !== 'SOLO') {
+                          setTournamentFormat('PLACEMENT');
+                        }
+                      }}
+                      className="input-field w-full px-3 py-2 rounded-lg bg-gray-800 border border-white/10 text-white text-sm"
+                      required
+                    >
                       <option value="SOLO" className="bg-gray-800 text-white">Solo</option>
                       <option value="DUO" className="bg-gray-800 text-white">Duo</option>
                       <option value="SQUAD" className="bg-gray-800 text-white">Squad</option>
@@ -549,40 +583,42 @@ export default function AdminTournamentsPage() {
                 />
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="text-xs text-zinc-400 mb-1.5 block font-medium">Tournament Format</label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => setTournamentFormat('PLACEMENT')}
-                    className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
-                      tournamentFormat === 'PLACEMENT'
-                        ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
-                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Trophy className="w-3.5 h-3.5" />
-                    Placement Prize
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTournamentFormat('PER_KILL')}
-                    className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
-                      tournamentFormat === 'PER_KILL'
-                        ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
-                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Crosshair className="w-3.5 h-3.5" />
-                    Per Kill
-                  </button>
+              {isSolo && (
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-zinc-400 mb-1.5 block font-medium">Tournament Format</label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setTournamentFormat('PLACEMENT')}
+                      className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                        tournamentFormat === 'PLACEMENT'
+                          ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                      Placement Prize
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTournamentFormat('PER_KILL')}
+                      className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                        tournamentFormat === 'PER_KILL'
+                          ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Crosshair className="w-3.5 h-3.5" />
+                      Per Kill
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="sm:col-span-2">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs text-zinc-400 block">
-                      {tournamentFormat === 'PER_KILL' ? 'Prize Structure (Per Kill)' : `Prize Distribution${effectiveFree ? ' (Manual)' : ''}`}
+                      {isPerKill ? 'Prize Structure (Per Kill)' : `Prize Distribution${effectiveFree ? ' (Manual)' : ''}`}
                     </label>
                     {!effectiveFree && maxPool > 0 && (
                       <span className="text-xs text-zinc-500">
@@ -596,13 +632,28 @@ export default function AdminTournamentsPage() {
                       const isCreatingTeam = form.gameMode === 'CLASH_SQUAD' ? form.teamSize !== '1v1' : form.format !== 'SOLO';
 
                       if (tournamentFormat === 'PER_KILL') {
+                        const neededBooyah = maxPrizePool - (estimatedKills * perKillRateNum);
+                        const canAutoFillBooyah = !effectiveFree && maxPrizePool > 0 && neededBooyah >= 0;
+
                         return (
                           <div className="space-y-3">
                             <div className="flex items-center gap-2">
                               <div className="flex-1">
-                                <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 block">
-                                  Booyah Prize ({isCreatingTeam ? 'Winning Team' : '1st Place'})
-                                </label>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <label className="text-[10px] text-zinc-500 uppercase tracking-wider block">
+                                    Booyah Prize ({isCreatingTeam ? 'Winning Team' : '1st Place'})
+                                  </label>
+                                  {canAutoFillBooyah && booyahPrizeNum !== neededBooyah && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setBooyahPrize(neededBooyah)}
+                                      className="text-[11px] text-fire-400 hover:text-fire-300 font-semibold flex items-center gap-1 hover:underline transition-all"
+                                    >
+                                      <Sparkles className="w-3 h-3" />
+                                      Auto-fill: {formatCurrency(neededBooyah)}
+                                    </button>
+                                  )}
+                                </div>
                                 <input
                                   type="number"
                                   value={booyahPrize === 0 ? '' : booyahPrize}
@@ -646,17 +697,56 @@ export default function AdminTournamentsPage() {
                               </div>
                             </div>
 
-                            <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 space-y-1">
+                            <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 space-y-1.5">
                               <div className="flex justify-between">
                                 <span className="text-zinc-400">Estimated Total Kills:</span>
                                 <span className="font-semibold text-white">~{estimatedKills} kills</span>
                               </div>
-                              <div className="flex justify-between">
+                              <div className="flex justify-between items-center">
                                 <span className="text-zinc-400">Total Estimated Prize:</span>
-                                <span className="font-bold text-yellow-400">
+                                <span className={`font-bold ${isPrizesBalanced ? 'text-green-400' : 'text-yellow-400'}`}>
                                   ₹{booyahPrizeNum} + (~{estimatedKills} × ₹{perKillRateNum}) = {formatCurrency(totalPerKillPrize)}
                                 </span>
                               </div>
+
+                              {!effectiveFree && maxPrizePool > 0 && totalPerKillPrize !== maxPrizePool && (
+                                <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                                  <div className="text-[11px] text-zinc-400">
+                                    {totalPerKillPrize < maxPrizePool ? (
+                                      <>
+                                        <span className="text-amber-400 font-semibold">₹{(maxPrizePool - totalPerKillPrize).toLocaleString('en-IN')} short</span> of Max Prize Pool ({formatCurrency(maxPrizePool)})
+                                        {canAutoFillBooyah && (
+                                          <span className="block text-zinc-500 mt-0.5">
+                                            Tip: Set Booyah Prize to {formatCurrency(neededBooyah)} to match exact {formatCurrency(maxPrizePool)}.
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="text-red-400 font-semibold">₹{(totalPerKillPrize - maxPrizePool).toLocaleString('en-IN')} over</span> Max Prize Pool ({formatCurrency(maxPrizePool)})
+                                        {canAutoFillBooyah ? (
+                                          <span className="block text-zinc-500 mt-0.5">
+                                            Tip: Lower Booyah Prize to {formatCurrency(neededBooyah)} to match exact {formatCurrency(maxPrizePool)}.
+                                          </span>
+                                        ) : (
+                                          <span className="block text-red-400/80 mt-0.5">
+                                            Tip: Per-kill rate is too high. Max per-kill rate without Booyah is ₹{Math.floor(maxPrizePool / (estimatedKills || 1))}.
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                  {canAutoFillBooyah && booyahPrizeNum !== neededBooyah && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setBooyahPrize(neededBooyah)}
+                                      className="shrink-0 px-2.5 py-1 rounded bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 border border-yellow-500/30 text-[11px] font-medium transition-all"
+                                    >
+                                      Auto-fill Booyah
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -822,7 +912,7 @@ export default function AdminTournamentsPage() {
                       <span className="flex items-center gap-1">
                         {isPrizesBalanced ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
                         {isPrizesBalanced
-                          ? (isPerKill ? 'Prize structure is within budget' : 'Prize distribution is balanced')
+                          ? (isPerKill ? 'Prize distribution matches Max Prize Pool exactly' : 'Prize distribution is balanced')
                           : prizeError}
                       </span>
                       <span className="text-zinc-500">

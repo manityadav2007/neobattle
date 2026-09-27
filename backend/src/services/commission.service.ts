@@ -60,7 +60,8 @@ export function validatePrizePool(
   entryFee: number,
   maxPlayers: number,
   prizePool: number,
-  gameMode?: string
+  gameMode?: string,
+  options?: { isPerKill?: boolean; booyahPrize?: number; perKillRate?: number }
 ): {
   valid: boolean;
   breakdown: CommissionBreakdown;
@@ -68,7 +69,21 @@ export function validatePrizePool(
 } {
   const breakdown = calculateCommission(entryFee, maxPlayers, gameMode);
 
-  if (prizePool > breakdown.maxPrizePool) {
+  if (options?.isPerKill) {
+    const estimatedKills = Math.max(0, maxPlayers - 1);
+    const bp = Number(options.booyahPrize) || 0;
+    const pkr = Number(options.perKillRate) || 0;
+    const calculatedTotal = Math.round(bp + (estimatedKills * pkr));
+    if (calculatedTotal !== breakdown.maxPrizePool) {
+      const diff = Math.abs(breakdown.maxPrizePool - calculatedTotal);
+      const diffText = calculatedTotal < breakdown.maxPrizePool ? `₹${diff.toLocaleString('en-IN')} short` : `₹${diff.toLocaleString('en-IN')} over`;
+      return {
+        valid: false,
+        breakdown,
+        message: `Prize distribution must exactly equal Max Prize Pool: ₹${breakdown.maxPrizePool.toLocaleString('en-IN')} (currently ₹${calculatedTotal.toLocaleString('en-IN')} — ${diffText})`,
+      };
+    }
+  } else if (prizePool > breakdown.maxPrizePool) {
     const fmtINR = (n: number) =>
       `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     return {

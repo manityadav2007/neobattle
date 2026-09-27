@@ -1,11 +1,11 @@
 'use client';
 
-import { Shield, Trophy, Smartphone, Gamepad2 } from 'lucide-react';
+import { Shield, Trophy, Smartphone, Gamepad2, Crosshair, type LucideIcon } from 'lucide-react';
 
 interface TagItem {
   label: string;
   color: string;
-  icon: typeof Shield;
+  icon: LucideIcon | typeof Shield;
 }
 
 interface TournamentTagsProps {
@@ -42,6 +42,10 @@ export const tagColorMap = {
     DUO: 'bg-blue-500/20 text-blue-400',
     SQUAD: 'bg-blue-500/20 text-blue-400',
   },
+  tournamentFormat: {
+    PER_KILL: 'bg-rose-500/20 text-rose-400',
+    PLACEMENT: 'bg-amber-500/20 text-amber-400',
+  },
   platform: {
     MOBILE: 'bg-purple-500/20 text-purple-400',
     PC: 'bg-purple-500/20 text-purple-400',
@@ -55,6 +59,8 @@ export const tagColorMap = {
 export const tagIcons = {
   status: Shield,
   format: Trophy,
+  tournamentFormat: Crosshair,
   platform: Smartphone,
   gameMode: Gamepad2,
 };
+

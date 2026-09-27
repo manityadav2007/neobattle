@@ -7,19 +7,21 @@ import { getErrorMessage } from '@/lib/api';
 interface UseTournamentsOptions {
   status?: string;
   format?: string;
+  tournamentFormat?: string;
+  type?: string;
   platform?: string;
   gameMode?: string;
   autoFetch?: boolean;
 }
 
 export function useTournaments(options: UseTournamentsOptions = {}) {
-  const { status, format, platform, gameMode, autoFetch = true } = options;
+  const { status, format, tournamentFormat, type, platform, gameMode, autoFetch = true } = options;
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 0 });
 
-  const fetchTournaments = useCallback(async (page = 1, overrides?: { status?: string; format?: string; platform?: string; gameMode?: string }) => {
+  const fetchTournaments = useCallback(async (page = 1, overrides?: { status?: string; format?: string; tournamentFormat?: string; type?: string; platform?: string; gameMode?: string }) => {
     try {
       setLoading(true);
       setError(null);
@@ -27,6 +29,8 @@ export function useTournaments(options: UseTournamentsOptions = {}) {
         page,
         status: overrides?.status ?? status,
         format: overrides?.format ?? format,
+        tournamentFormat: overrides?.tournamentFormat ?? tournamentFormat,
+        type: overrides?.type ?? type,
         platform: overrides?.platform ?? platform,
         gameMode: overrides?.gameMode ?? gameMode,
       });
@@ -43,7 +47,7 @@ export function useTournaments(options: UseTournamentsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [status, format, platform, gameMode]);
+  }, [status, format, tournamentFormat, type, platform, gameMode]);
 
   useEffect(() => {
     if (autoFetch) fetchTournaments();

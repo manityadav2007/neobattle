@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
-  Trophy, Users, Clock, ArrowRight, MapPin, Smartphone, Monitor, Gamepad2, Timer,
+  Trophy, Users, Clock, ArrowRight, MapPin, Smartphone, Monitor, Gamepad2, Timer, Crosshair,
 } from 'lucide-react';
 import { Tournament, formatCurrency, getStatusColor, getEffectiveStatus, isTournamentEnded, formatTag, getMapTheme, getCountdown } from '@/lib/services';
 
@@ -63,6 +63,17 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
             {tournament.format}
           </span>
+          {tournament.tournamentFormat === 'PER_KILL' ? (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/25 flex items-center gap-1">
+              <Crosshair className="w-3 h-3" />
+              Per Kill
+            </span>
+          ) : (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 flex items-center gap-1">
+              <Trophy className="w-3 h-3" />
+              Placement
+            </span>
+          )}
           {tournament.platform && (
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center gap-1">
               <PlatformIcon platform={tournament.platform} />
@@ -100,8 +111,17 @@ export default function TournamentCard({ tournament, index = 0 }: TournamentCard
         {/* Prize Breakdown & Entry — inline row */}
         <div className="flex items-start justify-between mb-3">
           <div>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{hasBreakdown ? 'Prize Breakdown' : 'Prize Pool'}</p>
-            {hasBreakdown ? (
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
+              {tournament.tournamentFormat === 'PER_KILL' ? 'Prize Structure' : hasBreakdown ? 'Prize Breakdown' : 'Prize Pool'}
+            </p>
+            {tournament.tournamentFormat === 'PER_KILL' && Number(tournament.perKillRate) > 0 ? (
+              <div className="mt-1 space-y-0.5">
+                <p className="text-sm font-bold text-yellow-400">₹{Number(tournament.perKillRate)} / kill</p>
+                {tournament.booyahPrize != null && Number(tournament.booyahPrize) > 0 && (
+                  <p className="text-xs font-semibold text-zinc-300">Booyah: {formatCurrency(Number(tournament.booyahPrize))}</p>
+                )}
+              </div>
+            ) : hasBreakdown ? (
               <div className="mt-1 space-y-0.5">
                 <p className="text-sm font-bold text-yellow-400">1st: {formatCurrency(prizeFirst!)}</p>
                 {prizeSecond != null && prizeSecond > 0 && (

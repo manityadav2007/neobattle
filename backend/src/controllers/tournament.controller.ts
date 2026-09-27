@@ -25,13 +25,27 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   const maxPlayers = data.maxParticipants;
   const prizePoolNum = isFree ? 0 : Number(data.prizePool);
 
-  const tourFormat: TournamentType = data.tournamentFormat === 'PER_KILL' ? 'PER_KILL' : 'PLACEMENT';
+  if (data.tournamentFormat === 'PER_KILL' && data.format !== 'SOLO') {
+    res.status(400).json({ success: false, message: 'Per-Kill tournament format is only allowed for Solo tournaments' });
+    return;
+  }
+
+  if (data.tournamentFormat === 'PER_KILL' && data.format !== 'SOLO') {
+    res.status(400).json({ success: false, message: 'Per-Kill tournament format is only allowed for Solo tournaments' });
+    return;
+  }
+
+  const tourFormat: TournamentType = (data.format === 'SOLO' && data.tournamentFormat === 'PER_KILL') ? 'PER_KILL' : 'PLACEMENT';
   const isPerKill = tourFormat === 'PER_KILL';
   const perKillRateNum = isPerKill && data.perKillRate != null ? new Decimal(Number(data.perKillRate)) : null;
   const booyahPrizeNum = isPerKill && data.booyahPrize != null ? new Decimal(Number(data.booyahPrize)) : null;
 
   if (!isFree) {
-    const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum, data.gameMode);
+    const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum, data.gameMode, {
+      isPerKill,
+      booyahPrize: Number(data.booyahPrize) || 0,
+      perKillRate: Number(data.perKillRate) || 0,
+    });
     if (!validation.valid) {
       res.status(400).json({ success: false, message: validation.message, breakdown: validation.breakdown });
       return;
@@ -135,6 +149,7 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
   const format = req.query.format as TournamentFormat | undefined;
   const platform = req.query.platform as Platform | undefined;
   const gameMode = req.query.gameMode as GameMode | undefined;
+  const tournamentFormat = (req.query.tournamentFormat || req.query.type) as TournamentType | undefined;
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
   const skip = (page - 1) * limit;
 
@@ -180,6 +195,7 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
   if (format) where.format = format;
   if (platform) where.platform = platform;
   if (gameMode) where.gameMode = gameMode;
+  if (tournamentFormat) where.tournamentFormat = tournamentFormat;
 
   if (search) {
     const searchConditions = [
@@ -201,7 +217,7 @@ export async function listTournaments(req: AuthenticatedRequest, res: Response):
     }
   }
 
-  const cacheKey = isAll ? null : `tournaments:list:${page}:${limit}:${status || ''}:${format || ''}:${platform || ''}:${gameMode || ''}:${search || ''}`;
+  const cacheKey = isAll ? null : `tournaments:list:${page}:${limit}:${status || ''}:${format || ''}:${platform || ''}:${gameMode || ''}:${tournamentFormat || ''}:${search || ''}`;
   const cached = cacheKey ? await cacheGet<{ tournaments: unknown[]; total: number }>(cacheKey) : null;
 
   if (cached) {

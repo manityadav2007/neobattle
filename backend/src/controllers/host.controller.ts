@@ -58,13 +58,22 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   const prizePoolNum = isFree ? 0 : Number(data.prizePool);
   const maxPlayers = data.maxParticipants;
 
-  const tourFormat: TournamentType = data.tournamentFormat === 'PER_KILL' ? 'PER_KILL' : 'PLACEMENT';
+  if (data.tournamentFormat === 'PER_KILL' && data.format !== 'SOLO') {
+    res.status(400).json({ success: false, message: 'Per-Kill tournament format is only allowed for Solo tournaments' });
+    return;
+  }
+
+  const tourFormat: TournamentType = (data.format === 'SOLO' && data.tournamentFormat === 'PER_KILL') ? 'PER_KILL' : 'PLACEMENT';
   const isPerKill = tourFormat === 'PER_KILL';
   const perKillRateNum = isPerKill && data.perKillRate != null ? new Decimal(Number(data.perKillRate)) : null;
   const booyahPrizeNum = isPerKill && data.booyahPrize != null ? new Decimal(Number(data.booyahPrize)) : null;
 
   if (!isFree) {
-    const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum, data.gameMode);
+    const validation = validatePrizePool(entryFeeNum, maxPlayers, prizePoolNum, data.gameMode, {
+      isPerKill,
+      booyahPrize: Number(data.booyahPrize) || 0,
+      perKillRate: Number(data.perKillRate) || 0,
+    });
     if (!validation.valid) {
       res.status(400).json({ success: false, message: validation.message, breakdown: validation.breakdown });
       return;
