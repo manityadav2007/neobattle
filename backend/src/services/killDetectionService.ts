@@ -323,7 +323,6 @@ export async function callGeminiMultimodalWithLogging(
   tag: string = '[KillDetection]'
 ): Promise<GeminiCallResult> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const maskedKey = apiKey ? `...${apiKey.slice(-4)}` : 'MISSING';
   const candidateModels = [GEMINI_MODEL_NAME, ...GEMINI_FALLBACK_MODELS.filter((m) => m !== GEMINI_MODEL_NAME)];
 
   let lastError: any = null;
@@ -337,7 +336,7 @@ export async function callGeminiMultimodalWithLogging(
     const endpointUrl = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent`;
     console.log(`\n======================================================`);
     console.log(`${tag} [Gemini API Pre-Flight] Batch ${batchNumber} of ${totalBatches}${isFallback ? ' (Fallback Model)' : ''}`);
-    console.log(`${tag} API Key Defined: ${Boolean(apiKey)} | Length: ${apiKey ? apiKey.length : 0} | Suffix: ${maskedKey}`);
+    console.log(`${tag} API Key Configured: ${Boolean(apiKey)}`);
     console.log(`${tag} Exact Model String: "${currentModel}"`);
     console.log(`${tag} HTTP Request: POST ${endpointUrl}`);
     console.log(`${tag} Payload: ${imageParts.length} image(s), prompt length ${prompt.length} chars`);
@@ -465,11 +464,20 @@ export async function detectKillsFromVideo(
     );
   }
 
-  if (!videoFilePath || typeof videoFilePath !== 'string') {
+  if (!videoFilePath || typeof videoFilePath !== 'string' || videoFilePath.includes('\0') || videoFilePath.includes('..')) {
     throw new Error('Invalid videoFilePath parameter provided.');
   }
 
   const resolvedVideoPath = path.resolve(videoFilePath);
+  const allowedRoots = [
+    path.resolve(process.cwd(), 'uploads'),
+    path.resolve(os.tmpdir()),
+    path.resolve(__dirname, '..', '..', 'uploads'),
+    path.resolve(__dirname, '..', 'uploads'),
+  ];
+  if (!allowedRoots.some((root) => resolvedVideoPath.startsWith(root))) {
+    throw new Error('Access denied: videoFilePath must be within allowed directory.');
+  }
   if (!fs.existsSync(resolvedVideoPath)) {
     throw new Error(`Video file not found at: ${resolvedVideoPath}`);
   }
@@ -781,11 +789,20 @@ export async function detectKillsForTestFeed(
     );
   }
 
-  if (!videoFilePath || typeof videoFilePath !== 'string') {
+  if (!videoFilePath || typeof videoFilePath !== 'string' || videoFilePath.includes('\0') || videoFilePath.includes('..')) {
     throw new Error('Invalid videoFilePath parameter provided.');
   }
 
   const resolvedVideoPath = path.resolve(videoFilePath);
+  const allowedRoots = [
+    path.resolve(process.cwd(), 'uploads'),
+    path.resolve(os.tmpdir()),
+    path.resolve(__dirname, '..', '..', 'uploads'),
+    path.resolve(__dirname, '..', 'uploads'),
+  ];
+  if (!allowedRoots.some((root) => resolvedVideoPath.startsWith(root))) {
+    throw new Error('Access denied: videoFilePath must be within allowed directory.');
+  }
   if (!fs.existsSync(resolvedVideoPath)) {
     throw new Error(`Video file not found at: ${resolvedVideoPath}`);
   }

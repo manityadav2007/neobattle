@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { esportsApi, uploadApi, gameApi, type EsportsSeason, type EsportsTeam, formatDate, formatCurrency } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
+import { sanitizeMediaUrl } from '@/utils/sanitizeUrl';
 
 interface UidField {
   uid: string;
@@ -568,7 +569,7 @@ export default function EsportsPage() {
                   </label>
                   {teamLogoPreview && (
                     <div className="flex items-center gap-2">
-                      <img src={teamLogoPreview} alt="Team logo preview" className="w-8 h-8 rounded-full object-cover" />
+                      <img src={sanitizeMediaUrl(teamLogoPreview)} alt="Team logo preview" className="w-8 h-8 rounded-full object-cover" />
                       <button onClick={() => { setTeamLogoPreview(null); setTeamLogoUrl(''); }} className="text-zinc-500 hover:text-red-400 transition-colors">
                         <X className="h-4 w-4" />
                       </button>

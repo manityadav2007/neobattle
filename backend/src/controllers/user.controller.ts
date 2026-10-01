@@ -239,7 +239,12 @@ export async function getUserStats(req: AuthenticatedRequest, res: Response): Pr
 }
 
 export async function searchUsers(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const q = (req.query.q as string) || '';
+  const rawQ = req.query.q;
+  if (typeof rawQ !== 'string') {
+    res.status(400).json({ success: false, message: 'Search query must be a valid string' });
+    return;
+  }
+  const q = rawQ.trim();
   if (q.length < 2) {
     res.status(400).json({ success: false, message: 'Search query must be at least 2 characters' });
     return;

@@ -1153,7 +1153,12 @@ export async function testAiFeed(req: AuthenticatedRequest, res: Response): Prom
   }
 
   const startTime = Date.now();
-  const videoPath = file.path;
+  const safeFileName = path.basename(file.path || '');
+  const safeVideoPath = path.resolve(TEST_UPLOAD_DIR, safeFileName);
+  if (!safeVideoPath.startsWith(path.resolve(TEST_UPLOAD_DIR))) {
+    res.status(400).json({ success: false, message: 'Invalid video file path' });
+    return;
+  }
 
   try {
     console.log(
@@ -1162,7 +1167,7 @@ export async function testAiFeed(req: AuthenticatedRequest, res: Response): Prom
       }`
     );
 
-    const result = await detectKillsForTestFeed(videoPath, cropRegion);
+    const result = await detectKillsForTestFeed(safeVideoPath, cropRegion);
     const durationSeconds = Math.round((Date.now() - startTime) / 1000);
 
     console.log(`[TestAIFeed] Completed in ${durationSeconds}s. Found ${result.totalKillsFound} kills.`);
@@ -1202,12 +1207,12 @@ export async function testAiFeed(req: AuthenticatedRequest, res: Response): Prom
   } finally {
     // Clean up uploaded video file from disk
     try {
-      if (fs.existsSync(videoPath)) {
-        fs.unlinkSync(videoPath);
-        console.log(`[TestAIFeed] Cleaned up temporary upload: ${videoPath}`);
+      if (fs.existsSync(safeVideoPath)) {
+        fs.unlinkSync(safeVideoPath);
+        console.log('[TestAIFeed] Cleaned up temporary upload:', safeFileName);
       }
     } catch (cleanErr: any) {
-      console.warn(`[TestAIFeed] Failed to delete uploaded video ${videoPath}:`, cleanErr.message);
+      console.warn('[TestAIFeed] Failed to delete uploaded video:', safeFileName, cleanErr?.message || cleanErr);
     }
   }
 }

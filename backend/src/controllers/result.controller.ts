@@ -83,8 +83,9 @@ async function resolveWinners(tournament: {
   const resolved: ResolvedWinner[] = [];
 
   for (const c of candidates) {
-    const rawVal = c.uid!;
-    const cleanTag = rawVal.replace(/^[\[\(<]+|[\]\)>]+$/g, '').trim();
+    const rawVal = (c.uid || '').slice(0, 100).trim();
+    if (!rawVal) continue;
+    const cleanTag = rawVal.replace(/^[\[({<]+/, '').replace(/[\])}>]+$/, '').trim();
 
     const entry = await prisma.tournamentEntry.findFirst({
       where: {

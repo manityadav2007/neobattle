@@ -23,6 +23,7 @@ import {
 import { testAiCounterApi, TestAiDetectedKill, TestAiFeedResponse, CropRegion } from '@/lib/services';
 import { ScreenRegionCropper, DEFAULT_KILL_FEED_CROP } from './ScreenRegionCropper';
 import { getErrorMessage } from '@/lib/api';
+import { sanitizeMediaUrl } from '@/utils/sanitizeUrl';
 
 export default function TestAICounter() {
   const [file, setFile] = useState<File | null>(null);
@@ -229,7 +230,7 @@ export default function TestAICounter() {
         captureFrame();
       };
 
-      tempVideo.src = url;
+      tempVideo.src = sanitizeMediaUrl(url);
     } catch {
       setVideoPreviewUrl(null);
     }
@@ -504,7 +505,7 @@ export default function TestAICounter() {
                   <div className="rounded-xl overflow-hidden bg-black border border-white/10 max-w-xl mx-auto shadow-lg">
                     <video
                       ref={videoPlayerRef}
-                      src={videoPreviewUrl}
+                      src={sanitizeMediaUrl(videoPreviewUrl)}
                       controls
                       autoPlay
                       playsInline

@@ -19,6 +19,7 @@ import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
 import TeamManagementModal from '@/components/TeamManagementModal';
 import Avatar from '@/components/Avatar';
+import { sanitizeMediaUrl } from '@/utils/sanitizeUrl';
 
 export default function TournamentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -227,7 +228,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           captureFrame();
         };
 
-        tempVideo.src = url;
+        tempVideo.src = sanitizeMediaUrl(url);
       } catch {
         setVideoPreviewUrl(null);
       }
@@ -1612,7 +1613,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                         <div className="rounded-xl overflow-hidden bg-black/90 border border-white/10 max-w-xl mx-auto shadow-lg">
                           <video
                             ref={videoPlayerRef}
-                            src={videoPreviewUrl}
+                            src={sanitizeMediaUrl(videoPreviewUrl)}
                             controls
                             autoPlay
                             playsInline

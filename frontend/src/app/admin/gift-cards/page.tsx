@@ -10,6 +10,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { giftCardApi, uploadApi, formatCurrency, type GiftCard, type GiftCardRedemption } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
+import { sanitizeMediaUrl } from '@/utils/sanitizeUrl';
 
 export default function AdminGiftCardsPage() {
   const router = useRouter();
@@ -149,7 +150,7 @@ export default function AdminGiftCardsPage() {
                   Choose Image
                   <input type="file" accept="image/*" onChange={handleImageChange} className="absolute inset-0 opacity-0 cursor-pointer" />
                 </label>
-                {imagePreview && <img src={imagePreview} alt="Preview" className="h-10 rounded" />}
+                {imagePreview && <img src={sanitizeMediaUrl(imagePreview)} alt="Preview" className="h-10 rounded" />}
               </div>
             </div>
             <div className="flex gap-2">

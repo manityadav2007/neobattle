@@ -528,7 +528,7 @@ export async function startAnalysis(req: AuthenticatedRequest, res: Response): P
       };
       console.log(`[KillCounter] Job ${jobId} finished successfully with ${finalKills.length} kills.`);
     } catch (err: any) {
-      console.error(`[KillCounter] Job ${jobId} failed:`, err.message || err);
+      console.error('[KillCounter] Job failed:', jobId, err.message || err);
       job.status = 'failed';
       job.error = err.message || 'Video analysis failed';
 
@@ -541,13 +541,15 @@ export async function startAnalysis(req: AuthenticatedRequest, res: Response): P
       }
     } finally {
       // Clean up uploaded video file from disk
+      const safeFileName = path.basename(job.videoPath || '');
       try {
-        if (fs.existsSync(job.videoPath)) {
-          fs.unlinkSync(job.videoPath);
-          console.log(`[KillCounter] Cleaned up uploaded video: ${job.videoPath}`);
+        const safeVideoPath = path.resolve(UPLOAD_DIR, safeFileName);
+        if (safeVideoPath.startsWith(path.resolve(UPLOAD_DIR)) && fs.existsSync(safeVideoPath)) {
+          fs.unlinkSync(safeVideoPath);
+          console.log('[KillCounter] Cleaned up uploaded video:', safeFileName);
         }
       } catch (cleanErr: any) {
-        console.warn(`[KillCounter] Failed to delete video file ${job.videoPath}:`, cleanErr.message);
+        console.warn('[KillCounter] Failed to delete video file:', safeFileName, cleanErr?.message || cleanErr);
       }
     }
   })();

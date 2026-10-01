@@ -15,11 +15,11 @@ export function parseBankSms(message: string, sender?: string): ParsedSmsPayment
     return { amount: null, utrNumber: null, rawMessage: message || '', sender: sender || null, isCredit: false };
   }
 
-  const cleanMsg = message.trim();
+  const cleanMsg = (message.length > 500 ? message.slice(0, 500) : message).trim();
   const lower = cleanMsg.toLowerCase();
 
   // 1. Check for PhonePe notification format: "[Name] has sent ₹[amount] to your [bank] account..."
-  const phonePePattern = /(?:^|[\n\r])\s*(?:(.+?)\s+)?(?:has\s+sent|sent)\s+(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)\s+to\s+your\s+(?:bank\s+)?account/i;
+  const phonePePattern = /(?:^|[\r\n])\s*(?:(?!(?:has\s+sent|sent)\b)([^\r\n]{1,60}?)\s+)?(?:has\s+sent|sent)\s+(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)\s+to\s+your\s+(?:bank\s+)?account/i;
   const phonePeMatch = cleanMsg.match(phonePePattern);
   const isPhonePeCredit = Boolean(phonePeMatch);
 
@@ -46,17 +46,17 @@ export function parseBankSms(message: string, sender?: string): ParsedSmsPayment
   if (amount === null) {
     const amountPatterns: RegExp[] = [
       // PhonePe notification: "[Name] has sent ₹[amount] to your bank account"
-      /(?:has\s+sent|sent)\s*(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)\s*to\s*your\s*(?:bank\s*)?account/i,
+      /(?:has\s+sent|sent)\s+(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)\s+to\s+your\s+(?:bank\s+)?account/i,
       // Generic "has sent ₹50.05"
-      /(?:has\s+sent|sent)\s*(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
+      /(?:has\s+sent|sent)\s+(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
       // "credited by/with/for INR 50.05" or "received Rs 50.05"
-      /(?:credited\s*(?:by|with|for|to)?|received(?:\s*a\s*payment\s*of)?|deposited)\s*(?:INR|Rs\.?|[₹\u20B9])?\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
+      /(?:credited\s+(?:by|with|for|to)?|received(?:\s+a\s+payment\s+of)?|deposited)\s*(?:INR|Rs\.?|[₹\u20B9])?\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
       // "INR 50.05 credited/received" or "Rs. 50.05 has been credited"
-      /(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)\s*(?:is|has\s*been)?\s*(?:credited|deposited|received)/i,
+      /(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)\s+(?:is|has\s+been)?\s*(?:credited|deposited|received)/i,
       // "A/c ... credited with Rs.50.05"
-      /(?:credited|received|deposited)[^0-9\n\r]*(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
+      /(?:credited|received|deposited)[^0-9\r\n]{1,40}(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
       // "(INR|Rs|₹) 50.05 ... credited"
-      /(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)[^0-9\n\r]*(?:credited|received|deposited)/i,
+      /(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)[^0-9\r\n]{1,40}(?:credited|received|deposited)/i,
       // Fallback: Any currency with number in a confirmed credit message
       /(?:INR|Rs\.?|[₹\u20B9])\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
     ];
@@ -76,7 +76,7 @@ export function parseBankSms(message: string, sender?: string): ParsedSmsPayment
   // Patterns for UTR / UPI Reference Extraction (usually 12 digits)
   let utrNumber: string | null = null;
   const utrPatterns: RegExp[] = [
-    /(?:UPI(?:\s*Ref(?:\s*no)?)?|UTR(?:\s*no)?|Ref(?:\s*no)?|RRN)\s*[:/=\s-]*([0-9]{12})\b/i,
+    /(?:UPI(?:\s+Ref(?:\s+no)?)?|UTR(?:\s+no)?|Ref(?:\s+no)?|RRN)[:/=\s-]+([0-9]{12})\b/i,
     /(?:UPI\/|Ref\/|RRN\/)([0-9]{12})\b/i,
     /\b(UPI[A-Za-z0-9]{10,20})\b/i,
   ];

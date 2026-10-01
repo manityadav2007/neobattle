@@ -271,7 +271,7 @@ export async function checkPlayerEligibility(req: AuthenticatedRequest, res: Res
   try {
     playerInfo = await fetchPlayerInfo(uid, 'IND');
   } catch (err: unknown) {
-    console.error(`[Tournament] checkPlayerEligibility FreeFire API error for UID ${uid}:`, err);
+    console.error('[Tournament] checkPlayerEligibility FreeFire API error for UID:', uid, err);
     res.status(400).json({
       success: false,
       message: "Couldn't find this UID, please check and try again.",
@@ -668,7 +668,7 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
         try {
           info = await fetchPlayerInfo(uid, 'IND');
         } catch (err: unknown) {
-          console.error(`[Tournament] Registration FreeFire API error for UID ${uid}:`, err);
+          console.error('[Tournament] Registration FreeFire API error for UID:', uid, err);
           res.status(400).json({
             success: false,
             message: "Couldn't find this UID, please check and try again.",

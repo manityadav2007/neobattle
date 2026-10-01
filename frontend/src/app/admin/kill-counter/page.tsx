@@ -17,6 +17,7 @@ import {
 } from '@/lib/services';
 import { ScreenRegionCropper, DEFAULT_KILL_FEED_CROP } from '@/components/ScreenRegionCropper';
 import { getErrorMessage } from '@/lib/api';
+import { sanitizeMediaUrl } from '@/utils/sanitizeUrl';
 
 interface PlayerCandidate {
   id: string;
@@ -387,7 +388,7 @@ export default function AdminKillCounterPage() {
         captureFrame();
       };
 
-      tempVideo.src = objectUrl;
+      tempVideo.src = sanitizeMediaUrl(objectUrl);
     } catch {}
   };
 
@@ -1054,7 +1055,7 @@ export default function AdminKillCounterPage() {
                     <div className="relative rounded-2xl overflow-hidden bg-black border border-white/10 flex flex-col items-center justify-center aspect-video w-full shadow-lg">
                       <video
                         ref={videoPlayerRef}
-                        src={videoPreviewUrl}
+                        src={sanitizeMediaUrl(videoPreviewUrl)}
                         controls
                         autoPlay
                         playsInline

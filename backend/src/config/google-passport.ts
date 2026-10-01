@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Strategy as GoogleStrategy, VerifyCallback } from 'passport-google-oauth20';
 import { prisma } from './db';
 
@@ -48,7 +49,7 @@ export const googleStrategy = new GoogleStrategy(
         let username = `google_${googleId.slice(-12)}`;
         const existingUsername = await prisma.user.findUnique({ where: { username } });
         if (existingUsername) {
-          username = `google_${googleId.slice(-8)}_${Math.floor(1000 + Math.random() * 9000)}`;
+          username = `google_${googleId.slice(-8)}_${crypto.randomInt(1000, 10000)}`;
         }
 
         user = await prisma.user.create({
