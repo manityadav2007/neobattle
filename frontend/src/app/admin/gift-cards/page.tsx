@@ -56,7 +56,7 @@ export default function AdminGiftCardsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setImagePreview(encodeURI(URL.createObjectURL(file)));
   };
 
   const handleSubmit = async () => {
@@ -150,7 +150,7 @@ export default function AdminGiftCardsPage() {
                   Choose Image
                   <input type="file" accept="image/*" onChange={handleImageChange} className="absolute inset-0 opacity-0 cursor-pointer" />
                 </label>
-                {imagePreview && <img src={sanitizeMediaUrl(imagePreview)} alt="Preview" className="h-10 rounded" />}
+                {imagePreview && <img src={encodeURI(sanitizeMediaUrl(imagePreview))} alt="Preview" className="h-10 rounded" />}
               </div>
             </div>
             <div className="flex gap-2">

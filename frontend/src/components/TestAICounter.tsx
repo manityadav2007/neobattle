@@ -184,7 +184,7 @@ export default function TestAICounter() {
     setFile(selectedFile);
     setIsCropping(true);
     try {
-      const url = URL.createObjectURL(selectedFile);
+      const url = encodeURI(URL.createObjectURL(selectedFile));
       setVideoPreviewUrl(url);
 
       const tempVideo = document.createElement('video');
@@ -230,7 +230,7 @@ export default function TestAICounter() {
         captureFrame();
       };
 
-      tempVideo.src = sanitizeMediaUrl(url);
+      tempVideo.src = encodeURI(sanitizeMediaUrl(url));
     } catch {
       setVideoPreviewUrl(null);
     }
@@ -505,7 +505,7 @@ export default function TestAICounter() {
                   <div className="rounded-xl overflow-hidden bg-black border border-white/10 max-w-xl mx-auto shadow-lg">
                     <video
                       ref={videoPlayerRef}
-                      src={sanitizeMediaUrl(videoPreviewUrl)}
+                      src={videoPreviewUrl ? encodeURI(sanitizeMediaUrl(videoPreviewUrl)) : undefined}
                       controls
                       autoPlay
                       playsInline

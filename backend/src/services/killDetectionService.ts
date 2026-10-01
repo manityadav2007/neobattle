@@ -468,15 +468,26 @@ export async function detectKillsFromVideo(
     throw new Error('Invalid videoFilePath parameter provided.');
   }
 
-  const resolvedVideoPath = path.resolve(videoFilePath);
-  const allowedRoots = [
-    path.resolve(process.cwd(), 'uploads'),
-    path.resolve(os.tmpdir()),
-    path.resolve(__dirname, '..', '..', 'uploads'),
-    path.resolve(__dirname, '..', 'uploads'),
-  ];
-  if (!allowedRoots.some((root) => resolvedVideoPath.startsWith(root))) {
+  const safeFileName = path.basename(videoFilePath);
+  const baseUploadsDir = path.resolve(process.cwd(), 'uploads');
+  const baseTestDir = path.resolve(process.cwd(), 'uploads', 'test-feed');
+  const baseTmpDir = path.resolve(os.tmpdir());
+
+  const resolvedDir = path.resolve(path.dirname(videoFilePath));
+  let safeDirectory = baseUploadsDir;
+  if (resolvedDir.startsWith(baseTestDir)) {
+    safeDirectory = baseTestDir;
+  } else if (resolvedDir.startsWith(baseTmpDir)) {
+    safeDirectory = baseTmpDir;
+  } else if (resolvedDir.startsWith(baseUploadsDir)) {
+    safeDirectory = baseUploadsDir;
+  } else {
     throw new Error('Access denied: videoFilePath must be within allowed directory.');
+  }
+
+  const resolvedVideoPath = path.resolve(safeDirectory, safeFileName);
+  if (!resolvedVideoPath.startsWith(safeDirectory)) {
+    throw new Error('Access denied: path traversal detected.');
   }
   if (!fs.existsSync(resolvedVideoPath)) {
     throw new Error(`Video file not found at: ${resolvedVideoPath}`);
@@ -793,15 +804,26 @@ export async function detectKillsForTestFeed(
     throw new Error('Invalid videoFilePath parameter provided.');
   }
 
-  const resolvedVideoPath = path.resolve(videoFilePath);
-  const allowedRoots = [
-    path.resolve(process.cwd(), 'uploads'),
-    path.resolve(os.tmpdir()),
-    path.resolve(__dirname, '..', '..', 'uploads'),
-    path.resolve(__dirname, '..', 'uploads'),
-  ];
-  if (!allowedRoots.some((root) => resolvedVideoPath.startsWith(root))) {
+  const safeFileName = path.basename(videoFilePath);
+  const baseUploadsDir = path.resolve(process.cwd(), 'uploads');
+  const baseTestDir = path.resolve(process.cwd(), 'uploads', 'test-feed');
+  const baseTmpDir = path.resolve(os.tmpdir());
+
+  const resolvedDir = path.resolve(path.dirname(videoFilePath));
+  let safeDirectory = baseTestDir;
+  if (resolvedDir.startsWith(baseTestDir)) {
+    safeDirectory = baseTestDir;
+  } else if (resolvedDir.startsWith(baseTmpDir)) {
+    safeDirectory = baseTmpDir;
+  } else if (resolvedDir.startsWith(baseUploadsDir)) {
+    safeDirectory = baseUploadsDir;
+  } else {
     throw new Error('Access denied: videoFilePath must be within allowed directory.');
+  }
+
+  const resolvedVideoPath = path.resolve(safeDirectory, safeFileName);
+  if (!resolvedVideoPath.startsWith(safeDirectory)) {
+    throw new Error('Access denied: path traversal detected.');
   }
   if (!fs.existsSync(resolvedVideoPath)) {
     throw new Error(`Video file not found at: ${resolvedVideoPath}`);

@@ -279,7 +279,7 @@ export default function EsportsPage() {
     setTeamLogoUploading(true);
     setError('');
     try {
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = encodeURI(URL.createObjectURL(file));
       setTeamLogoPreview(previewUrl);
       const res = await uploadApi.teamLogo(file);
       setTeamLogoUrl(res.data.logoUrl);
@@ -569,7 +569,7 @@ export default function EsportsPage() {
                   </label>
                   {teamLogoPreview && (
                     <div className="flex items-center gap-2">
-                      <img src={sanitizeMediaUrl(teamLogoPreview)} alt="Team logo preview" className="w-8 h-8 rounded-full object-cover" />
+                      <img src={teamLogoPreview ? encodeURI(sanitizeMediaUrl(teamLogoPreview)) : undefined} alt="Team logo preview" className="w-8 h-8 rounded-full object-cover" />
                       <button onClick={() => { setTeamLogoPreview(null); setTeamLogoUrl(''); }} className="text-zinc-500 hover:text-red-400 transition-colors">
                         <X className="h-4 w-4" />
                       </button>

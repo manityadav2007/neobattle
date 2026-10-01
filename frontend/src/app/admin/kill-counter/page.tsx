@@ -333,7 +333,7 @@ export default function AdminKillCounterPage() {
     if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
 
     setVideoFile(file);
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = encodeURI(URL.createObjectURL(file));
     setVideoPreviewUrl(objectUrl);
     setFirstFrameDataUrl(null);
     setCropRegion(DEFAULT_KILL_FEED_CROP);
@@ -388,7 +388,7 @@ export default function AdminKillCounterPage() {
         captureFrame();
       };
 
-      tempVideo.src = sanitizeMediaUrl(objectUrl);
+      tempVideo.src = encodeURI(sanitizeMediaUrl(objectUrl));
     } catch {}
   };
 
@@ -1055,7 +1055,7 @@ export default function AdminKillCounterPage() {
                     <div className="relative rounded-2xl overflow-hidden bg-black border border-white/10 flex flex-col items-center justify-center aspect-video w-full shadow-lg">
                       <video
                         ref={videoPlayerRef}
-                        src={sanitizeMediaUrl(videoPreviewUrl)}
+                        src={videoPreviewUrl ? encodeURI(sanitizeMediaUrl(videoPreviewUrl)) : undefined}
                         controls
                         autoPlay
                         playsInline

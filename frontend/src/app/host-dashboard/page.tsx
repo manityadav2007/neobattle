@@ -316,7 +316,7 @@ export default function HostDashboardPage() {
       return;
     }
     setProofFile(selected);
-    setProofPreview(URL.createObjectURL(selected));
+    setProofPreview(encodeURI(URL.createObjectURL(selected)));
     setSubmitErr('');
   };
 

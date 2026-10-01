@@ -184,7 +184,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
     if (selectedFile) {
       try {
-        const url = URL.createObjectURL(selectedFile);
+        const url = encodeURI(URL.createObjectURL(selectedFile));
         setVideoPreviewUrl(url);
         const tempVideo = document.createElement('video');
         tempVideo.preload = 'auto';
@@ -228,7 +228,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           captureFrame();
         };
 
-        tempVideo.src = sanitizeMediaUrl(url);
+        tempVideo.src = encodeURI(sanitizeMediaUrl(url));
       } catch {
         setVideoPreviewUrl(null);
       }
@@ -1613,7 +1613,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                         <div className="rounded-xl overflow-hidden bg-black/90 border border-white/10 max-w-xl mx-auto shadow-lg">
                           <video
                             ref={videoPlayerRef}
-                            src={sanitizeMediaUrl(videoPreviewUrl)}
+                            src={videoPreviewUrl ? encodeURI(sanitizeMediaUrl(videoPreviewUrl)) : undefined}
                             controls
                             autoPlay
                             playsInline
