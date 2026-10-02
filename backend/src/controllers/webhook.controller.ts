@@ -2,15 +2,37 @@ import { Request, Response } from 'express';
 import { parseBankSms } from '../services/smsParser';
 import { paymentMatchingService } from '../services/paymentMatchingService';
 
+import crypto from 'crypto';
+
 export async function handleSmsWebhook(req: Request, res: Response): Promise<void> {
   const configuredSecret = process.env.WEBHOOK_SECRET?.trim();
   const incomingSecret = (req.header('X-Webhook-Secret') || req.header('x-webhook-secret') || req.query.secret)?.toString()?.trim();
 
-  // Validate shared secret if configured in environment
-  if (configuredSecret && configuredSecret !== incomingSecret) {
+  // Fail-closed: If WEBHOOK_SECRET is not configured in environment, reject all requests by default
+  if (!configuredSecret) {
+    console.error('[SMS Webhook] CRITICAL SECURITY ALERT: WEBHOOK_SECRET is not configured on the server. Rejecting all requests by default.');
+    res.status(500).json({
+      success: false,
+      message: 'Webhook handler is not configured on the server',
+    });
+    return;
+  }
+
+  if (!incomingSecret) {
     res.status(401).json({
       success: false,
-      message: 'Unauthorized: Invalid or missing X-Webhook-Secret header',
+      message: 'Unauthorized: Missing X-Webhook-Secret header',
+    });
+    return;
+  }
+
+  const configuredBuf = Buffer.from(configuredSecret, 'utf8');
+  const incomingBuf = Buffer.from(incomingSecret, 'utf8');
+
+  if (configuredBuf.length !== incomingBuf.length || !crypto.timingSafeEqual(configuredBuf, incomingBuf)) {
+    res.status(401).json({
+      success: false,
+      message: 'Unauthorized: Invalid X-Webhook-Secret header',
     });
     return;
   }
