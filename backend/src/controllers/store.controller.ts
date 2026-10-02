@@ -32,107 +32,81 @@ export async function redeemItem(req: AuthenticatedRequest, res: Response): Prom
   const { itemType, amount } = req.body;
   const userId = req.user!.id;
 
-  if (!itemType || !amount) {
-    res.status(400).json({ success: false, message: 'itemType and amount required' });
+  if (!itemType || !amount || Number(amount) <= 0) {
+    res.status(400).json({ success: false, message: 'Valid itemType and amount required' });
     return;
   }
 
-  const code = await prisma.storeItem.findFirst({
-    where: { type: itemType, amount, isRedeemed: false },
-    orderBy: { createdAt: 'asc' },
-  });
+  const redeemAmount = Number(amount);
 
-  if (!code) {
-    res.status(404).json({ success: false, message: 'No codes available for this item' });
-    return;
-  }
-
-  const wallet = await prisma.wallet.findUnique({ where: { userId } });
-  if (!wallet || Number(wallet.balance) < amount) {
-    res.status(400).json({ success: false, message: 'Insufficient balance' });
-    return;
-  }
-
-  await prisma.$transaction([
-    prisma.wallet.update({ where: { id: wallet.id }, data: { balance: { decrement: amount } } }),
-    prisma.storeItem.update({
-      where: { id: code.id },
-      data: { isRedeemed: true, redeemedBy: userId, redeemedAt: new Date() },
-    }),
-    prisma.transaction.create({
-      data: {
-        walletId: wallet.id,
-        userId,
-        type: TransactionType.WITHDRAWAL,
-        status: TransactionStatus.COMPLETED,
-        amount: new Decimal(amount),
-        description: `Redeemed ${itemType === 'GOOGLE_PLAY' ? 'Google Play' : 'Amazon'} ₹${amount} code`,
-        metadata: { storeCode: code.code, storeItemId: code.id },
-      },
-    }),
-  ]);
-
-  res.json({
-    success: true,
-    message: `Code redeemed! Code: ${code.code}`,
-    data: { code: code.code, type: itemType, amount },
-  });
-}
-
-function generateRedeemCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const groups: string[] = [];
-  for (let g = 0; g < 3; g++) {
-    let group = '';
-    for (let i = 0; i < 4; i++) group += chars[Math.floor(Math.random() * chars.length)];
-    groups.push(group);
-  }
-  return `GP-${groups.join('-')}`;
-}
-
-export async function withdrawToCode(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const { amount } = req.body;
-    const userId = req.user!.id;
-    const withdrawAmount = Number(amount);
+    const result = await prisma.$transaction(async (tx) => {
+      // Find an available code
+      const code = await tx.storeItem.findFirst({
+        where: { type: itemType, amount: redeemAmount, isRedeemed: false },
+        orderBy: { createdAt: 'asc' },
+      });
 
-    if (!amount || withdrawAmount <= 0) {
-      res.status(400).json({ success: false, message: 'Valid amount is required' });
-      return;
-    }
+      if (!code) {
+        throw new Error('No codes available for this item');
+      }
 
-    const wallet = await prisma.wallet.findUnique({ where: { userId } });
-    if (!wallet || Number(wallet.balance) < withdrawAmount) {
-      res.status(400).json({ success: false, message: 'Insufficient balance' });
-      return;
-    }
+      const wallet = await tx.wallet.findUnique({ where: { userId } });
+      if (!wallet || Number(wallet.balance) < redeemAmount) {
+        throw new Error('Insufficient balance');
+      }
 
-    const redeemCode = generateRedeemCode();
+      // Atomic wallet decrement
+      const walletRes = await tx.wallet.updateMany({
+        where: { id: wallet.id, balance: { gte: redeemAmount } },
+        data: { balance: { decrement: redeemAmount } },
+      });
+      if (walletRes.count === 0) {
+        throw new Error('Insufficient balance');
+      }
 
-    await prisma.$transaction([
-      prisma.wallet.update({ where: { id: wallet.id }, data: { balance: { decrement: withdrawAmount } } }),
-      prisma.transaction.create({
+      // Atomic store item claim
+      const storeRes = await tx.storeItem.updateMany({
+        where: { id: code.id, isRedeemed: false },
+        data: { isRedeemed: true, redeemedBy: userId, redeemedAt: new Date() },
+      });
+      if (storeRes.count === 0) {
+        throw new Error('This code was just claimed by another user. Please try again.');
+      }
+
+      await tx.transaction.create({
         data: {
           walletId: wallet.id,
           userId,
           type: TransactionType.WITHDRAWAL,
           status: TransactionStatus.COMPLETED,
-          amount: new Decimal(withdrawAmount),
-          description: `Withdrew ₹${withdrawAmount} to Google Play redeem code`,
-          metadata: { redeemCode, method: 'GOOGLE_PLAY' },
+          amount: new Decimal(redeemAmount),
+          description: `Redeemed ${itemType === 'GOOGLE_PLAY' ? 'Google Play' : 'Amazon'} ₹${redeemAmount} code`,
+          metadata: { storeCode: code.code, storeItemId: code.id },
         },
-      }),
-    ]);
+      });
+
+      return { code: code.code, type: itemType, amount: redeemAmount };
+    });
 
     res.json({
       success: true,
-      message: 'Withdrawal successful!',
-      data: { code: redeemCode, amount: withdrawAmount },
+      message: `Code redeemed! Code: ${result.code}`,
+      data: result,
     });
-  } catch (error) {
-    console.error('[Store] withdrawToCode error:', error);
-    res.status(500).json({ success: false, message: 'Withdrawal failed' });
+  } catch (err: any) {
+    const isNotFound = err.message === 'No codes available for this item';
+    const isConflict = err.message.includes('just claimed');
+    const status = isNotFound ? 404 : isConflict ? 409 : 400;
+    res.status(status).json({ success: false, message: err.message || 'Redemption failed' });
   }
+}
+
+export async function withdrawToCode(_req: AuthenticatedRequest, res: Response): Promise<void> {
+  res.status(403).json({
+    success: false,
+    message: 'Direct automated code withdrawal is disabled for security. Please use the Gift Card withdrawal system for verified fulfillment.',
+  });
 }
 
 export async function addCode(req: AuthenticatedRequest, res: Response): Promise<void> {
