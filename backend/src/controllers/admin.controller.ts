@@ -649,6 +649,18 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
 
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Atomic status transition - prevents concurrent double payouts
+      const statusTransition = await tx.tournament.updateMany({
+        where: {
+          id: tournament.id,
+          status: { not: TournamentStatus.PAID },
+        },
+        data: { status: TournamentStatus.PAID },
+      });
+      if (statusTransition.count === 0) {
+        throw new Error('Tournament prizes have already been distributed');
+      }
+
       // 1. Stamp placements on the entries for record-keeping
       for (const w of winnerPayouts) {
         await tx.tournamentEntry.updateMany({
@@ -759,11 +771,6 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
           },
         });
       }
-
-      await tx.tournament.update({
-        where: { id: tournament.id },
-        data: { status: TournamentStatus.PAID },
-      });
     });
 
     // Notify winners and host

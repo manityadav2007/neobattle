@@ -728,6 +728,36 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
 
     try {
       await prisma.$transaction(async (tx) => {
+        // Atomic status transitions - fail immediately if already paid out or approved concurrently
+        const statusTransition = await tx.tournament.updateMany({
+          where: {
+            id: t.id,
+            status: { not: TournamentStatus.PAID },
+          },
+          data: {
+            status: TournamentStatus.PAID,
+            finalKillList: rawKillList,
+          },
+        });
+        if (statusTransition.count === 0) {
+          throw new Error('Tournament prizes have already been distributed');
+        }
+
+        const submissionTransition = await tx.resultSubmission.updateMany({
+          where: {
+            id: submissionId,
+            status: { not: 'APPROVED' },
+          },
+          data: {
+            status: 'APPROVED',
+            reviewedBy: req.user!.id,
+            reviewedAt: new Date(),
+          },
+        });
+        if (submissionTransition.count === 0) {
+          throw new Error('This result submission has already been approved');
+        }
+
         for (const p of payouts) {
           const pointsToAdd = (p.isBooyah ? winPoints : 0) + (p.kills * 1);
 
@@ -813,19 +843,6 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
             },
           });
         }
-
-        await tx.tournament.update({
-          where: { id: t.id },
-          data: {
-            status: TournamentStatus.PAID,
-            finalKillList: rawKillList,
-          },
-        });
-
-        await tx.resultSubmission.update({
-          where: { id: submissionId },
-          data: { status: 'APPROVED', reviewedBy: req.user!.id, reviewedAt: new Date() },
-        });
       });
 
       // Send notifications to players
@@ -910,6 +927,33 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
 
   try {
     await prisma.$transaction(async (tx) => {
+      // Atomic status transitions - fail immediately if already paid out or approved concurrently
+      const statusTransition = await tx.tournament.updateMany({
+        where: {
+          id: t.id,
+          status: { not: TournamentStatus.PAID },
+        },
+        data: { status: TournamentStatus.PAID },
+      });
+      if (statusTransition.count === 0) {
+        throw new Error('Tournament prizes have already been distributed');
+      }
+
+      const submissionTransition = await tx.resultSubmission.updateMany({
+        where: {
+          id: submissionId,
+          status: { not: 'APPROVED' },
+        },
+        data: {
+          status: 'APPROVED',
+          reviewedBy: req.user!.id,
+          reviewedAt: new Date(),
+        },
+      });
+      if (submissionTransition.count === 0) {
+        throw new Error('This result submission has already been approved');
+      }
+
       // 1. Stamp placements on the entries for record-keeping
       for (const w of winners) {
         await tx.tournamentEntry.updateMany({
@@ -1009,12 +1053,6 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
           },
         });
       }
-
-      await tx.tournament.update({ where: { id: t.id }, data: { status: TournamentStatus.PAID } });
-      await tx.resultSubmission.update({
-        where: { id: submissionId },
-        data: { status: 'APPROVED', reviewedBy: req.user!.id, reviewedAt: new Date() },
-      });
     });
 
     // Notify winners and host
