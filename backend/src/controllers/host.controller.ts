@@ -194,6 +194,15 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
     return;
   }
 
+  if (
+    tournament.status === TournamentStatus.COMPLETED ||
+    tournament.status === TournamentStatus.PAID ||
+    tournament.status === TournamentStatus.CANCELLED
+  ) {
+    res.status(400).json({ success: false, message: `Tournament is already ${tournament.status.toLowerCase()}` });
+    return;
+  }
+
   const winnerEntries = tournament.entries.filter((e) => e.placement === 1);
   if (winnerEntries.length === 0) {
     res.status(400).json({ success: false, message: 'No winner entry found. Update placement to 1 first.' });
@@ -212,89 +221,111 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
   const prizePoolNum = Number(tournament.prizePool);
   const totalEntryCollection = Number(tournament.remainingPool) + hostCommissionNum + platformCommissionNum;
   const fractionalSurplus = prizePoolNum > 0 ? totalEntryCollection - prizePoolNum - hostCommissionNum - platformCommissionNum : 0;
+  const adminAmount = platformCommissionNum + (fractionalSurplus > 0 ? fractionalSurplus : 0);
 
-  if (hostCommissionNum > 0) {
-    const hostWallet = await prisma.wallet.findUnique({ where: { userId: tournament.creatorId } });
-    if (hostWallet) {
-      await prisma.wallet.update({
-        where: { id: hostWallet.id },
-        data: { balance: { increment: hostCommissionNum } },
-      });
-      await prisma.transaction.create({
-        data: {
-          walletId: hostWallet.id,
-          userId: tournament.creatorId,
-          type: 'PRIZE',
-          status: 'COMPLETED',
-          amount: hostCommissionNum,
-          description: `Host commission for: ${tournament.title}`,
+  const ownerEmail = process.env.OWNER_EMAIL || 'ymanit330@gmail.com';
+  const adminUser = await prisma.user.findFirst({
+    where: { OR: [{ role: 'SUPER_ADMIN' }, { email: ownerEmail }] },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      // 1. Atomic status transition check - prevents concurrent execution
+      const transition = await tx.tournament.updateMany({
+        where: {
+          id: tournamentId,
+          status: { notIn: [TournamentStatus.COMPLETED, TournamentStatus.PAID, TournamentStatus.CANCELLED] },
         },
+        data: { status: TournamentStatus.COMPLETED, endTime: new Date() },
       });
-    }
-  }
 
-  if (platformCommissionNum > 0 || fractionalSurplus > 0) {
-    const adminEmail = 'ymanit330@gmail.com';
-    const adminUser = await prisma.user.findUnique({ where: { email: adminEmail } });
-    if (adminUser) {
-      let adminWallet = await prisma.wallet.findUnique({ where: { userId: adminUser.id } });
-      if (!adminWallet) {
-        adminWallet = await prisma.wallet.create({ data: { userId: adminUser.id } });
+      if (transition.count === 0) {
+        throw new Error('Tournament has already been completed or paid out');
       }
-      const adminAmount = platformCommissionNum + (fractionalSurplus > 0 ? fractionalSurplus : 0);
-      if (adminAmount > 0) {
-        await prisma.wallet.update({
+
+      // 2. Host commission
+      if (hostCommissionNum > 0) {
+        const hostWallet = await tx.wallet.findUnique({ where: { userId: tournament.creatorId } });
+        if (hostWallet) {
+          await tx.wallet.update({
+            where: { id: hostWallet.id },
+            data: { balance: { increment: hostCommissionNum } },
+          });
+          await tx.transaction.create({
+            data: {
+              walletId: hostWallet.id,
+              userId: tournament.creatorId,
+              type: 'PRIZE',
+              status: 'COMPLETED',
+              amount: new Decimal(hostCommissionNum),
+              description: `Host commission for: ${tournament.title}`,
+              reference: `HOST-${tournamentId.slice(0, 8)}-${Date.now().toString(36)}`,
+            },
+          });
+        }
+      }
+
+      // 3. Platform commission
+      if (adminAmount > 0 && adminUser) {
+        let adminWallet = await tx.wallet.findUnique({ where: { userId: adminUser.id } });
+        if (!adminWallet) {
+          adminWallet = await tx.wallet.create({ data: { userId: adminUser.id } });
+        }
+        await tx.wallet.update({
           where: { id: adminWallet.id },
           data: { balance: { increment: adminAmount } },
         });
-        await prisma.transaction.create({
+        await tx.transaction.create({
           data: {
             walletId: adminWallet.id,
             userId: adminUser.id,
             type: 'PRIZE',
             status: 'COMPLETED',
-            amount: adminAmount,
+            amount: new Decimal(adminAmount),
             description: `Platform commission + surplus for: ${tournament.title}`,
+            reference: `PLAT-${tournamentId.slice(0, 8)}-${Date.now().toString(36)}`,
           },
         });
       }
+
+      // 4. Winner placement prize
+      if (prizePoolNum > 0) {
+        await tx.wallet.update({
+          where: { id: winnerWallet.id },
+          data: { balance: { increment: prizePoolNum } },
+        });
+        await tx.transaction.create({
+          data: {
+            walletId: winnerWallet.id,
+            userId: winner.user!.id,
+            type: 'PRIZE',
+            status: 'COMPLETED',
+            amount: new Decimal(prizePoolNum),
+            description: `Winner prize for: ${tournament.title}`,
+            reference: `WIN-${tournamentId.slice(0, 8)}-${Date.now().toString(36)}`,
+          },
+        });
+      }
+
+      return tx.tournament.findUnique({ where: { id: tournamentId } });
+    });
+
+    // 5. Release escrows if any
+    const escrows = await escrowService.getTournamentEscrows(tournamentId);
+    const heldEscrows = escrows.filter((e) => e.status === 'HELD');
+    for (const escrow of heldEscrows) {
+      await escrowService.releaseToWinner(escrow.id, winnerWallet.id, winner.user!.id);
     }
-  }
 
-  const escrows = await escrowService.getTournamentEscrows(tournamentId);
-  const heldEscrows = escrows.filter((e) => e.status === 'HELD');
-
-  for (const escrow of heldEscrows) {
-    await escrowService.releaseToWinner(escrow.id, winnerWallet.id, winner.user!.id);
-  }
-
-  if (prizePoolNum > 0) {
-    await prisma.wallet.update({
-      where: { id: winnerWallet.id },
-      data: { balance: { increment: prizePoolNum } },
+    res.json({
+      success: true,
+      message: `Tournament completed! Winner: ${winner.user?.username || 'Unknown'}. Prize: ₹${prizePoolNum}. Host commission: ₹${hostCommissionNum}`,
+      data: updated,
     });
-    await prisma.transaction.create({
-      data: {
-        walletId: winnerWallet.id,
-        userId: winner.user!.id,
-        type: 'PRIZE',
-        status: 'COMPLETED',
-        amount: prizePoolNum,
-        description: `Winner prize for: ${tournament.title}`,
-      },
-    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message || 'Failed to complete tournament' });
   }
-
-  const updated = await prisma.tournament.update({
-    where: { id: tournamentId },
-    data: { status: TournamentStatus.COMPLETED, endTime: new Date() },
-  });
-
-  res.json({
-    success: true,
-    message: `Tournament completed! Winner: ${winner.user?.username || 'Unknown'}. Prize: ₹${prizePoolNum}. Host commission: ₹${hostCommissionNum}`,
-    data: updated,
-  });
 }
 
 export async function updateTournamentStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
