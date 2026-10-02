@@ -30,13 +30,50 @@ export async function submitWinnerProof(req: AuthenticatedRequest, res: Response
     return;
   }
 
+  // Find registered entry matching winnerUid (either solo player or team member)
   const entry = await prisma.tournamentEntry.findFirst({
-    where: { tournamentId, userId: { not: null } },
-    include: { user: { select: { id: true, freeFireId: true, ign: true, username: true } } },
+    where: {
+      tournamentId,
+      OR: [
+        { user: { OR: [{ freeFireId: winnerUid }, { freeFireUid: winnerUid }] } },
+        { team: { members: { some: { user: { OR: [{ freeFireId: winnerUid }, { freeFireUid: winnerUid }] } } } } },
+      ],
+    },
+    include: {
+      user: { select: { id: true, freeFireId: true, freeFireUid: true, ign: true, username: true } },
+      team: {
+        include: {
+          members: {
+            include: {
+              user: { select: { id: true, freeFireId: true, freeFireUid: true, ign: true, username: true } },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!entry) {
-    res.status(404).json({ success: false, message: 'No registered player found for this tournament' });
+    res.status(404).json({
+      success: false,
+      message: `No registered player found in this tournament matching Free Fire UID "${winnerUid}"`,
+    });
+    return;
+  }
+
+  // Determine winning user ID (direct solo registrant or matched team member)
+  let winningUserId: string | null = entry.userId;
+  if (entry.team && entry.team.members.length > 0) {
+    const memberMatch = entry.team.members.find(
+      (m) => m.user.freeFireId === winnerUid || m.user.freeFireUid === winnerUid
+    );
+    if (memberMatch) {
+      winningUserId = memberMatch.user.id;
+    }
+  }
+
+  if (!winningUserId) {
+    res.status(404).json({ success: false, message: 'Could not determine winning user account' });
     return;
   }
 
@@ -44,7 +81,7 @@ export async function submitWinnerProof(req: AuthenticatedRequest, res: Response
   const winnerIgn = profile?.ign || `Player_${winnerUid.slice(-4)}`;
 
   const existing = await prisma.winnerProof.findUnique({
-    where: { tournamentId_userId: { tournamentId, userId: entry.userId! } },
+    where: { tournamentId_userId: { tournamentId, userId: winningUserId } },
   });
 
   if (existing) {
@@ -55,7 +92,7 @@ export async function submitWinnerProof(req: AuthenticatedRequest, res: Response
   const proof = await prisma.winnerProof.create({
     data: {
       tournamentId,
-      userId: entry.userId!,
+      userId: winningUserId,
       winnerUid,
       winnerIgn,
       screenshotUrl,
