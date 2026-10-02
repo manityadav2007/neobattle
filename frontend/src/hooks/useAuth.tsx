@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const ownerEmail = 'ymanit330@gmail.com';
+  const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL || 'ymanit330@gmail.com';
   const isOwner = user?.email === ownerEmail;
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' || isOwner;
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'MODERATOR' || isSuperAdmin;

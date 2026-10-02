@@ -131,6 +131,10 @@ export function getErrorMessage(error: unknown): string {
 export function setAuthTokens(accessToken: string, refreshToken: string): void {
   localStorage.setItem('accessToken', accessToken);
   localStorage.setItem('refreshToken', refreshToken);
+  if (typeof document !== 'undefined') {
+    const isHttps = window.location.protocol === 'https:';
+    document.cookie = `accessToken=${accessToken}; path=/; max-age=604800; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+  }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(TOKENS_CHANGED_EVENT));
   }
@@ -139,6 +143,11 @@ export function setAuthTokens(accessToken: string, refreshToken: string): void {
 export function clearAuthTokens(): void {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
+  if (typeof document !== 'undefined') {
+    document.cookie = 'accessToken=; path=/; max-age=0; SameSite=Lax';
+    document.cookie = 'userRole=; path=/; max-age=0; SameSite=Lax';
+    document.cookie = 'userEmail=; path=/; max-age=0; SameSite=Lax';
+  }
 }
 
 export function isAuthenticated(): boolean {

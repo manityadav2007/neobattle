@@ -60,7 +60,7 @@ export const hostOrSuper: RequestHandler = (req, res, next): void => {
   next();
 };
 
-const OWNER_EMAIL = 'ymanit330@gmail.com';
+const OWNER_EMAIL = process.env.OWNER_EMAIL || 'ymanit330@gmail.com';
 
 export const ownerOnly: RequestHandler = (req, res, next): void => {
   if (!req.user) {

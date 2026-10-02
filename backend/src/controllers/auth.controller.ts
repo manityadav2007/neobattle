@@ -10,7 +10,7 @@ import {
 } from '../utils/auth.utils';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 
-const SUPER_ADMIN_EMAIL = 'ymanit330@gmail.com';
+const SUPER_ADMIN_EMAIL = process.env.OWNER_EMAIL || process.env.SUPER_ADMIN_EMAIL || 'ymanit330@gmail.com';
 
 async function enforceSuperAdmin(userId: string, email: string, currentRole: string): Promise<string> {
   if (email === SUPER_ADMIN_EMAIL && currentRole !== 'SUPER_ADMIN') {
