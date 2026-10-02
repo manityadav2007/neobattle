@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as resultController from '../controllers/result.controller';
 import { authenticate } from '../middleware/authMiddleware';
-import { adminCheck } from '../middleware/adminCheck';
+import { adminCheck, adminOnly } from '../middleware/adminCheck';
 
 const router = Router();
 
@@ -12,6 +12,6 @@ router.get('/mine', authenticate, resultController.listMyResultSubmissions);
 
 // Admin
 router.get('/pending', authenticate, adminCheck, resultController.listPendingResults);
-router.patch('/:id/review', authenticate, adminCheck, resultController.reviewResult);
+router.patch('/:id/review', authenticate, adminOnly, resultController.reviewResult);
 
 export default router;

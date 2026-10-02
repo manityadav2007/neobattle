@@ -13,7 +13,8 @@
  * ─────────────────────────────────────────────────────────────────
  */
 
-const FREEFIRE_API_BASE = 'http://siambhau69.eu.cc/freefireinfo/bhau';
+const FREEFIRE_API_BASE = process.env.FREEFIRE_API_BASE || 'https://siambhau69.eu.cc/freefireinfo/bhau';
+const FREEFIRE_API_FALLBACK_BASE = 'http://siambhau69.eu.cc/freefireinfo/bhau';
 const REQUEST_TIMEOUT_MS = 5000;
 
 // Soft warning threshold (80 % of 500 daily limit)
@@ -73,7 +74,8 @@ async function fetchFromProvider1(uid: string, region: string): Promise<PlayerIn
     throw new FreefireApiError('API_ERROR', 'Free Fire API key is not configured on the server');
   }
 
-  const url = `${FREEFIRE_API_BASE}?uid=${encodeURIComponent(uid)}&region=${encodeURIComponent(region)}&key=${encodeURIComponent(apiKey)}`;
+  const buildUrl = (base: string) =>
+    `${base}?uid=${encodeURIComponent(uid)}&region=${encodeURIComponent(region)}&key=${encodeURIComponent(apiKey)}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -81,11 +83,24 @@ async function fetchFromProvider1(uid: string, region: string): Promise<PlayerIn
   let response: Response;
   try {
     tickCallCounter();
-    response = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
+    try {
+      response = await fetch(buildUrl(FREEFIRE_API_BASE), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+    } catch (primaryErr) {
+      if (FREEFIRE_API_BASE.startsWith('https://')) {
+        // Fallback to HTTP if external host certificate fails
+        response = await fetch(buildUrl(FREEFIRE_API_FALLBACK_BASE), {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        });
+      } else {
+        throw primaryErr;
+      }
+    }
   } catch (err: unknown) {
     clearTimeout(timeoutId);
     if (err instanceof Error && err.name === 'AbortError') {

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as paymentController from '../controllers/payment.controller';
 import { authenticate } from '../middleware/authMiddleware';
-import { adminCheck } from '../middleware/adminCheck';
+import { adminCheck, adminOnly } from '../middleware/adminCheck';
 
 const router = Router();
 
@@ -11,7 +11,7 @@ router.get('/deposit/status/:transactionId', authenticate, paymentController.get
 
 // Admin Unmatched & Auto Deposits Management
 router.get('/unmatched', authenticate, adminCheck, paymentController.listUnmatchedPayments);
-router.post('/unmatched/:id/credit', authenticate, adminCheck, paymentController.creditUnmatchedPayment);
+router.post('/unmatched/:id/credit', authenticate, adminOnly, paymentController.creditUnmatchedPayment);
 router.get('/auto-deposits', authenticate, adminCheck, paymentController.listAutoDeposits);
 
 // Legacy Manual UPI Payments (preserved for existing tournament entry or pending review)
@@ -19,7 +19,7 @@ router.post('/upi/create', authenticate, paymentController.createUpiPayment);
 router.get('/upi/my', authenticate, paymentController.getMyUpiPayments);
 router.get('/pending', authenticate, adminCheck, paymentController.listPendingUpiPayments);
 router.get('/all', authenticate, adminCheck, paymentController.listAllUpiPayments);
-router.patch('/:id/approve', authenticate, adminCheck, paymentController.approveUpiPayment);
-router.patch('/:id/reject', authenticate, adminCheck, paymentController.rejectUpiPayment);
+router.patch('/:id/approve', authenticate, adminOnly, paymentController.approveUpiPayment);
+router.patch('/:id/reject', authenticate, adminOnly, paymentController.rejectUpiPayment);
 
 export default router;
