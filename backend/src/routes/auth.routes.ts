@@ -12,6 +12,7 @@ router.get('/check-username', authController.checkUsername);
 router.post('/register', authLimiter, validate(registerSchema), authController.register);
 router.post('/login', authLimiter, validate(loginSchema), authController.login);
 router.post('/refresh', validate(refreshTokenSchema), authController.refresh);
+router.post('/oauth-exchange', authLimiter, authController.exchangeOAuthCode);
 router.post('/logout', authController.logout);
 router.get('/me', authenticate, authController.me);
 router.patch('/ign', authenticate, authController.updateIgn);

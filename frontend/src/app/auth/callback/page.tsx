@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setAuthTokens } from '@/lib/api';
+import { setAuthTokens, api, ApiResponse } from '@/lib/api';
 import { authApi } from '@/lib/services';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
@@ -20,10 +20,11 @@ function CallbackContent() {
       return;
     }
 
+    const code = searchParams.get('code');
     const accessToken = searchParams.get('accessToken');
     const refreshToken = searchParams.get('refreshToken');
 
-    if (!accessToken || !refreshToken) {
+    if (!code && (!accessToken || !refreshToken)) {
       const authError = searchParams.get('error');
       setError(authError ? `Authentication failed (${authError}). Please try again.` : 'Invalid authentication response.');
       return;
@@ -32,8 +33,40 @@ function CallbackContent() {
     let cancelled = false;
 
     (async () => {
+      let finalAccessToken = accessToken;
+      let finalRefreshToken = refreshToken;
+
+      if (code) {
+        setStep('Exchanging authorization code...');
+        try {
+          const res = await api.post<ApiResponse<{ accessToken: string; refreshToken: string }>>('/auth/oauth-exchange', { code });
+          if (cancelled) return;
+          if (res.data?.data) {
+            finalAccessToken = res.data.data.accessToken;
+            finalRefreshToken = res.data.data.refreshToken;
+          } else {
+            setError(res.data?.message || 'Failed to exchange authorization code');
+            return;
+          }
+        } catch (err: any) {
+          if (cancelled) return;
+          setError(err.response?.data?.message || 'Authorization exchange failed');
+          return;
+        }
+      }
+
+      if (!finalAccessToken || !finalRefreshToken) {
+        setError('Missing authentication tokens');
+        return;
+      }
+
       setStep('Storing session...');
-      setAuthTokens(accessToken, refreshToken);
+      setAuthTokens(finalAccessToken, finalRefreshToken);
+
+      // Clean sensitive query parameters from browser history immediately
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/auth/callback');
+      }
 
       setStep('Verifying session...');
       try {

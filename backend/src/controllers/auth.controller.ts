@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../config/db';
 import {
   hashPassword,
@@ -7,10 +8,60 @@ import {
   verifyRefreshToken,
   revokeRefreshToken,
   sanitizeUser,
+  TokenPair,
 } from '../utils/auth.utils';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 
 const SUPER_ADMIN_EMAIL = process.env.OWNER_EMAIL || process.env.SUPER_ADMIN_EMAIL || 'ymanit330@gmail.com';
+
+const oauthCodeMap = new Map<string, { tokens: TokenPair; expiresAt: number }>();
+
+// Periodic cleanup of expired codes
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, entry] of oauthCodeMap.entries()) {
+    if (now > entry.expiresAt) {
+      oauthCodeMap.delete(code);
+    }
+  }
+}, 60_000);
+
+function createOAuthCode(tokens: TokenPair): string {
+  const code = uuidv4();
+  // Single-use code valid for 60 seconds
+  oauthCodeMap.set(code, { tokens, expiresAt: Date.now() + 60_000 });
+  return code;
+}
+
+export async function exchangeOAuthCode(req: Request, res: Response): Promise<void> {
+  const { code } = req.body;
+  if (!code || typeof code !== 'string') {
+    res.status(400).json({ success: false, message: 'Exchange code is required' });
+    return;
+  }
+
+  const entry = oauthCodeMap.get(code);
+  if (!entry) {
+    res.status(400).json({ success: false, message: 'Invalid or expired exchange code' });
+    return;
+  }
+
+  oauthCodeMap.delete(code); // single-use burn
+
+  if (Date.now() > entry.expiresAt) {
+    res.status(400).json({ success: false, message: 'Exchange code has expired' });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      accessToken: entry.tokens.accessToken,
+      refreshToken: entry.tokens.refreshToken,
+      expiresIn: entry.tokens.expiresIn,
+    },
+  });
+}
 
 async function enforceSuperAdmin(userId: string, email: string, currentRole: string): Promise<string> {
   if (email === SUPER_ADMIN_EMAIL && currentRole !== 'SUPER_ADMIN') {
@@ -207,9 +258,8 @@ export async function googleCallback(req: AuthenticatedRequest, res: Response): 
     }
 
     const tokens = await generateTokenPair(user);
-    res.redirect(
-      `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`
-    );
+    const oauthCode = createOAuthCode(tokens);
+    res.redirect(`${frontendUrl}/auth/callback?code=${oauthCode}`);
   } catch (error) {
     console.error('[GoogleCallback Error]', error);
     res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
@@ -341,9 +391,8 @@ export async function discordCallback(req: Request, res: Response): Promise<void
     }
 
     const tokens = await generateTokenPair(user);
-    res.redirect(
-      `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`
-    );
+    const oauthCode = createOAuthCode(tokens);
+    res.redirect(`${frontendUrl}/auth/callback?code=${oauthCode}`);
   } catch (err) {
     res.redirect(`${frontendUrl}/login?error=discord_auth_error`);
   }
