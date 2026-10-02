@@ -122,12 +122,7 @@ export async function changePassword(req: AuthenticatedRequest, res: Response): 
 }
 
 export async function deleteAccount(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const { password } = req.body;
-
-  if (!password) {
-    res.status(400).json({ success: false, message: 'Password is required' });
-    return;
-  }
+  const { password, confirmation } = req.body;
 
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
   if (!user) {
@@ -135,10 +130,24 @@ export async function deleteAccount(req: AuthenticatedRequest, res: Response): P
     return;
   }
 
-  const valid = await comparePassword(password, user.passwordHash);
-  if (!valid) {
-    res.status(401).json({ success: false, message: 'Password is incorrect' });
-    return;
+  // If user registered with email/password, verify password
+  if (user.passwordHash && user.passwordHash.trim() !== '') {
+    if (!password) {
+      res.status(400).json({ success: false, message: 'Password is required' });
+      return;
+    }
+
+    const valid = await comparePassword(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ success: false, message: 'Password is incorrect' });
+      return;
+    }
+  } else {
+    // OAuth user without password hash: allow deletion directly when authenticated
+    if (confirmation && confirmation !== 'DELETE' && confirmation !== true && confirmation !== 'CONFIRM') {
+      res.status(400).json({ success: false, message: 'Invalid confirmation' });
+      return;
+    }
   }
 
   await prisma.user.update({
