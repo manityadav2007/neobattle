@@ -9,9 +9,14 @@ export interface JwtPayload {
   role: string;
 }
 
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret && process.env.NODE_ENV === 'production') {
+  throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing in production');
+}
+
 const options: StrategyOptions = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: process.env.JWT_SECRET || 'fallback-secret',
+  secretOrKey: jwtSecret || (process.env.NODE_ENV === 'test' ? 'test-jwt-secret' : 'insecure-dev-secret-do-not-use-in-production'),
 };
 
 passport.use(googleStrategy);

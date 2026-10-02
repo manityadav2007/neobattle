@@ -4,8 +4,20 @@ import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../config/db';
 import { UserRole } from '@prisma/client';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
+const jwtSecret = process.env.JWT_SECRET;
+const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
+
+if (process.env.NODE_ENV === 'production') {
+  if (!jwtSecret) {
+    throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing in production');
+  }
+  if (!jwtRefreshSecret) {
+    throw new Error('FATAL SECURITY ERROR: JWT_REFRESH_SECRET environment variable is missing in production');
+  }
+}
+
+const JWT_SECRET = jwtSecret || (process.env.NODE_ENV === 'test' ? 'test-jwt-secret' : 'insecure-dev-secret-do-not-use-in-production');
+const JWT_REFRESH_SECRET = jwtRefreshSecret || (process.env.NODE_ENV === 'test' ? 'test-refresh-secret' : 'insecure-dev-refresh-secret-do-not-use-in-production');
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as any;
 const JWT_REFRESH_EXPIRES_IN = (process.env.JWT_REFRESH_EXPIRES_IN || '30d') as any;
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
