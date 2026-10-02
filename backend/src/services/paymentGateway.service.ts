@@ -17,6 +17,10 @@ export interface PaymentIntent {
 
 class PaymentGatewayService {
   async createDeposit(intent: PaymentIntent): Promise<PaymentResult> {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Simulated payment gateway is disabled in production.');
+    }
+
     const reference = `DEP-${uuidv4().slice(0, 8).toUpperCase()}`;
 
     // Simulated payment gateway — replace with Stripe/Razorpay in production

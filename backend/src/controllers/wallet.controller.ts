@@ -36,6 +36,14 @@ export async function getWallet(req: AuthenticatedRequest, res: Response): Promi
 }
 
 export async function deposit(req: AuthenticatedRequest, res: Response): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    res.status(403).json({
+      success: false,
+      message: 'Direct simulated deposits are disabled in production. Please use the verified payment gateway.',
+    });
+    return;
+  }
+
   const { amount } = req.body;
   const userId = req.user!.id;
 
