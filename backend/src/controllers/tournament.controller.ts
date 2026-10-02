@@ -747,8 +747,9 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
     const totalTeamFee = Number(tournament.entryFee) * requiredSlots;
     let isPaid = totalTeamFee === 0;
 
+    let wallet: any = null;
     if (totalTeamFee > 0) {
-      const wallet = await prisma.wallet.findUnique({ where: { userId } });
+      wallet = await prisma.wallet.findUnique({ where: { userId } });
       if (!wallet || Number(wallet.balance) < totalTeamFee) {
         res.status(400).json({
           success: false,
@@ -756,13 +757,6 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
         });
         return;
       }
-
-      const holdResult = await escrowService.holdFunds(wallet.id, userId, tournamentId, totalTeamFee);
-      if (!holdResult.success) {
-        res.status(400).json({ success: false, message: holdResult.message });
-        return;
-      }
-      isPaid = true;
     }
 
     // Create a new Team record for this tournament roster with auto-generated unique team tag
@@ -791,101 +785,138 @@ export async function registerForTournament(req: AuthenticatedRequest, res: Resp
       uniqueTeamName = `${rawTeamName} #${Date.now().toString().slice(-6)}`;
     }
 
-    const team = await prisma.team.create({
-      data: {
-        name: uniqueTeamName,
-        tag: uniqueTeamTag.slice(0, 6),
-        leaderId: userId,
-        maxMembers: requiredSlots,
-        members: {
-          create: verifiedPlayers.map((p) => ({
-            userId: p.id,
-            role: p.id === userId ? 'LEADER' : 'MEMBER',
-          })),
-        },
-      },
-    });
+    try {
+      const { entry, team } = await prisma.$transaction(async (tx) => {
+        // Atomic capacity check inside transaction
+        const currentEntries = await tx.tournamentEntry.count({ where: { tournamentId } });
+        if (currentEntries >= tournament.maxParticipants) {
+          throw new Error('Tournament is full');
+        }
 
-    const entry = await prisma.tournamentEntry.create({
-      data: {
-        tournamentId,
-        userId,
-        teamId: team.id,
-        isPaid,
-      },
-      include: {
-        tournament: { select: { title: true, startTime: true } },
-        user: { select: { id: true, username: true } },
-        team: {
-          select: {
-            id: true,
-            name: true,
-            tag: true,
+        if (totalTeamFee > 0 && wallet) {
+          const holdResult = await escrowService.holdFunds(wallet.id, userId, tournamentId, totalTeamFee);
+          if (!holdResult.success) {
+            throw new Error(holdResult.message);
+          }
+          isPaid = true;
+        }
+
+        const createdTeam = await tx.team.create({
+          data: {
+            name: uniqueTeamName,
+            tag: uniqueTeamTag.slice(0, 6),
+            leaderId: userId,
+            maxMembers: requiredSlots,
             members: {
-              include: {
-                user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+              create: verifiedPlayers.map((p) => ({
+                userId: p.id,
+                role: p.id === userId ? 'LEADER' : 'MEMBER',
+              })),
+            },
+          },
+        });
+
+        const createdEntry = await tx.tournamentEntry.create({
+          data: {
+            tournamentId,
+            userId,
+            teamId: createdTeam.id,
+            isPaid,
+          },
+          include: {
+            tournament: { select: { title: true, startTime: true } },
+            user: { select: { id: true, username: true } },
+            team: {
+              select: {
+                id: true,
+                name: true,
+                tag: true,
+                members: {
+                  include: {
+                    user: { select: { id: true, username: true, ign: true, freeFireId: true, gameLevel: true, isVerified: true } },
+                  },
+                },
               },
             },
           },
-        },
-      },
-    });
+        });
 
-    res.status(201).json({
-      success: true,
-      data: entry,
-      message: `Team "${team.name}" registered successfully with ${verifiedPlayers.length} verified players!`,
-    });
-    return;
+        return { entry: createdEntry, team: createdTeam };
+      });
+
+      res.status(201).json({
+        success: true,
+        data: entry,
+        message: `Team "${team.name}" registered successfully with ${verifiedPlayers.length} verified players!`,
+      });
+      return;
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || 'Team registration failed' });
+      return;
+    }
   }
 
   // SOLO Registration
-  const existingSolo = await prisma.tournamentEntry.findFirst({
-    where: {
-      tournamentId,
-      OR: [
-        { userId },
-        { team: { members: { some: { userId } } } },
-      ],
-    },
-  });
-
-  if (existingSolo) {
-    res.status(409).json({ success: false, message: 'You are already registered in this tournament' });
-    return;
-  }
-
   const entryFee = Number(tournament.entryFee);
   let isPaid = entryFee === 0;
 
+  let wallet: any = null;
   if (entryFee > 0) {
-    const wallet = await prisma.wallet.findUnique({ where: { userId } });
+    wallet = await prisma.wallet.findUnique({ where: { userId } });
     if (!wallet || Number(wallet.balance) < entryFee) {
       res.status(400).json({ success: false, message: 'Insufficient wallet balance for entry fee' });
       return;
     }
-
-    const holdResult = await escrowService.holdFunds(wallet.id, userId, tournamentId, entryFee);
-    if (!holdResult.success) {
-      res.status(400).json({ success: false, message: holdResult.message });
-      return;
-    }
-    isPaid = true;
   }
 
-  const entry = await prisma.tournamentEntry.create({
-    data: {
-      tournamentId,
-      userId,
-      isPaid,
-    },
-    include: {
-      tournament: { select: { title: true, startTime: true } },
-      user: { select: { id: true, username: true, freeFireId: true, ign: true } },
-    },
-  });
+  try {
+    const entry = await prisma.$transaction(async (tx) => {
+      // Atomic capacity check inside transaction
+      const currentEntries = await tx.tournamentEntry.count({ where: { tournamentId } });
+      if (currentEntries >= tournament.maxParticipants) {
+        throw new Error('Tournament is full');
+      }
 
-  res.status(201).json({ success: true, data: entry, message: 'Successfully registered for tournament!' });
+      const existingSolo = await tx.tournamentEntry.findFirst({
+        where: {
+          tournamentId,
+          OR: [
+            { userId },
+            { team: { members: { some: { userId } } } },
+          ],
+        },
+      });
+
+      if (existingSolo) {
+        throw new Error('You are already registered in this tournament');
+      }
+
+      if (entryFee > 0 && wallet) {
+        const holdResult = await escrowService.holdFunds(wallet.id, userId, tournamentId, entryFee);
+        if (!holdResult.success) {
+          throw new Error(holdResult.message);
+        }
+        isPaid = true;
+      }
+
+      return tx.tournamentEntry.create({
+        data: {
+          tournamentId,
+          userId,
+          isPaid,
+        },
+        include: {
+          tournament: { select: { title: true, startTime: true } },
+          user: { select: { id: true, username: true, freeFireId: true, ign: true } },
+        },
+      });
+    });
+
+    res.status(201).json({ success: true, data: entry, message: 'Successfully registered for tournament!' });
+  } catch (err: any) {
+    const isConflict = err.message === 'You are already registered in this tournament';
+    res.status(isConflict ? 409 : 400).json({ success: false, message: err.message || 'Registration failed' });
+  }
 }
 
 export async function updateEntryScore(req: AuthenticatedRequest, res: Response): Promise<void> {
