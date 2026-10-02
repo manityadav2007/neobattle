@@ -77,8 +77,7 @@ api.interceptors.response.use(
         const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
         const newAccessToken = data.data.accessToken;
         const newRefreshToken = data.data.refreshToken;
-        localStorage.setItem('accessToken', newAccessToken);
-        localStorage.setItem('refreshToken', newRefreshToken);
+        setAuthTokens(newAccessToken, newRefreshToken);
         processQueue(null, newAccessToken);
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -133,7 +132,9 @@ export function setAuthTokens(accessToken: string, refreshToken: string): void {
   localStorage.setItem('refreshToken', refreshToken);
   if (typeof document !== 'undefined') {
     const isHttps = window.location.protocol === 'https:';
-    document.cookie = `accessToken=${accessToken}; path=/; max-age=604800; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+    const secureFlag = isHttps ? '; Secure' : '';
+    document.cookie = `accessToken=${accessToken}; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
+    document.cookie = `token=${accessToken}; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
   }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(TOKENS_CHANGED_EVENT));
@@ -145,6 +146,7 @@ export function clearAuthTokens(): void {
   localStorage.removeItem('refreshToken');
   if (typeof document !== 'undefined') {
     document.cookie = 'accessToken=; path=/; max-age=0; SameSite=Lax';
+    document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
     document.cookie = 'userRole=; path=/; max-age=0; SameSite=Lax';
     document.cookie = 'userEmail=; path=/; max-age=0; SameSite=Lax';
   }

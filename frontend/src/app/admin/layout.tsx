@@ -7,13 +7,14 @@ import { Loader2 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, loading, isSuperAdmin } = useAuth();
+  const { user, loading, isSuperAdmin, isAdmin } = useAuth();
+  const hasAccess = isSuperAdmin || isAdmin;
 
   useEffect(() => {
-    if (!loading && (!user || !isSuperAdmin)) {
+    if (!loading && (!user || !hasAccess)) {
       router.push(user ? '/dashboard' : '/login');
     }
-  }, [user, loading, isSuperAdmin, router]);
+  }, [user, loading, hasAccess, router]);
 
   if (loading) {
     return (
@@ -23,7 +24,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!user || !isSuperAdmin) return null;
+  if (!user || !hasAccess) return null;
 
   return <>{children}</>;
 }

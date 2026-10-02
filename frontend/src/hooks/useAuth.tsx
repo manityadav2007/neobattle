@@ -85,12 +85,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem('accessToken');
+      if (storedToken) {
+        const isHttps = window.location.protocol === 'https:';
+        const secureFlag = isHttps ? '; Secure' : '';
+        const cookieVal = `${storedToken}; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
+        if (!document.cookie.includes('accessToken=')) {
+          document.cookie = `accessToken=${cookieVal}`;
+        }
+        if (!document.cookie.includes('token=')) {
+          document.cookie = `token=${cookieVal}`;
+        }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (user) {
+      const storedToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+      if (storedToken) {
+        const isHttps = window.location.protocol === 'https:';
+        const secureFlag = isHttps ? '; Secure' : '';
+        document.cookie = `accessToken=${storedToken}; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
+        document.cookie = `token=${storedToken}; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
+      }
       document.cookie = `userRole=${user.role}; path=/; max-age=2592000; SameSite=Lax`;
       document.cookie = `userEmail=${user.email}; path=/; max-age=2592000; SameSite=Lax`;
     } else {
-      document.cookie = 'userRole=; path=/; max-age=0';
-      document.cookie = 'userEmail=; path=/; max-age=0';
+      document.cookie = 'accessToken=; path=/; max-age=0; SameSite=Lax';
+      document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
+      document.cookie = 'userRole=; path=/; max-age=0; SameSite=Lax';
+      document.cookie = 'userEmail=; path=/; max-age=0; SameSite=Lax';
     }
   }, [user]);
 
@@ -138,11 +164,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL || 'ymanit330@gmail.com';
-  const isOwner = user?.email === ownerEmail;
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || isOwner;
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'MODERATOR' || isSuperAdmin;
-  const isHost = user?.role === 'HOST';
+  const ownerEmail = (process.env.NEXT_PUBLIC_OWNER_EMAIL || 'ymanit330@gmail.com').trim().toLowerCase();
+  const userEmail = (user?.email || '').trim().toLowerCase();
+  const userRole = (user?.role || '').trim().toUpperCase();
+  const isOwner = Boolean(userEmail) && userEmail === ownerEmail;
+  const isSuperAdmin = userRole === 'SUPER_ADMIN' || isOwner;
+  const isAdmin = userRole === 'ADMIN' || userRole === 'MODERATOR' || isSuperAdmin;
+  const isHost = userRole === 'HOST';
   const canAccessWallet = !!user;
 
   return (
