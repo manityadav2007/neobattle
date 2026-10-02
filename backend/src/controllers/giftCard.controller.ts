@@ -58,42 +58,49 @@ export async function redeemGiftCard(req: AuthenticatedRequest, res: Response): 
     return;
   }
 
-  const wallet = await prisma.wallet.findUnique({ where: { userId } });
-  if (!wallet || Number(wallet.balance) < Number(giftCard.priceInCoins)) {
-    res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
-    return;
+  const priceDecimal = new Decimal(Number(giftCard.priceInCoins));
+
+  try {
+    const redemption = await prisma.$transaction(async (tx) => {
+      const deduct = await tx.wallet.updateMany({
+        where: { userId, balance: { gte: priceDecimal } },
+        data: { balance: { decrement: priceDecimal } },
+      });
+
+      if (deduct.count === 0) {
+        throw new Error('Insufficient wallet balance');
+      }
+
+      const created = await tx.giftCardRedemption.create({
+        data: { userId, giftCardId, status: 'PENDING' },
+      });
+
+      const userWallet = await tx.wallet.findUnique({ where: { userId } });
+      if (!userWallet) throw new Error('Wallet not found');
+
+      await tx.transaction.create({
+        data: {
+          userId,
+          walletId: userWallet.id,
+          type: 'WITHDRAWAL',
+          status: 'PENDING',
+          amount: priceDecimal,
+          description: `Gift card purchase: ${giftCard.name} (₹${Number(giftCard.value)}) — pending admin approval`,
+          metadata: { redemptionId: created.id, method: 'GIFT_CARD' },
+        },
+      });
+
+      return created;
+    });
+
+    res.json({
+      success: true,
+      data: redemption,
+      message: 'Purchase complete! Your redeem code will appear in My Redemptions once the admin approves your request.',
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message || 'Purchase failed' });
   }
-
-  const redemption = await prisma.$transaction(async (tx) => {
-    await tx.wallet.update({
-      where: { userId },
-      data: { balance: { decrement: giftCard.priceInCoins } },
-    });
-
-    const created = await tx.giftCardRedemption.create({
-      data: { userId, giftCardId, status: 'PENDING' },
-    });
-
-    await tx.transaction.create({
-      data: {
-        userId,
-        walletId: wallet.id,
-        type: 'WITHDRAWAL',
-        status: 'PENDING',
-        amount: new Decimal(Number(giftCard.priceInCoins)),
-        description: `Gift card purchase: ${giftCard.name} (₹${Number(giftCard.value)}) — pending admin approval`,
-        metadata: { redemptionId: created.id, method: 'GIFT_CARD' },
-      },
-    });
-
-    return created;
-  });
-
-  res.json({
-    success: true,
-    data: redemption,
-    message: 'Purchase complete! Your redeem code will appear in My Redemptions once the admin approves your request.',
-  });
 }
 
 export async function listRedemptions(req: AuthenticatedRequest, res: Response): Promise<void> {

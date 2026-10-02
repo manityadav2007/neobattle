@@ -21,9 +21,14 @@ class EscrowService {
     amount: number
   ): Promise<EscrowHoldResult> {
     return prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { id: walletId } });
+      const holdDecimal = new Decimal(amount);
 
-      if (!wallet || Number(wallet.balance) < amount) {
+      const deduct = await tx.wallet.updateMany({
+        where: { id: walletId, balance: { gte: holdDecimal } },
+        data: { balance: { decrement: holdDecimal } },
+      });
+
+      if (deduct.count === 0) {
         return { success: false, message: 'Insufficient wallet balance' };
       }
 
@@ -31,14 +36,9 @@ class EscrowService {
         data: {
           walletId,
           tournamentId,
-          amount: new Decimal(amount),
+          amount: holdDecimal,
           status: EscrowStatus.HELD,
         },
-      });
-
-      await tx.wallet.update({
-        where: { id: walletId },
-        data: { balance: { decrement: amount } },
       });
 
       await tx.transaction.create({

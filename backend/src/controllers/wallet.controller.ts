@@ -141,37 +141,52 @@ export async function withdraw(req: AuthenticatedRequest, res: Response): Promis
     return;
   }
 
-  if (Number(wallet.balance) < Number(amount)) {
-    res.status(400).json({ success: false, message: 'Insufficient balance' });
-    return;
-  }
+  const withdrawDecimal = new Decimal(Number(amount));
 
-  const [updatedWallet, transaction] = await prisma.$transaction([
-    prisma.wallet.update({
-      where: { id: wallet.id },
-      data: { balance: { decrement: Number(amount) } },
-    }),
-    prisma.transaction.create({
+  try {
+    const { updatedWallet, transaction } = await prisma.$transaction(async (tx) => {
+      // Atomic conditional decrement: row check guarantees balance >= amount at execution time
+      const deduct = await tx.wallet.updateMany({
+        where: {
+          id: wallet.id,
+          balance: { gte: withdrawDecimal },
+        },
+        data: {
+          balance: { decrement: withdrawDecimal },
+        },
+      });
+
+      if (deduct.count === 0) {
+        throw new Error('Insufficient balance');
+      }
+
+      const txRecord = await tx.transaction.create({
+        data: {
+          walletId: wallet.id,
+          userId,
+          type: TransactionType.WITHDRAWAL,
+          status: TransactionStatus.PENDING,
+          amount: withdrawDecimal,
+          description: `Withdrawal request to ${payoutLabel} — pending admin approval`,
+          metadata: { payout: payoutDetails, isAdminReviewRequired: true },
+        },
+      });
+
+      const freshWallet = await tx.wallet.findUnique({ where: { id: wallet.id } });
+      return { updatedWallet: freshWallet, transaction: txRecord };
+    });
+
+    res.json({
+      success: true,
+      message: 'Withdrawal request submitted! Funds are held until the admin processes your payout.',
       data: {
-        walletId: wallet.id,
-        userId,
-        type: TransactionType.WITHDRAWAL,
-        status: TransactionStatus.PENDING,
-        amount: new Decimal(Number(amount)),
-        description: `Withdrawal request to ${payoutLabel} — pending admin approval`,
-        metadata: { payout: payoutDetails, isAdminReviewRequired: true },
+        balance: Number(updatedWallet?.balance ?? 0),
+        transaction: { ...transaction, amount: Number(transaction.amount) },
       },
-    }),
-  ]);
-
-  res.json({
-    success: true,
-    message: 'Withdrawal request submitted! Funds are held until the admin processes your payout.',
-    data: {
-      balance: Number(updatedWallet.balance),
-      transaction: { ...transaction, amount: Number(transaction.amount) },
-    },
-  });
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message || 'Withdrawal request failed' });
+  }
 }
 
 export async function getTransactions(req: AuthenticatedRequest, res: Response): Promise<void> {
