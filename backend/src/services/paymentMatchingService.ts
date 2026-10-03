@@ -129,18 +129,9 @@ export class PaymentMatchingService {
         throw new Error('Merchant UPI ID is not configured on the server. Please set MERCHANT_UPI_ID in the environment variables (.env).');
       }
       const merchantName = (process.env.UPI_MERCHANT_NAME || 'NeoBattle').trim();
-      const upiDeepLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&am=${actualQrAmount.toFixed(2)}&cu=INR`;
+      const merchantCode = (process.env.UPI_MERCHANT_CODE || '0000').trim();
 
-      // Generate Base64 QR code image
-      const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
-        margin: 1,
-        width: 320,
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-      });
-
+      // 1. Create transaction record first to generate unique transaction ID (CUID)
       const transaction = await prisma.transaction.create({
         data: {
           walletId: wallet.id,
@@ -154,6 +145,37 @@ export class PaymentMatchingService {
           timerExpiresAt,
           expiresAt,
           description: `Automated UPI deposit of ₹${cleanRequested}`,
+        },
+      });
+
+      // 2. Build standard NPCI UPI URI matching the working PhonePe QR parameters:
+      // - pa: Payee UPI ID (unencoded '@' so UPI apps do not fail VPA validation on '%40')
+      // - pn: Payee Name (URL-encoded)
+      // - mc: Merchant Category Code ('0000' for retail/default merchant)
+      // - mode: 02 (Dynamic / Secure QR initiation mode required by PhonePe to prevent security decline)
+      // - purpose: 00 (Default purpose code)
+      // - am: Exact amount formatted to 2 decimals
+      // - cu: Currency (INR)
+      // - tr: Transaction Reference ID (transaction.id, alphanumeric <= 35 chars)
+      // - tn: Transaction Note (URL-encoded note)
+      const transactionRef = transaction.id;
+      const transactionNote = encodeURIComponent(`${merchantName} Deposit`);
+      const upiDeepLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&mc=${merchantCode}&mode=02&purpose=00&am=${actualQrAmount.toFixed(2)}&cu=INR&tr=${transactionRef}&tn=${transactionNote}`;
+
+      // 3. Generate Base64 QR code image from the exact same compliant URI
+      const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
+        margin: 1,
+        width: 320,
+        color: {
+          dark: '#000000',
+          light: '#ffffff',
+        },
+      });
+
+      // 4. Update transaction metadata with the generated deep-link
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
           metadata: {
             upiDeepLink,
             offset,
