@@ -14,21 +14,21 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 
 const SUPER_ADMIN_EMAIL = process.env.OWNER_EMAIL || process.env.SUPER_ADMIN_EMAIL || 'ymanit330@gmail.com';
 
-const oauthCodeMap = new Map<string, { tokens: TokenPair; expiresAt: number }>();
+const oauthCodeMap = new Map<string, { tokens: TokenPair; expiresAt: number; usedAt?: number }>();
 
 // Periodic cleanup of expired codes
 setInterval(() => {
   const now = Date.now();
   for (const [code, entry] of oauthCodeMap.entries()) {
-    if (now > entry.expiresAt) {
+    if (now > entry.expiresAt || (entry.usedAt && now - entry.usedAt > 15_000)) {
       oauthCodeMap.delete(code);
     }
   }
-}, 60_000);
+}, 30_000);
 
 function createOAuthCode(tokens: TokenPair): string {
   const code = uuidv4();
-  // Single-use code valid for 60 seconds
+  // Valid for 60 seconds
   oauthCodeMap.set(code, { tokens, expiresAt: Date.now() + 60_000 });
   return code;
 }
@@ -46,11 +46,26 @@ export async function exchangeOAuthCode(req: Request, res: Response): Promise<vo
     return;
   }
 
-  oauthCodeMap.delete(code); // single-use burn
-
   if (Date.now() > entry.expiresAt) {
+    oauthCodeMap.delete(code);
     res.status(400).json({ success: false, message: 'Exchange code has expired' });
     return;
+  }
+
+  // Grace window: if the code was already exchanged in the last 15 seconds, return the same tokens
+  // to safely absorb rapid concurrent/double-mount React requests without failing.
+  if (entry.usedAt) {
+    if (Date.now() - entry.usedAt > 15_000) {
+      oauthCodeMap.delete(code);
+      res.status(400).json({ success: false, message: 'Exchange code has already been used' });
+      return;
+    }
+  } else {
+    entry.usedAt = Date.now();
+    // Schedule permanent removal after 15 seconds grace window
+    setTimeout(() => {
+      oauthCodeMap.delete(code);
+    }, 15_000);
   }
 
   res.json({

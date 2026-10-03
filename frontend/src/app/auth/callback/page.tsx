@@ -1,11 +1,35 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setAuthTokens, api, ApiResponse } from '@/lib/api';
 import { authApi } from '@/lib/services';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
+
+export const dynamic = 'force-dynamic';
+
+function extractAuthParams(searchParams: URLSearchParams | null): {
+  code: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  authError: string | null;
+} {
+  let code = searchParams?.get('code') || null;
+  let accessToken = searchParams?.get('accessToken') || null;
+  let refreshToken = searchParams?.get('refreshToken') || null;
+  let authError = searchParams?.get('error') || null;
+
+  if (typeof window !== 'undefined' && window.location.search) {
+    const sp = new URLSearchParams(window.location.search);
+    if (!code) code = sp.get('code');
+    if (!accessToken) accessToken = sp.get('accessToken');
+    if (!refreshToken) refreshToken = sp.get('refreshToken');
+    if (!authError) authError = sp.get('error');
+  }
+
+  return { code, accessToken, refreshToken, authError };
+}
 
 function CallbackContent() {
   const router = useRouter();
@@ -14,78 +38,121 @@ function CallbackContent() {
   const [error, setError] = useState('');
   const [step, setStep] = useState('Processing...');
 
+  const isProcessingRef = useRef(false);
+  const hasCompletedRef = useRef(false);
+
   useEffect(() => {
-    if (user) {
+    if (user && hasCompletedRef.current) {
       router.replace('/dashboard');
       return;
     }
 
-    const code = searchParams.get('code');
-    const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken');
+    let attempts = 0;
+    const maxAttempts = 15; // 1.5 seconds max polling window
+    let timerId: NodeJS.Timeout | null = null;
+    let isCancelled = false;
 
-    if (!code && (!accessToken || !refreshToken)) {
-      const authError = searchParams.get('error');
-      setError(authError ? `Authentication failed (${authError}). Please try again.` : 'Invalid authentication response.');
-      return;
-    }
+    const checkAndProcess = async () => {
+      if (isCancelled || hasCompletedRef.current) return;
 
-    let cancelled = false;
+      const params = extractAuthParams(searchParams);
 
-    (async () => {
-      let finalAccessToken = accessToken;
-      let finalRefreshToken = refreshToken;
+      if (params.authError) {
+        setError(`Authentication failed (${params.authError}). Please try again.`);
+        return;
+      }
 
-      if (code) {
+      if (!params.code && (!params.accessToken || !params.refreshToken)) {
+        attempts++;
+        if (attempts < maxAttempts) {
+          timerId = setTimeout(checkAndProcess, 100);
+          return;
+        }
+        setError('Invalid authentication response.');
+        return;
+      }
+
+      if (isProcessingRef.current) return;
+      isProcessingRef.current = true;
+
+      let finalAccessToken = params.accessToken;
+      let finalRefreshToken = params.refreshToken;
+
+      if (params.code) {
         setStep('Exchanging authorization code...');
-        try {
-          const res = await api.post<ApiResponse<{ accessToken: string; refreshToken: string }>>('/auth/oauth-exchange', { code });
-          if (cancelled) return;
-          if (res.data?.data) {
-            finalAccessToken = res.data.data.accessToken;
-            finalRefreshToken = res.data.data.refreshToken;
-          } else {
-            setError(res.data?.message || 'Failed to exchange authorization code');
-            return;
+        let exchangeSuccess = false;
+        let lastErrorMsg = '';
+
+        for (let retry = 0; retry < 3 && !exchangeSuccess && !isCancelled; retry++) {
+          try {
+            const res = await api.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
+              '/auth/oauth-exchange',
+              { code: params.code }
+            );
+            if (res.data?.data) {
+              finalAccessToken = res.data.data.accessToken;
+              finalRefreshToken = res.data.data.refreshToken;
+              exchangeSuccess = true;
+            } else {
+              lastErrorMsg = res.data?.message || 'Failed to exchange authorization code';
+            }
+          } catch (err: any) {
+            lastErrorMsg = err.response?.data?.message || 'Authorization exchange failed';
+            await new Promise((r) => setTimeout(r, 200));
           }
-        } catch (err: any) {
-          if (cancelled) return;
-          setError(err.response?.data?.message || 'Authorization exchange failed');
+        }
+
+        if (isCancelled) return;
+
+        if (!exchangeSuccess || !finalAccessToken || !finalRefreshToken) {
+          setError(lastErrorMsg || 'Authorization exchange failed. Please try logging in again.');
+          isProcessingRef.current = false;
           return;
         }
       }
 
       if (!finalAccessToken || !finalRefreshToken) {
         setError('Missing authentication tokens');
+        isProcessingRef.current = false;
         return;
       }
 
       setStep('Storing session...');
       setAuthTokens(finalAccessToken, finalRefreshToken);
 
-      // Clean sensitive query parameters from browser history immediately
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', '/auth/callback');
       }
 
       setStep('Verifying session...');
-      try {
-        const res = await authApi.me();
-        if (cancelled) return;
-        if (res.data) {
-          setStep('Redirecting...');
-          setUser(res.data);
-          router.replace('/dashboard');
-        } else {
-          setError('Failed to load user profile');
+      let profileUser = null;
+      for (let retry = 0; retry < 3 && !profileUser && !isCancelled; retry++) {
+        try {
+          const res = await authApi.me();
+          if (res.data) {
+            profileUser = res.data;
+          }
+        } catch {
+          await new Promise((r) => setTimeout(r, 200));
         }
-      } catch (err) {
-        if (cancelled) return;
-        setError('Session verification failed. Please try logging in again.');
       }
-    })();
 
-    return () => { cancelled = true; };
+      if (isCancelled) return;
+
+      hasCompletedRef.current = true;
+      setStep('Redirecting...');
+      if (profileUser) {
+        setUser(profileUser);
+      }
+      router.replace('/dashboard');
+    };
+
+    checkAndProcess();
+
+    return () => {
+      isCancelled = true;
+      if (timerId) clearTimeout(timerId);
+    };
   }, [searchParams, router, setUser, user]);
 
   if (error) {
