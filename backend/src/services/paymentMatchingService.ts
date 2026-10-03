@@ -131,7 +131,6 @@ export class PaymentMatchingService {
         throw new Error('Merchant UPI ID is not configured on the server. Please set MERCHANT_UPI_ID in the environment variables (.env).');
       }
       const merchantName = (process.env.UPI_MERCHANT_NAME || 'NeoBattle').trim();
-      const merchantCode = (process.env.UPI_MERCHANT_CODE || '0000').trim();
 
       // 1. REUSE EXISTING ORDER: Check if user already has an ACTIVE (non-expired) pending deposit for this base amount
       const existing = await prisma.transaction.findFirst({
@@ -150,8 +149,13 @@ export class PaymentMatchingService {
       if (existing && existing.actualQrAmount && existing.timerExpiresAt && existing.expiresAt) {
         const actualQrAmount = Number(existing.actualQrAmount);
         const transactionRef = existing.id;
-        const transactionNote = encodeURIComponent(`${merchantName} Deposit`);
-        const upiDeepLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&mc=${merchantCode}&mode=02&purpose=00&am=${actualQrAmount.toFixed(2)}&cu=INR&tr=${transactionRef}&tn=${transactionNote}`;
+        const upiDeepLink = this.buildUpiUri(
+          upiId,
+          merchantName,
+          actualQrAmount,
+          transactionRef,
+          `${merchantName} Deposit`
+        );
 
         const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
           margin: 1,
@@ -223,10 +227,15 @@ export class PaymentMatchingService {
         },
       });
 
-      // Build standard NPCI UPI URI matching the working PhonePe QR parameters
+      // Build standard NPCI-compliant UPI URI (omits merchant-only fields mc/mode/purpose for personal VPA)
       const transactionRef = transaction.id;
-      const transactionNote = encodeURIComponent(`${merchantName} Deposit`);
-      const upiDeepLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&mc=${merchantCode}&mode=02&purpose=00&am=${actualQrAmount.toFixed(2)}&cu=INR&tr=${transactionRef}&tn=${transactionNote}`;
+      const upiDeepLink = this.buildUpiUri(
+        upiId,
+        merchantName,
+        actualQrAmount,
+        transactionRef,
+        `${merchantName} Deposit`
+      );
 
       // Generate Base64 QR code image from the exact same compliant URI
       const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
@@ -261,6 +270,33 @@ export class PaymentMatchingService {
     } finally {
       release();
     }
+  }
+
+  /**
+   * Constructs standard NPCI-compliant UPI URI for peer-to-peer / personal VPA payment.
+   * Merchant parameters (mc, mode, purpose) are omitted because the payee is a personal UPI ID,
+   * avoiding technical declines / security alerts triggered by merchant/personal VPA mismatches.
+   */
+  private buildUpiUri(
+    upiId: string,
+    payeeName: string,
+    amount: number,
+    transactionRef: string,
+    transactionNote: string
+  ): string {
+    const encodedName = encodeURIComponent(payeeName);
+    const encodedNote = encodeURIComponent(transactionNote);
+    const formattedAmount = amount.toFixed(2);
+
+    let uri = `upi://pay?pa=${upiId}&pn=${encodedName}&am=${formattedAmount}&cu=INR&tr=${transactionRef}&tn=${encodedNote}`;
+
+    // Only include merchant category code if explicitly set and not '0000' (registered merchant account)
+    const merchantCode = process.env.UPI_MERCHANT_CODE?.trim();
+    if (merchantCode && merchantCode !== '0000') {
+      uri += `&mc=${merchantCode}`;
+    }
+
+    return uri;
   }
 
   /**
