@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setAuthTokens, api, ApiResponse } from '@/lib/api';
+import { setAuthTokens, isAuthenticated, api, ApiResponse } from '@/lib/api';
 import { authApi } from '@/lib/services';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
@@ -38,42 +38,59 @@ function CallbackContent() {
   const [error, setError] = useState('');
   const [step, setStep] = useState('Processing...');
 
-  const isProcessingRef = useRef(false);
-  const hasCompletedRef = useRef(false);
+  const hasProcessedRef = useRef(false);
 
+  // 1. Immediately redirect whenever authenticated
   useEffect(() => {
-    if (user && hasCompletedRef.current) {
+    if (user || isAuthenticated()) {
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
+
+  // 2. Perform code exchange once on mount
+  useEffect(() => {
+    if (hasProcessedRef.current) return;
+    if (isAuthenticated() || user) {
       router.replace('/dashboard');
       return;
     }
 
-    let attempts = 0;
-    const maxAttempts = 15; // 1.5 seconds max polling window
-    let timerId: NodeJS.Timeout | null = null;
     let isCancelled = false;
+    let timerId: NodeJS.Timeout | null = null;
+    let attempts = 0;
+    const maxAttempts = 15; // 1.5 seconds max polling for hydration
 
-    const checkAndProcess = async () => {
-      if (isCancelled || hasCompletedRef.current) return;
+    const processAuth = async () => {
+      if (isCancelled || hasProcessedRef.current) return;
 
       const params = extractAuthParams(searchParams);
 
       if (params.authError) {
+        hasProcessedRef.current = true;
         setError(`Authentication failed (${params.authError}). Please try again.`);
         return;
       }
 
+      // If no code and no tokens yet, wait for router hydration
       if (!params.code && (!params.accessToken || !params.refreshToken)) {
         attempts++;
         if (attempts < maxAttempts) {
-          timerId = setTimeout(checkAndProcess, 100);
+          timerId = setTimeout(processAuth, 100);
           return;
         }
+
+        // Before declaring error, check if user is already authenticated
+        if (isAuthenticated() || user) {
+          router.replace('/dashboard');
+          return;
+        }
+
+        hasProcessedRef.current = true;
         setError('Invalid authentication response.');
         return;
       }
 
-      if (isProcessingRef.current) return;
-      isProcessingRef.current = true;
+      hasProcessedRef.current = true;
 
       let finalAccessToken = params.accessToken;
       let finalRefreshToken = params.refreshToken;
@@ -106,56 +123,43 @@ function CallbackContent() {
 
         if (!exchangeSuccess || !finalAccessToken || !finalRefreshToken) {
           setError(lastErrorMsg || 'Authorization exchange failed. Please try logging in again.');
-          isProcessingRef.current = false;
           return;
         }
       }
 
       if (!finalAccessToken || !finalRefreshToken) {
         setError('Missing authentication tokens');
-        isProcessingRef.current = false;
         return;
       }
 
       setStep('Storing session...');
       setAuthTokens(finalAccessToken, finalRefreshToken);
 
-      if (typeof window !== 'undefined') {
-        window.history.replaceState({}, '', '/auth/callback');
-      }
-
       setStep('Verifying session...');
-      let profileUser = null;
-      for (let retry = 0; retry < 3 && !profileUser && !isCancelled; retry++) {
-        try {
-          const res = await authApi.me();
-          if (res.data) {
-            profileUser = res.data;
-          }
-        } catch {
-          await new Promise((r) => setTimeout(r, 200));
+      try {
+        const res = await authApi.me();
+        if (res.data) {
+          setUser(res.data);
         }
+      } catch {
+        // Non-blocking: tokens are stored, AuthProvider will reconcile profile
       }
 
       if (isCancelled) return;
 
-      hasCompletedRef.current = true;
       setStep('Redirecting...');
-      if (profileUser) {
-        setUser(profileUser);
-      }
       router.replace('/dashboard');
     };
 
-    checkAndProcess();
+    processAuth();
 
     return () => {
       isCancelled = true;
       if (timerId) clearTimeout(timerId);
     };
-  }, [searchParams, router, setUser, user]);
+  }, []); // Run strictly once on mount
 
-  if (error) {
+  if (error && !isAuthenticated() && !user) {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center">
         <p className="text-red-400 mb-4">{error}</p>
