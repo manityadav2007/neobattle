@@ -31,6 +31,11 @@ class SimpleMutex {
 
 const poolMutex = new SimpleMutex();
 
+// Sliding-window rate limit tracker: userId -> array of creation timestamps (ms)
+const depositCreationRateLimit = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_CREATIONS_PER_WINDOW = 5;
+
 export interface DepositOrderResult {
   transactionId: string;
   requestedAmount: number;
@@ -93,7 +98,10 @@ export class PaymentMatchingService {
   }
 
   /**
-   * Creates a new dynamic QR deposit order for a user.
+   * Creates or reuses a dynamic QR deposit order for a user.
+   * If the user already has an active, non-expired pending order for the same base amount,
+   * it returns the existing order (same paise-suffix and same timerExpiresAt) to prevent
+   * pool exhaustion and lost payments on refresh.
    */
   async createDepositOrder(userId: string, requestedAmount: number): Promise<DepositOrderResult> {
     if (!requestedAmount || requestedAmount <= 0) {
@@ -115,15 +123,9 @@ export class PaymentMatchingService {
         });
       }
 
-      // Pick next available offset (1..99)
-      const offset = await this.getNextAvailableOffset();
-      const decimalFraction = offset / 100;
-      const actualQrAmount = Number((cleanRequested + decimalFraction).toFixed(2));
+      await this.cleanupExpiredOrders();
 
       const now = new Date();
-      const timerExpiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes UI countdown
-      const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 60 minutes late match
-
       const upiId = (process.env.MERCHANT_UPI_ID || process.env.UPI_ID || '').trim();
       if (!upiId) {
         throw new Error('Merchant UPI ID is not configured on the server. Please set MERCHANT_UPI_ID in the environment variables (.env).');
@@ -131,7 +133,80 @@ export class PaymentMatchingService {
       const merchantName = (process.env.UPI_MERCHANT_NAME || 'NeoBattle').trim();
       const merchantCode = (process.env.UPI_MERCHANT_CODE || '0000').trim();
 
-      // 1. Create transaction record first to generate unique transaction ID (CUID)
+      // 1. REUSE EXISTING ORDER: Check if user already has an ACTIVE (non-expired) pending deposit for this base amount
+      const existing = await prisma.transaction.findFirst({
+        where: {
+          userId,
+          type: TransactionType.DEPOSIT,
+          status: TransactionStatus.PENDING,
+          requestedAmount: new Decimal(cleanRequested),
+          timerExpiresAt: { gt: now },
+          expiresAt: { gt: now },
+          decimalOffset: { not: null },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (existing && existing.actualQrAmount && existing.timerExpiresAt && existing.expiresAt) {
+        const actualQrAmount = Number(existing.actualQrAmount);
+        const transactionRef = existing.id;
+        const transactionNote = encodeURIComponent(`${merchantName} Deposit`);
+        const upiDeepLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&mc=${merchantCode}&mode=02&purpose=00&am=${actualQrAmount.toFixed(2)}&cu=INR&tr=${transactionRef}&tn=${transactionNote}`;
+
+        const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
+          margin: 1,
+          width: 320,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+
+        return {
+          transactionId: existing.id,
+          requestedAmount: cleanRequested,
+          actualQrAmount,
+          upiDeepLink,
+          qrCodeDataUrl,
+          timerExpiresAt: existing.timerExpiresAt,
+          expiresAt: existing.expiresAt,
+        };
+      }
+
+      // 2. RATE LIMIT: Limit creation of genuinely NEW deposit orders (max 5 per 10 mins per user)
+      const nowMs = now.getTime();
+      const userTimestamps = (depositCreationRateLimit.get(userId) || []).filter(
+        (ts) => nowMs - ts < RATE_LIMIT_WINDOW_MS
+      );
+      if (userTimestamps.length >= MAX_CREATIONS_PER_WINDOW) {
+        throw new Error('Deposit request limit reached. Please wait a few minutes before generating a new request.');
+      }
+
+      // 3. RELEASE OLDER SLOTS: If user is generating a NEW order with a DIFFERENT base amount,
+      // expire older pending orders of this user so they don't hold multiple slots in the pool.
+      await prisma.transaction.updateMany({
+        where: {
+          userId,
+          type: TransactionType.DEPOSIT,
+          status: TransactionStatus.PENDING,
+          decimalOffset: { not: null },
+        },
+        data: {
+          status: TransactionStatus.EXPIRED,
+          decimalOffset: null,
+        },
+      });
+
+      // 4. Pick next available offset (1..99)
+      const offset = await this.getNextAvailableOffset();
+      const decimalFraction = offset / 100;
+      const actualQrAmount = Number((cleanRequested + decimalFraction).toFixed(2));
+
+      const timerExpiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes UI countdown
+      const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 60 minutes late match
+
+      // Record rate limit timestamp
+      userTimestamps.push(nowMs);
+      depositCreationRateLimit.set(userId, userTimestamps);
+
+      // Create transaction record first to generate unique transaction ID (CUID)
       const transaction = await prisma.transaction.create({
         data: {
           walletId: wallet.id,
@@ -148,21 +223,12 @@ export class PaymentMatchingService {
         },
       });
 
-      // 2. Build standard NPCI UPI URI matching the working PhonePe QR parameters:
-      // - pa: Payee UPI ID (unencoded '@' so UPI apps do not fail VPA validation on '%40')
-      // - pn: Payee Name (URL-encoded)
-      // - mc: Merchant Category Code ('0000' for retail/default merchant)
-      // - mode: 02 (Dynamic / Secure QR initiation mode required by PhonePe to prevent security decline)
-      // - purpose: 00 (Default purpose code)
-      // - am: Exact amount formatted to 2 decimals
-      // - cu: Currency (INR)
-      // - tr: Transaction Reference ID (transaction.id, alphanumeric <= 35 chars)
-      // - tn: Transaction Note (URL-encoded note)
+      // Build standard NPCI UPI URI matching the working PhonePe QR parameters
       const transactionRef = transaction.id;
       const transactionNote = encodeURIComponent(`${merchantName} Deposit`);
       const upiDeepLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&mc=${merchantCode}&mode=02&purpose=00&am=${actualQrAmount.toFixed(2)}&cu=INR&tr=${transactionRef}&tn=${transactionNote}`;
 
-      // 3. Generate Base64 QR code image from the exact same compliant URI
+      // Generate Base64 QR code image from the exact same compliant URI
       const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
         margin: 1,
         width: 320,
@@ -172,7 +238,7 @@ export class PaymentMatchingService {
         },
       });
 
-      // 4. Update transaction metadata with the generated deep-link
+      // Update transaction metadata with the generated deep-link
       await prisma.transaction.update({
         where: { id: transaction.id },
         data: {
@@ -195,6 +261,33 @@ export class PaymentMatchingService {
     } finally {
       release();
     }
+  }
+
+  /**
+   * Explicitly cancels an active pending deposit order and frees its decimalOffset.
+   */
+  async cancelDepositOrder(userId: string, transactionId: string) {
+    const tx = await prisma.transaction.findFirst({
+      where: {
+        id: transactionId,
+        userId,
+        status: { in: [TransactionStatus.PENDING, TransactionStatus.AWAITING_LATE_MATCH] },
+      },
+    });
+
+    if (!tx) {
+      return { success: false, message: 'Active deposit order not found' };
+    }
+
+    await prisma.transaction.update({
+      where: { id: tx.id },
+      data: {
+        status: TransactionStatus.CANCELLED,
+        decimalOffset: null,
+      },
+    });
+
+    return { success: true, message: 'Deposit order cancelled and slot released' };
   }
 
   /**

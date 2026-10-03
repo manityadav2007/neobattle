@@ -78,8 +78,6 @@ function DepositContent() {
     setError('');
     setIsSuccess(false);
     setIsTimerExpired(false);
-    // Always initialize timer at exactly 5 minutes (300 seconds)
-    setTimeLeft(FIVE_MINUTES_SECONDS);
     setOrder(null);
 
     try {
@@ -87,8 +85,18 @@ function DepositContent() {
       if (res.success && res.data) {
         setOrder(res.data);
         setCreditedAmount(res.data.requestedAmount);
-        // Start countdown from exactly 300 seconds
-        setTimeLeft(FIVE_MINUTES_SECONDS);
+        
+        // Calculate remaining seconds strictly from the server's timerExpiresAt
+        if (res.data.timerExpiresAt) {
+          const diffMs = new Date(res.data.timerExpiresAt).getTime() - Date.now();
+          const sec = Math.max(0, Math.floor(diffMs / 1000));
+          setTimeLeft(sec);
+          if (sec <= 0) {
+            setIsTimerExpired(true);
+          }
+        } else {
+          setTimeLeft(FIVE_MINUTES_SECONDS);
+        }
       } else {
         setError(res.message || 'Unable to generate payment QR. Please try again.');
       }
@@ -97,6 +105,20 @@ function DepositContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancelOrder = async () => {
+    if (order?.transactionId) {
+      try {
+        await dynamicDepositApi.cancel(order.transactionId);
+      } catch {
+        // Silently continue
+      }
+    }
+    setOrder(null);
+    setIsTimerExpired(false);
+    setTimeLeft(FIVE_MINUTES_SECONDS);
+    router.replace('/wallet/deposit');
   };
 
   // Automatically start order if initialAmount was in URL params
@@ -323,6 +345,14 @@ function DepositContent() {
                       </>
                     )}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCancelOrder}
+                    className="w-full text-center py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    Cancel & Choose Different Amount
+                  </button>
                 </div>
               </div>
 
@@ -424,6 +454,16 @@ function DepositContent() {
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500" />
                       </span>
                       <span>Still verifying your transfer in the background...</span>
+                    </div>
+
+                    <div className="pt-2 border-t border-orange-500/15">
+                      <button
+                        type="button"
+                        onClick={handleCancelOrder}
+                        className="w-full py-2.5 px-3 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 font-semibold text-xs border border-orange-500/30 transition-colors"
+                      >
+                        Start New Deposit Request
+                      </button>
                     </div>
                   </div>
                 )}

@@ -59,7 +59,10 @@ export default function DynamicDepositModal({
           if (res.data.timerExpiresAt) {
             const diffMs = new Date(res.data.timerExpiresAt).getTime() - Date.now();
             const sec = Math.max(0, Math.floor(diffMs / 1000));
-            setTimeLeft(sec > 0 ? sec : FIVE_MINUTES_SECONDS);
+            setTimeLeft(sec);
+            if (sec <= 0) {
+              setIsTimerExpired(true);
+            }
           }
         } else {
           setError(res.message || 'Failed to generate payment QR');

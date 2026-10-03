@@ -235,6 +235,23 @@ export async function getDepositOrderStatus(req: AuthenticatedRequest, res: Resp
   }
 }
 
+export async function cancelDepositOrder(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { transactionId } = req.params;
+  const userId = req.user!.id;
+
+  if (!transactionId) {
+    res.status(400).json({ success: false, message: 'Transaction ID is required' });
+    return;
+  }
+
+  try {
+    const result = await paymentMatchingService.cancelDepositOrder(userId, transactionId);
+    res.json({ success: true, message: result.message });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message || 'Failed to cancel deposit order' });
+  }
+}
+
 // ── Admin: Unmatched Payments Management ────────────────────────────────────
 
 export async function listUnmatchedPayments(req: AuthenticatedRequest, res: Response): Promise<void> {

@@ -895,6 +895,10 @@ export const dynamicDepositApi = {
     const res = await api.get(`/payment/deposit/status/${transactionId}`);
     return res.data;
   },
+  cancel: async (transactionId: string): Promise<{ success: boolean; message?: string }> => {
+    const res = await api.post(`/payment/deposit/cancel/${transactionId}`);
+    return res.data;
+  },
   listUnmatched: async (status?: 'PENDING' | 'RESOLVED' | ''): Promise<{ success: boolean; data: UnmatchedPaymentRecord[] }> => {
     const query = status ? `?status=${status}` : '';
     const res = await api.get(`/payment/unmatched${query}`);

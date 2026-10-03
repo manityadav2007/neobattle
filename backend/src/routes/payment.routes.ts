@@ -8,6 +8,7 @@ const router = Router();
 // Dynamic QR Automated Deposit Flow
 router.post('/deposit/initiate', authenticate, paymentController.initiateDynamicDeposit);
 router.get('/deposit/status/:transactionId', authenticate, paymentController.getDepositOrderStatus);
+router.post('/deposit/cancel/:transactionId', authenticate, paymentController.cancelDepositOrder);
 
 // Admin Unmatched & Auto Deposits Management
 router.get('/unmatched', authenticate, adminCheck, paymentController.listUnmatchedPayments);
