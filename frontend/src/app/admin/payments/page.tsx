@@ -375,7 +375,7 @@ export default function AdminPaymentsPage() {
                       const creditedAmt = Number(d.requestedAmount || d.amount);
                       const actualPaid = d.actualQrAmount ? Number(d.actualQrAmount) : creditedAmt;
                       const rawSms = d.metadata?.rawSms || d.description || '';
-                      const sender = d.metadata?.sender || 'Bank / PhonePe';
+                      const sender = d.metadata?.sender || 'Bank / Paytm';
                       const utr = d.reference || d.metadata?.utrNumber || 'N/A';
 
                       return (

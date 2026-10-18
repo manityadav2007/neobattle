@@ -7,6 +7,7 @@
     "dev": "tsx watch src/app.ts",
     "build": "tsc --skipLibCheck",
     "start": "node dist/app.js",
+    "test": "tsx --test src/tests/**/*.test.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
