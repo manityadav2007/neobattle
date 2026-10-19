@@ -9,10 +9,9 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
-  Smartphone,
+  Download,
   ShieldCheck,
   Clock,
-  Copy,
   Check,
   Wallet,
   Sparkles,
@@ -58,7 +57,10 @@ function DepositContent() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [creditedAmount, setCreditedAmount] = useState<number>(initialAmount || 100);
   const [newBalance, setNewBalance] = useState<number | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
+
+  const [savedConfirm, setSavedConfirm] = useState(false);
+  const [downloadBlocked, setDownloadBlocked] = useState(false);
+  const [savingQr, setSavingQr] = useState(false);
 
   const [checkingActive, setCheckingActive] = useState(true);
   const hasCheckedActiveRef = useRef(false);
@@ -82,7 +84,7 @@ function DepositContent() {
     }
   }, [user, authLoading, router]);
 
-  // Initiate deposit order
+  // Initiate deposit order (always creates a NEW deposit)
   const startDeposit = async (amt: number) => {
     if (amt <= 0 || loading) return;
 
@@ -123,7 +125,7 @@ function DepositContent() {
     }
   };
 
-  // Resume active deposit on load (Requirement 1, 2, 3)
+  // Resume only when ?resume=<depositId> is passed from transaction history (Part A)
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -133,31 +135,63 @@ function DepositContent() {
     if (hasCheckedActiveRef.current) return;
     hasCheckedActiveRef.current = true;
 
-    const checkActiveDeposit = async () => {
-      try {
-        const res = await dynamicDepositApi.getActive();
-        if (res.success && res.data) {
-          const targetExpiry = res.data.expiresAt || res.data.timerExpiresAt;
-          const remainingMs = computeRemainingMs(targetExpiry);
-          if (remainingMs > 0) {
-            setOrder(res.data);
-            setTimeLeft(Math.floor(remainingMs / 1000));
-            setIsTimerExpired(false);
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data));
-            } catch {}
-            setCheckingActive(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch active deposit:', err);
-      }
+    const resumeId = searchParams.get('resume');
 
-      // No active deposit within 5 minutes: show amount selection
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch {}
+    if (resumeId) {
+      // User tapped a pending item in Transaction History
+      const fetchResumable = async () => {
+        try {
+          const res = await dynamicDepositApi.getResumable(resumeId);
+          if (res.success && res.data) {
+            const targetExpiry = res.data.expiresAt || res.data.timerExpiresAt;
+            const remainingMs = computeRemainingMs(targetExpiry);
+            if (remainingMs > 0) {
+              setOrder(res.data);
+              setTimeLeft(Math.floor(remainingMs / 1000));
+              setIsTimerExpired(false);
+              setCheckingActive(false);
+              return;
+            } else {
+              // 5-minute payment window ended -> show expired screen
+              setOrder(res.data);
+              setIsTimerExpired(true);
+              setTimeLeft(0);
+              setCheckingActive(false);
+              return;
+            }
+          }
+        } catch {
+          // If getResumable returns 404 (e.g. 5-min window has ended), verify with getStatus
+          try {
+            const statusRes = await dynamicDepositApi.getStatus(resumeId);
+            if (statusRes.success && statusRes.data) {
+              setOrder({
+                transactionId: statusRes.data.transactionId,
+                requestedAmount: statusRes.data.requestedAmount,
+                actualQrAmount: statusRes.data.actualQrAmount,
+                upiDeepLink: '',
+                qrCodeDataUrl: '',
+                timerExpiresAt: statusRes.data.timerExpiresAt,
+                expiresAt: statusRes.data.expiresAt,
+              });
+              setIsTimerExpired(true);
+              setTimeLeft(0);
+              setCheckingActive(false);
+              return;
+            }
+          } catch {}
+        }
+
+        // Deposit not found or belonging to another user
+        setOrder(null);
+        setIsTimerExpired(false);
+        setError('Deposit request not found, expired, or belongs to another user.');
+        setCheckingActive(false);
+      };
+
+      fetchResumable();
+    } else {
+      // No resumeId: entering an amount and tapping Deposit must always create a NEW deposit
       setOrder(null);
       setIsTimerExpired(false);
       setCheckingActive(false);
@@ -165,10 +199,8 @@ function DepositContent() {
       if (initialAmount > 0) {
         startDeposit(initialAmount);
       }
-    };
-
-    checkActiveDeposit();
-  }, [user, authLoading, initialAmount]);
+    }
+  }, [user, authLoading, searchParams, initialAmount]);
 
   const handleCancelOrder = async () => {
     try {
@@ -280,14 +312,67 @@ function DepositContent() {
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   const progressPercent = Math.max(0, Math.min(100, (timeLeft / FIVE_MINUTES_SECONDS) * 100));
 
-  const handleCopyDeepLink = async () => {
-    if (!order?.upiDeepLink) return;
+  const handleSaveQr = async () => {
+    if (!order?.qrCodeDataUrl) return;
+
+    setSavingQr(true);
+    setDownloadBlocked(false);
+
     try {
-      await navigator.clipboard.writeText(order.upiDeepLink);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      // Fallback ignore
+      // 1. Render to canvas at least 800x800
+      const canvas = document.createElement('canvas');
+      const size = 800;
+      canvas.width = size;
+      canvas.height = size;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D context not available');
+
+      // 2. White quiet-zone border (at least 4 modules)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, size, size);
+
+      // 3. Load QR image
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load QR code image'));
+        img.src = order.qrCodeDataUrl;
+      });
+
+      // 40px quiet-zone margin inside 800x800 canvas
+      const padding = 40;
+      ctx.drawImage(img, padding, padding, size - padding * 2, size - padding * 2);
+
+      // 4. Export as PNG blob
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), 'image/png');
+      });
+
+      if (!blob) throw new Error('Blob creation failed');
+
+      // 5. Trigger download named neobattle-deposit-<amount>.png
+      const fileName = `neobattle-deposit-${order.actualQrAmount}.png`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+      setSavedConfirm(true);
+      setTimeout(() => setSavedConfirm(false), 3500);
+    } catch (err) {
+      console.error('Save QR error:', err);
+      setDownloadBlocked(true);
+    } finally {
+      setSavingQr(false);
     }
   };
 
@@ -380,13 +465,15 @@ function DepositContent() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleStartNewDeposit}
-                className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
-              >
-                Start New Deposit
-              </button>
+              <div className="w-full max-w-sm mx-auto space-y-2.5">
+                <button
+                  type="button"
+                  onClick={handleStartNewDeposit}
+                  className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
+                >
+                  Start New Deposit
+                </button>
+              </div>
             </motion.div>
           ) : order ? (
             /* ==================================================== */
@@ -450,39 +537,47 @@ function DepositContent() {
                   </div>
                 </div>
 
-                {/* Mobile Direct Pay Buttons */}
-                <div className="w-full max-w-sm mt-5 space-y-2">
-                  <a
-                    href={order.upiDeepLink}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl btn-fire text-white font-bold text-xs tracking-wide shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
-                  >
-                    <Smartphone className="w-4 h-4" />
-                    Pay {formatCurrency(order.actualQrAmount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} via UPI App (Mobile)
-                  </a>
-
+                {/* Save QR Action & Guidance */}
+                <div className="w-full max-w-sm mt-5 space-y-2.5">
                   <button
-                    onClick={handleCopyDeepLink}
-                    className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold border border-white/5 transition-colors"
+                    type="button"
+                    onClick={handleSaveQr}
+                    disabled={savingQr}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl btn-fire text-white font-bold text-sm tracking-wide shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-75"
                   >
-                    {copiedLink ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400">UPI Link Copied!</span>
-                      </>
+                    {savingQr ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : savedConfirm ? (
+                      <Check className="w-4 h-4 text-white stroke-[2.5]" />
                     ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                        <span>Copy UPI Payment Link</span>
-                      </>
+                      <Download className="w-4 h-4" />
                     )}
+                    {savedConfirm ? 'QR Code Saved!' : savingQr ? 'Saving QR...' : 'Save QR'}
                   </button>
+
+                  {savedConfirm && (
+                    <p className="text-center text-xs font-semibold text-emerald-400 flex items-center justify-center gap-1.5 animate-in fade-in">
+                      <Check className="w-3.5 h-3.5" />
+                      Saved! Check your gallery or downloads.
+                    </p>
+                  )}
+
+                  {downloadBlocked && (
+                    <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs text-center leading-relaxed">
+                      Download was blocked by your browser. Please long-press the QR code above and choose &quot;Save image&quot;.
+                    </div>
+                  )}
+
+                  <p className="text-xs text-zinc-400 text-center leading-relaxed px-1">
+                    Tap Save QR, then open any UPI app, tap Scan QR, choose Upload from gallery and select this image. Pay the exact amount shown, including paise.
+                  </p>
 
                   <button
                     type="button"
                     onClick={handleCancelOrder}
                     className="w-full text-center py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors"
                   >
-                    Cancel & Choose Different Amount
+                    Cancel &amp; Choose Different Amount
                   </button>
                 </div>
               </div>

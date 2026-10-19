@@ -268,6 +268,28 @@ export async function getActiveDepositOrder(req: AuthenticatedRequest, res: Resp
   }
 }
 
+export async function getResumableDepositOrder(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const userId = req.user!.id;
+  const depositId = req.params.id;
+
+  if (!depositId) {
+    res.status(400).json({ success: false, message: 'Deposit ID is required' });
+    return;
+  }
+
+  try {
+    const order = await paymentMatchingService.getResumableDepositOrder(userId, depositId);
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Deposit request not found, expired, or superseded' });
+      return;
+    }
+    res.json({ success: true, data: order });
+  } catch (err: any) {
+    console.error('[Payment] getResumableDepositOrder error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to resume deposit' });
+  }
+}
+
 // ── Admin: Unmatched Payments Management ────────────────────────────────────
 
 export async function listUnmatchedPayments(req: AuthenticatedRequest, res: Response): Promise<void> {

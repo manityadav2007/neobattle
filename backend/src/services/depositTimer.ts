@@ -137,3 +137,33 @@ export function isDepositActive(params: {
 
   return now < timerMs;
 }
+
+/**
+ * Evaluates whether a transaction item in Recent Transactions on /wallet is clickable.
+ * Criteria:
+ * - Must be type === 'DEPOSIT'
+ * - Must be status === 'PENDING'
+ * - Expiry (timerExpiresAt or expiresAt) must be strictly in the future (expiresAt > now)
+ * - Must NOT be superseded, cancelled, expired, or credited
+ */
+export function isRecentTransactionClickable(params: {
+  type: string;
+  status: string;
+  timerExpiresAt?: Date | string | number | null;
+  expiresAt?: Date | string | number | null;
+  superseded?: boolean;
+  nowMs?: number;
+}): boolean {
+  if (params.type !== 'DEPOSIT') return false;
+  if (params.status !== 'PENDING') return false;
+  if (params.superseded) return false;
+
+  const now = params.nowMs ?? Date.now();
+  const targetExpiry = params.timerExpiresAt || params.expiresAt;
+  if (!targetExpiry) return false;
+
+  const expiryMs = typeof targetExpiry === 'number' ? targetExpiry : new Date(targetExpiry).getTime();
+  if (isNaN(expiryMs)) return false;
+
+  return expiryMs > now;
+}

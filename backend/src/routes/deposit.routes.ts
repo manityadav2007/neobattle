@@ -7,6 +7,8 @@ import { adminCheck } from '../middleware/adminCheck';
 const router = Router();
 
 router.get('/active', authenticate, paymentController.getActiveDepositOrder);
+router.get('/:id/resume', authenticate, paymentController.getResumableDepositOrder);
+router.get('/:id', authenticate, paymentController.getResumableDepositOrder);
 router.post('/request', authenticate, depositController.createDepositRequest);
 router.get('/pending', authenticate, adminCheck, depositController.listDepositRequests);
 router.patch('/:id/review', authenticate, adminCheck, depositController.reviewDepositRequest);

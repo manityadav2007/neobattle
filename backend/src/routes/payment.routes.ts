@@ -7,6 +7,8 @@ const router = Router();
 
 // Dynamic QR Automated Deposit Flow
 router.get('/deposit/active', authenticate, paymentController.getActiveDepositOrder);
+router.get('/deposit/resume/:id', authenticate, paymentController.getResumableDepositOrder);
+router.get('/deposit/:id', authenticate, paymentController.getResumableDepositOrder);
 router.post('/deposit/initiate', authenticate, paymentController.initiateDynamicDeposit);
 router.get('/deposit/status/:transactionId', authenticate, paymentController.getDepositOrderStatus);
 router.post('/deposit/cancel/:transactionId', authenticate, paymentController.cancelDepositOrder);

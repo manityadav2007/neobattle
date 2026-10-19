@@ -86,6 +86,9 @@ export interface Transaction {
   amount: number;
   description: string | null;
   createdAt: string;
+  expiresAt?: string | null;
+  timerExpiresAt?: string | null;
+  metadata?: any;
 }
 
 export interface TeamMemberUser {
@@ -892,6 +895,17 @@ export const dynamicDepositApi = {
   getActive: async (): Promise<{ success: boolean; data: DynamicDepositOrder | null }> => {
     try {
       const res = await api.get('/payment/deposit/active');
+      return res.data;
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        return { success: false, data: null };
+      }
+      throw err;
+    }
+  },
+  getResumable: async (id: string): Promise<{ success: boolean; data: DynamicDepositOrder | null }> => {
+    try {
+      const res = await api.get(`/payment/deposit/resume/${id}`);
       return res.data;
     } catch (err: any) {
       if (err.response?.status === 404) {

@@ -135,52 +135,7 @@ export class PaymentMatchingService {
       }
       const merchantName = (process.env.UPI_MERCHANT_NAME || 'NeoBattle').trim();
 
-      // 1. REUSE EXISTING ORDER: Check if user already has an ACTIVE (non-expired) pending deposit for this base amount
-      const existing = await prisma.transaction.findFirst({
-        where: {
-          userId,
-          type: TransactionType.DEPOSIT,
-          status: TransactionStatus.PENDING,
-          requestedAmount: new Decimal(cleanRequested),
-          timerExpiresAt: { gt: now },
-          expiresAt: { gt: now },
-          decimalOffset: { not: null },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (existing && existing.actualQrAmount && existing.timerExpiresAt && existing.expiresAt) {
-        const actualQrAmount = Number(existing.actualQrAmount);
-        const transactionRef = existing.id;
-        const upiDeepLink = this.buildUpiUri(
-          upiId,
-          merchantName,
-          actualQrAmount,
-          transactionRef,
-          `${merchantName} Deposit`
-        );
-
-        const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
-          margin: 1,
-          width: 320,
-          color: { dark: '#000000', light: '#ffffff' },
-        });
-
-        return {
-          transactionId: existing.id,
-          tr: existing.id,
-          amount: actualQrAmount,
-          requestedAmount: cleanRequested,
-          actualQrAmount,
-          upiDeepLink,
-          qrCodeDataUrl,
-          timerExpiresAt: existing.timerExpiresAt,
-          expiresAt: existing.timerExpiresAt || existing.expiresAt,
-          graceExpiresAt: existing.expiresAt,
-        };
-      }
-
-      // 2. RATE LIMIT: Limit creation of genuinely NEW deposit orders (max 5 per 10 mins per user)
+      // 1. RATE LIMIT: Limit creation of deposit orders (max 5 per 10 mins per user)
       const nowMs = now.getTime();
       const userTimestamps = (depositCreationRateLimit.get(userId) || []).filter(
         (ts) => nowMs - ts < RATE_LIMIT_WINDOW_MS
@@ -189,20 +144,33 @@ export class PaymentMatchingService {
         throw new Error('Deposit request limit reached. Please wait a few minutes before generating a new request.');
       }
 
-      // 3. RELEASE OLDER SLOTS: If user is generating a NEW order with a DIFFERENT base amount,
-      // expire older pending orders of this user so they don't hold multiple slots in the pool.
-      await prisma.transaction.updateMany({
+      // 2. SUPERSEDE OLDER PENDING DEPOSITS:
+      // When a new deposit is created while the user already has a pending deposit,
+      // mark the old one as superseded (not cancelled):
+      // - It is no longer resumable or clickable (status: AWAITING_LATE_MATCH, metadata.superseded = true)
+      // - It stays matchable for late payments until its normal grace period ends (expiresAt)
+      // - It keeps its decimalOffset so the new deposit never gets the same exact amount
+      const olderPending = await prisma.transaction.findMany({
         where: {
           userId,
           type: TransactionType.DEPOSIT,
           status: TransactionStatus.PENDING,
-          decimalOffset: { not: null },
-        },
-        data: {
-          status: TransactionStatus.EXPIRED,
-          decimalOffset: null,
         },
       });
+
+      for (const old of olderPending) {
+        await prisma.transaction.update({
+          where: { id: old.id },
+          data: {
+            status: TransactionStatus.AWAITING_LATE_MATCH,
+            metadata: {
+              ...(typeof old.metadata === 'object' && old.metadata !== null ? old.metadata : {}),
+              superseded: true,
+              supersededAt: now.toISOString(),
+            },
+          },
+        });
+      }
 
       // 4. Pick next available offset (1..99)
       const offset = await this.getNextAvailableOffset();
@@ -243,10 +211,10 @@ export class PaymentMatchingService {
         `${merchantName} Deposit`
       );
 
-      // Generate Base64 QR code image from the exact same compliant URI
+      // Generate Base64 QR code image from the exact same compliant URI (at least 800x800 with >=4 modules quiet-zone border)
       const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
-        margin: 1,
-        width: 320,
+        margin: 4,
+        width: 800,
         color: {
           dark: '#000000',
           light: '#ffffff',
@@ -374,8 +342,74 @@ export class PaymentMatchingService {
     );
 
     const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
-      margin: 1,
-      width: 320,
+      margin: 4,
+      width: 800,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+
+    return {
+      transactionId: tx.id,
+      tr: tx.id,
+      amount: actualQrAmount,
+      requestedAmount,
+      actualQrAmount,
+      upiDeepLink,
+      qrCodeDataUrl,
+      timerExpiresAt: tx.timerExpiresAt,
+      expiresAt: tx.timerExpiresAt,
+      graceExpiresAt: tx.expiresAt || new Date(tx.timerExpiresAt.getTime() + 15 * 60 * 1000),
+    };
+  }
+
+  /**
+   * Returns a specific pending deposit by ID for the logged-in user only.
+   * Returns 404 (null) if:
+   * - It belongs to someone else (userId mismatch)
+   * - It is not pending (status !== PENDING)
+   * - It is marked as superseded in metadata
+   * - Its 5-minute window has ended (timerExpiresAt <= now)
+   */
+  async getResumableDepositOrder(userId: string, depositId: string): Promise<DepositOrderResult | null> {
+    await this.cleanupExpiredOrders();
+
+    const now = new Date();
+    const upiId = (process.env.MERCHANT_UPI_ID || process.env.UPI_ID || '').trim();
+    const merchantName = (process.env.UPI_MERCHANT_NAME || 'NeoBattle').trim();
+
+    const tx = await prisma.transaction.findFirst({
+      where: {
+        id: depositId,
+        userId, // Strictly user isolation: 404 if it belongs to someone else
+        type: TransactionType.DEPOSIT,
+        status: TransactionStatus.PENDING,
+        timerExpiresAt: { gt: now },
+        decimalOffset: { not: null },
+      },
+    });
+
+    if (!tx || !tx.actualQrAmount || !tx.timerExpiresAt) {
+      return null;
+    }
+
+    // Exclude superseded orders
+    if ((tx.metadata as any)?.superseded) {
+      return null;
+    }
+
+    const actualQrAmount = Number(tx.actualQrAmount);
+    const requestedAmount = tx.requestedAmount ? Number(tx.requestedAmount) : Math.floor(actualQrAmount);
+    const transactionRef = tx.id;
+    const upiDeepLink = (tx.metadata as any)?.upiDeepLink || this.buildUpiUri(
+      upiId,
+      merchantName,
+      actualQrAmount,
+      transactionRef,
+      `${merchantName} Deposit`
+    );
+
+    const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
+      margin: 4,
+      width: 800,
       color: { dark: '#000000', light: '#ffffff' },
     });
 

@@ -176,24 +176,54 @@ export default function WalletPage() {
           </div>
           {wallet?.transactions && wallet.transactions.length > 0 ? (
             <div className="space-y-3">
-              {wallet.transactions.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
-                  <div>
-                    <p className="text-sm font-medium text-white">{tx.description || tx.type}</p>
-                    <p className="text-xs text-zinc-500">{formatDate(tx.createdAt)}</p>
+              {wallet.transactions.map((tx) => {
+                const isPendingDeposit = tx.type === 'DEPOSIT' && tx.status === 'PENDING';
+                const expiryDate = tx.timerExpiresAt || tx.expiresAt;
+                const isNotExpired = expiryDate ? new Date(expiryDate).getTime() > Date.now() : false;
+                const isSuperseded = Boolean(tx.metadata?.superseded);
+                const isResumable = isPendingDeposit && isNotExpired && !isSuperseded;
+
+                const rowContent = (
+                  <div
+                    className={`flex items-center justify-between py-3 border-b border-white/5 last:border-0 ${
+                      isResumable ? 'hover:bg-white/[0.04] px-3 -mx-3 rounded-xl transition-all cursor-pointer' : ''
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-white">{tx.description || tx.type}</p>
+                        {isResumable && (
+                          <span className="text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-fire-500/15 border border-fire-500/30 text-fire-400 animate-pulse">
+                            Tap to pay &rarr;
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-500">{formatDate(tx.createdAt)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`text-sm font-bold ${
+                          ['DEPOSIT', 'PRIZE', 'REFUND', 'ESCROW_RELEASE'].includes(tx.type)
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                        }`}
+                      >
+                        {['DEPOSIT', 'PRIZE', 'REFUND', 'ESCROW_RELEASE'].includes(tx.type) ? '+' : '-'}
+                        {formatCurrency(tx.amount)}
+                      </p>
+                      <p className="text-xs text-zinc-500">{tx.status}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${
-                      ['DEPOSIT', 'PRIZE', 'REFUND', 'ESCROW_RELEASE'].includes(tx.type)
-                        ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {['DEPOSIT', 'PRIZE', 'REFUND', 'ESCROW_RELEASE'].includes(tx.type) ? '+' : '-'}
-                      {formatCurrency(tx.amount)}
-                    </p>
-                    <p className="text-xs text-zinc-500">{tx.status}</p>
-                  </div>
-                </div>
-              ))}
+                );
+
+                return isResumable ? (
+                  <Link key={tx.id} href={`/wallet/deposit?resume=${tx.id}`} className="block">
+                    {rowContent}
+                  </Link>
+                ) : (
+                  <div key={tx.id}>{rowContent}</div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-zinc-500 text-sm text-center py-8">No transactions yet</p>
