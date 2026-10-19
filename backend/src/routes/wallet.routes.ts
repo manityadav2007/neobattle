@@ -7,6 +7,8 @@ import { walletDepositSchema, walletWithdrawSchema } from '../utils/validation.s
 
 const router = Router();
 
+router.get('/limits', walletController.getWalletLimitsHandler);
+
 router.use(authenticate);
 
 router.get('/', walletController.getWallet);

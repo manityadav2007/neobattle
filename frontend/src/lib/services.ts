@@ -72,11 +72,20 @@ export interface Tournament {
   entries?: any[];
 }
 
+export interface WalletLimits {
+  minDeposit: number;
+  maxDeposit: number;
+  minWithdrawal: number;
+  maxWithdrawal: number;
+  maxDailyWithdrawalPerUser: number;
+}
+
 export interface WalletData {
   id: string;
   balance: number;
   currency: string;
   transactions: Transaction[];
+  limits?: WalletLimits;
 }
 
 export interface Transaction {
@@ -223,6 +232,10 @@ export const tournamentApi = {
 export const walletApi = {
   get: async () => {
     const res = await api.get<ApiResponse<WalletData>>('/wallet');
+    return res.data;
+  },
+  getLimits: async () => {
+    const res = await api.get<ApiResponse<WalletLimits>>('/wallet/limits');
     return res.data;
   },
   deposit: async (amount: number) => {

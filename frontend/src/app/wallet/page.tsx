@@ -10,10 +10,18 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
-import { walletApi, formatCurrency, formatDate } from '@/lib/services';
+import { walletApi, formatCurrency, formatDate, WalletLimits } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 
 type PayoutMethod = 'UPI' | 'BANK_TRANSFER';
+
+const DEFAULT_LIMITS: WalletLimits = {
+  minDeposit: 10,
+  maxDeposit: 10000,
+  minWithdrawal: 100,
+  maxWithdrawal: 5000,
+  maxDailyWithdrawalPerUser: 5000,
+};
 
 export default function WalletPage() {
   const router = useRouter();
@@ -21,6 +29,7 @@ export default function WalletPage() {
   const { wallet, loading, error, refetch } = useWallet();
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
+  const [limits, setLimits] = useState<WalletLimits>(DEFAULT_LIMITS);
 
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -33,18 +42,67 @@ export default function WalletPage() {
   const [modalErr, setModalErr] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
+    walletApi.getLimits().then((res) => {
+      if (isMounted && res.data) {
+        setLimits(res.data);
+      }
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (wallet?.limits) {
+      setLimits(wallet.limits);
+    }
+  }, [wallet?.limits]);
+
+  useEffect(() => {
     if (!authLoading && !user) router.push('/login');
   }, [user, authLoading, router]);
 
   const balance = wallet ? Number(wallet.balance) : 0;
 
-  const openWithdrawModal = () => {
-    if (!amount || Number(amount) <= 0) {
-      setMessage('Enter a valid amount first');
-      return;
+  const trimmedAmount = amount.trim();
+  const isAmountEntered = trimmedAmount.length > 0;
+  const numAmount = Number(trimmedAmount);
+  const isPositiveNumber = !isNaN(numAmount) && numAmount > 0;
+  const hasValidDecimals = /^\d+(\.\d{1,2})?$/.test(trimmedAmount);
+
+  let depositError = '';
+  if (isAmountEntered) {
+    if (!isPositiveNumber) {
+      depositError = 'Amount must be greater than 0';
+    } else if (!hasValidDecimals) {
+      depositError = 'Amount can have at most 2 decimal places';
+    } else if (numAmount < limits.minDeposit) {
+      depositError = `Minimum deposit is ${formatCurrency(limits.minDeposit)}`;
+    } else if (numAmount > limits.maxDeposit) {
+      depositError = `Maximum deposit is ${formatCurrency(limits.maxDeposit)}`;
     }
-    if (Number(amount) > balance) {
-      setMessage('Insufficient balance');
+  }
+
+  let withdrawError = '';
+  if (isAmountEntered) {
+    if (!isPositiveNumber) {
+      withdrawError = 'Amount must be greater than 0';
+    } else if (!hasValidDecimals) {
+      withdrawError = 'Amount can have at most 2 decimal places';
+    } else if (numAmount < limits.minWithdrawal) {
+      withdrawError = `Minimum withdrawal is ${formatCurrency(limits.minWithdrawal)}`;
+    } else if (numAmount > limits.maxWithdrawal) {
+      withdrawError = `Maximum withdrawal is ${formatCurrency(limits.maxWithdrawal)}`;
+    } else if (numAmount > balance) {
+      withdrawError = `Insufficient balance (${formatCurrency(balance)})`;
+    }
+  }
+
+  const isDepositValid = isAmountEntered && !depositError;
+  const isWithdrawValid = isAmountEntered && !withdrawError;
+
+  const openWithdrawModal = () => {
+    if (!isWithdrawValid) {
+      setMessage(withdrawError || 'Enter a valid amount first');
       return;
     }
     setWithdrawAmount(amount);
@@ -58,8 +116,21 @@ export default function WalletPage() {
       : bankAccountNumber.trim().length >= 8 && /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(bankIfsc.trim());
 
   const handleSubmitWithdrawal = async () => {
-    if (Number(withdrawAmount) <= 0 || Number(withdrawAmount) > balance) {
-      setModalErr('Invalid amount');
+    const num = Number(withdrawAmount);
+    if (!num || num <= 0 || !/^\d+(\.\d{1,2})?$/.test(withdrawAmount.trim())) {
+      setModalErr('Enter a valid amount with at most 2 decimal places');
+      return;
+    }
+    if (num < limits.minWithdrawal) {
+      setModalErr(`Minimum withdrawal is ${formatCurrency(limits.minWithdrawal)}`);
+      return;
+    }
+    if (num > limits.maxWithdrawal) {
+      setModalErr(`Maximum withdrawal is ${formatCurrency(limits.maxWithdrawal)}`);
+      return;
+    }
+    if (num > balance) {
+      setModalErr(`Insufficient balance (${formatCurrency(balance)})`);
       return;
     }
     if (!isPayoutValid) {
@@ -119,35 +190,57 @@ export default function WalletPage() {
         </div>
 
         <div className="glass-card rounded-2xl p-6 mb-6">
-          <div className="flex gap-3 mb-4">
+          <div className="flex gap-3 mb-2">
             <input
               type="number"
               value={amount}
               onChange={(e) => { setAmount(e.target.value); setMessage(''); }}
               className="input-field flex-1 px-4 py-3 rounded-lg text-white"
               placeholder="Amount (₹)"
-              min="1"
-              step="1"
+              min={limits.minDeposit}
+              max={limits.maxDeposit}
+              step="any"
             />
           </div>
+
+          <p className="text-xs text-zinc-400 mb-3">
+            Min deposit {formatCurrency(limits.minDeposit)}, max {formatCurrency(limits.maxDeposit)} • Min withdrawal {formatCurrency(limits.minWithdrawal)}, max {formatCurrency(limits.maxWithdrawal)}
+          </p>
+
+          {isAmountEntered && (depositError || withdrawError) && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs space-y-1.5">
+              {depositError && (
+                <div className="flex items-center gap-1.5 text-amber-400">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span><strong>Deposit:</strong> {depositError}</span>
+                </div>
+              )}
+              {withdrawError && (
+                <div className="flex items-center gap-1.5 text-amber-400">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span><strong>Withdraw:</strong> {withdrawError}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => {
-                if (amount && parseFloat(amount) > 0) {
+                if (isDepositValid) {
                   router.push(`/wallet/deposit?amount=${encodeURIComponent(amount)}`);
-                } else {
-                  router.push('/wallet/deposit');
                 }
               }}
-              className="flex items-center justify-center gap-2 btn-fire py-3 rounded-lg font-semibold text-white active:scale-[0.98] transition-transform"
+              disabled={!isDepositValid}
+              className="flex items-center justify-center gap-2 btn-fire py-3 rounded-lg font-semibold text-white active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CreditCard className="w-4 h-4" />
               Deposit
             </button>
             <button
               onClick={openWithdrawModal}
-              disabled={!amount || parseFloat(amount) <= 0}
-              className="flex items-center justify-center gap-2 py-3 rounded-lg font-semibold text-zinc-300 border border-white/10 hover:border-fire-500/50 transition-colors disabled:opacity-50"
+              disabled={!isWithdrawValid}
+              className="flex items-center justify-center gap-2 py-3 rounded-lg font-semibold text-zinc-300 border border-white/10 hover:border-fire-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowUpRight className="w-4 h-4" />
               Withdraw
@@ -257,9 +350,15 @@ export default function WalletPage() {
                 </button>
               </div>
 
-              <div className="p-3 rounded-xl bg-white/5 flex items-center justify-between text-sm mb-5">
-                <span className="text-zinc-400">Amount</span>
-                <span className="text-white font-bold">{formatCurrency(Number(withdrawAmount) || 0)}</span>
+              <div className="p-3 rounded-xl bg-white/5 text-sm mb-5">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-zinc-400">Amount</span>
+                  <span className="text-white font-bold">{formatCurrency(Number(withdrawAmount) || 0)}</span>
+                </div>
+                <div className="text-[11px] text-zinc-400 flex flex-wrap items-center justify-between gap-1">
+                  <span>Min {formatCurrency(limits.minWithdrawal)}, Max {formatCurrency(limits.maxWithdrawal)}</span>
+                  <span>Daily Limit: {formatCurrency(limits.maxDailyWithdrawalPerUser)}</span>
+                </div>
               </div>
 
               <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Payout Method</label>

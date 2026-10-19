@@ -4,6 +4,7 @@ import { TransactionStatus, TransactionType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { notificationService } from './notification.service';
 import { ParsedSmsPayment } from './smsParser';
+import { getWalletLimits, validateAmount } from '../config/walletLimits';
 
 // Simple in-process mutex to avoid race conditions when reserving decimal slots
 class SimpleMutex {
@@ -107,10 +108,20 @@ export class PaymentMatchingService {
    * pool exhaustion and lost payments on refresh.
    */
   async createDepositOrder(userId: string, requestedAmount: number): Promise<DepositOrderResult> {
-    if (!requestedAmount || requestedAmount <= 0) {
-      throw new Error('Please enter a valid deposit amount');
+    const validation = validateAmount(requestedAmount);
+    if (!validation.valid) {
+      throw new Error(validation.message || 'Please enter a valid deposit amount');
     }
-    const cleanRequested = Math.floor(requestedAmount); // Ensure integer base amount
+
+    const limits = getWalletLimits();
+    if (validation.value < limits.minDeposit) {
+      throw new Error(`Minimum deposit amount is ₹${limits.minDeposit}`);
+    }
+    if (validation.value > limits.maxDeposit) {
+      throw new Error(`Maximum deposit amount is ₹${limits.maxDeposit.toLocaleString('en-IN')}`);
+    }
+
+    const cleanRequested = Math.floor(validation.value);
     if (cleanRequested <= 0) {
       throw new Error('Deposit amount must be at least ₹1');
     }

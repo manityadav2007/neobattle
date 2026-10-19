@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { Decimal } from '@prisma/client/runtime/library';
 import { TransactionStatus, TransactionType } from '@prisma/client';
 import { paymentMatchingService } from '../services/paymentMatchingService';
+import { getWalletLimits, validateAmount } from '../config/walletLimits';
 
 export async function createUpiPayment(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { amount, tournamentId, utrNumber } = req.body;
@@ -196,14 +197,31 @@ export async function initiateDynamicDeposit(req: AuthenticatedRequest, res: Res
   const { amount } = req.body;
   const userId = req.user!.id;
 
-  const numAmount = Number(amount);
-  if (isNaN(numAmount) || numAmount <= 0) {
-    res.status(400).json({ success: false, message: 'Invalid deposit amount' });
+  const validation = validateAmount(amount);
+  if (!validation.valid) {
+    res.status(400).json({ success: false, message: validation.message || 'Invalid deposit amount' });
+    return;
+  }
+
+  const limits = getWalletLimits();
+  if (validation.value < limits.minDeposit) {
+    res.status(400).json({
+      success: false,
+      message: `Minimum deposit amount is ₹${limits.minDeposit}`,
+    });
+    return;
+  }
+
+  if (validation.value > limits.maxDeposit) {
+    res.status(400).json({
+      success: false,
+      message: `Maximum deposit amount is ₹${limits.maxDeposit.toLocaleString('en-IN')}`,
+    });
     return;
   }
 
   try {
-    const order = await paymentMatchingService.createDepositOrder(userId, numAmount);
+    const order = await paymentMatchingService.createDepositOrder(userId, validation.value);
     res.status(201).json({
       success: true,
       data: order,

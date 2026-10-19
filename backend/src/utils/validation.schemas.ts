@@ -101,7 +101,7 @@ export const registerTournamentSchema = z.object({
 });
 
 export const walletDepositSchema = z.object({
-  amount: z.number().positive().max(10000),
+  amount: z.number().positive(),
 });
 
 export const walletWithdrawSchema = z.object({

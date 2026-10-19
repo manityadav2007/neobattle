@@ -4,6 +4,15 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { TransactionStatus, TransactionType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { paymentGateway } from '../services/paymentGateway.service';
+import { getWalletLimits, validateAmount } from '../config/walletLimits';
+
+export async function getWalletLimitsHandler(_req: any, res: Response): Promise<void> {
+  const limits = getWalletLimits();
+  res.json({
+    success: true,
+    data: limits,
+  });
+}
 
 export async function getWallet(req: AuthenticatedRequest, res: Response): Promise<void> {
   const wallet = await prisma.wallet.findUnique({
@@ -31,6 +40,7 @@ export async function getWallet(req: AuthenticatedRequest, res: Response): Promi
         ...t,
         amount: Number(t.amount),
       })),
+      limits: getWalletLimits(),
     },
   });
 }
@@ -47,6 +57,29 @@ export async function deposit(req: AuthenticatedRequest, res: Response): Promise
   const { amount } = req.body;
   const userId = req.user!.id;
 
+  const validation = validateAmount(amount);
+  if (!validation.valid) {
+    res.status(400).json({ success: false, message: validation.message || 'Valid amount is required' });
+    return;
+  }
+
+  const limits = getWalletLimits();
+  if (validation.value < limits.minDeposit) {
+    res.status(400).json({
+      success: false,
+      message: `Minimum deposit amount is ₹${limits.minDeposit}`,
+    });
+    return;
+  }
+
+  if (validation.value > limits.maxDeposit) {
+    res.status(400).json({
+      success: false,
+      message: `Maximum deposit amount is ₹${limits.maxDeposit.toLocaleString('en-IN')}`,
+    });
+    return;
+  }
+
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   if (!wallet) {
     res.status(404).json({ success: false, message: 'Wallet not found' });
@@ -54,9 +87,9 @@ export async function deposit(req: AuthenticatedRequest, res: Response): Promise
   }
 
   const payment = await paymentGateway.createDeposit({
-    amount,
+    amount: validation.value,
     userId,
-      description: `Wallet deposit of ₹${amount}`,
+    description: `Wallet deposit of ₹${validation.value}`,
   });
 
   if (!payment.success) {
@@ -67,7 +100,7 @@ export async function deposit(req: AuthenticatedRequest, res: Response): Promise
   const [updatedWallet, transaction] = await prisma.$transaction([
     prisma.wallet.update({
       where: { id: wallet.id },
-      data: { balance: { increment: amount } },
+      data: { balance: { increment: validation.value } },
     }),
     prisma.transaction.create({
       data: {
@@ -75,7 +108,7 @@ export async function deposit(req: AuthenticatedRequest, res: Response): Promise
         userId,
         type: TransactionType.DEPOSIT,
         status: TransactionStatus.COMPLETED,
-        amount: new Decimal(amount),
+        amount: new Decimal(validation.value),
         description: 'Wallet deposit',
         reference: payment.reference,
         metadata: { transactionId: payment.transactionId },
@@ -97,8 +130,28 @@ export async function withdraw(req: AuthenticatedRequest, res: Response): Promis
   const { amount, payoutMethod, upiId, bankAccountNumber, bankIfsc, accountHolderName } = req.body;
   const userId = req.user!.id;
 
-  if (!amount || Number(amount) <= 0) {
-    res.status(400).json({ success: false, message: 'Valid amount is required' });
+  const validation = validateAmount(amount);
+  if (!validation.valid) {
+    res.status(400).json({ success: false, message: validation.message || 'Valid amount is required' });
+    return;
+  }
+
+  const numAmount = validation.value;
+  const limits = getWalletLimits();
+
+  if (numAmount < limits.minWithdrawal) {
+    res.status(400).json({
+      success: false,
+      message: `Minimum withdrawal amount is ₹${limits.minWithdrawal}`,
+    });
+    return;
+  }
+
+  if (numAmount > limits.maxWithdrawal) {
+    res.status(400).json({
+      success: false,
+      message: `Maximum withdrawal amount per request is ₹${limits.maxWithdrawal.toLocaleString('en-IN')}`,
+    });
     return;
   }
 
@@ -141,7 +194,38 @@ export async function withdraw(req: AuthenticatedRequest, res: Response): Promis
     return;
   }
 
-  const withdrawDecimal = new Decimal(Number(amount));
+  if (numAmount > Number(wallet.balance)) {
+    res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
+    return;
+  }
+
+  // 24-hour total daily withdrawal check
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const recentWithdrawals = await prisma.transaction.findMany({
+    where: {
+      userId,
+      type: TransactionType.WITHDRAWAL,
+      status: { in: [TransactionStatus.PENDING, TransactionStatus.COMPLETED] },
+      createdAt: { gte: twentyFourHoursAgo },
+    },
+    select: { amount: true },
+  });
+
+  const totalWithdrawnLast24h = recentWithdrawals.reduce(
+    (sum, tx) => sum + Number(tx.amount),
+    0
+  );
+
+  if (totalWithdrawnLast24h + numAmount > limits.maxDailyWithdrawalPerUser) {
+    const remaining = Math.max(0, limits.maxDailyWithdrawalPerUser - totalWithdrawnLast24h);
+    res.status(400).json({
+      success: false,
+      message: `Daily withdrawal limit of ₹${limits.maxDailyWithdrawalPerUser.toLocaleString('en-IN')} exceeded. You can withdraw up to ₹${remaining.toLocaleString('en-IN')} more today.`,
+    });
+    return;
+  }
+
+  const withdrawDecimal = new Decimal(numAmount);
 
   try {
     const { updatedWallet, transaction } = await prisma.$transaction(async (tx) => {
@@ -157,7 +241,7 @@ export async function withdraw(req: AuthenticatedRequest, res: Response): Promis
       });
 
       if (deduct.count === 0) {
-        throw new Error('Insufficient balance');
+        throw new Error('Insufficient wallet balance');
       }
 
       const txRecord = await tx.transaction.create({

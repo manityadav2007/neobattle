@@ -20,8 +20,16 @@ import {
   Info,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { dynamicDepositApi, DynamicDepositOrder, formatCurrency } from '@/lib/services';
+import { dynamicDepositApi, DynamicDepositOrder, formatCurrency, walletApi, WalletLimits } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
+
+const DEFAULT_LIMITS: WalletLimits = {
+  minDeposit: 10,
+  maxDeposit: 10000,
+  minWithdrawal: 100,
+  maxWithdrawal: 5000,
+  maxDailyWithdrawalPerUser: 5000,
+};
 
 const FIVE_MINUTES_SECONDS = 300;
 const PRESET_AMOUNTS = [50, 100, 200, 500, 1000];
@@ -49,9 +57,20 @@ function DepositContent() {
   const initialAmount = queryAmount ? Math.max(1, parseFloat(queryAmount) || 0) : 0;
 
   const [inputAmount, setInputAmount] = useState<string>(initialAmount > 0 ? String(initialAmount) : '100');
+  const [limits, setLimits] = useState<WalletLimits>(DEFAULT_LIMITS);
   const [order, setOrder] = useState<DynamicDepositOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+    walletApi.getLimits().then((res) => {
+      if (isMounted && res.data) {
+        setLimits(res.data);
+      }
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
   const [timeLeft, setTimeLeft] = useState(FIVE_MINUTES_SECONDS);
   const [isTimerExpired, setIsTimerExpired] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -707,8 +726,9 @@ function DepositContent() {
                     </span>
                     <input
                       type="number"
-                      min="1"
-                      step="1"
+                      min={limits.minDeposit}
+                      max={limits.maxDeposit}
+                      step="any"
                       value={inputAmount}
                       onChange={(e) => {
                         setInputAmount(e.target.value);
@@ -719,6 +739,20 @@ function DepositContent() {
                       autoFocus
                     />
                   </div>
+                  <p className="text-xs text-zinc-400 mt-1.5">
+                    Min deposit {formatCurrency(limits.minDeposit)}, max {formatCurrency(limits.maxDeposit)}
+                  </p>
+                  {inputAmount.trim().length > 0 && (
+                    (() => {
+                      const t = inputAmount.trim();
+                      const n = Number(t);
+                      if (isNaN(n) || n <= 0) return <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5 shrink-0" /><span>Amount must be greater than 0</span></p>;
+                      if (!/^\d+(\.\d{1,2})?$/.test(t)) return <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5 shrink-0" /><span>Amount can have at most 2 decimal places</span></p>;
+                      if (n < limits.minDeposit) return <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5 shrink-0" /><span>Minimum deposit is {formatCurrency(limits.minDeposit)}</span></p>;
+                      if (n > limits.maxDeposit) return <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5 shrink-0" /><span>Maximum deposit is {formatCurrency(limits.maxDeposit)}</span></p>;
+                      return null;
+                    })()
+                  )}
                 </div>
 
                 {/* Quick Presets */}
@@ -757,8 +791,15 @@ function DepositContent() {
                       setError('Please enter a valid deposit amount greater than 0');
                     }
                   }}
-                  disabled={loading || !inputAmount || parseFloat(inputAmount) <= 0}
-                  className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm tracking-wide shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
+                  disabled={
+                    loading ||
+                    !inputAmount.trim() ||
+                    isNaN(Number(inputAmount.trim())) ||
+                    Number(inputAmount.trim()) < limits.minDeposit ||
+                    Number(inputAmount.trim()) > limits.maxDeposit ||
+                    !/^\d+(\.\d{1,2})?$/.test(inputAmount.trim())
+                  }
+                  className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm tracking-wide shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
