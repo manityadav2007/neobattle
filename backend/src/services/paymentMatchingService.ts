@@ -44,11 +44,12 @@ export interface DepositOrderResult {
   qrCodeDataUrl: string;
   timerExpiresAt: Date;
   expiresAt: Date;
+  graceExpiresAt?: Date;
 }
 
 export class PaymentMatchingService {
   /**
-   * Cleans up expired orders older than 60 minutes and releases their decimal offsets.
+   * Cleans up expired orders older than the grace period and releases their decimal offsets.
    */
   async cleanupExpiredOrders(): Promise<number> {
     const now = new Date();
@@ -170,7 +171,8 @@ export class PaymentMatchingService {
           upiDeepLink,
           qrCodeDataUrl,
           timerExpiresAt: existing.timerExpiresAt,
-          expiresAt: existing.expiresAt,
+          expiresAt: existing.timerExpiresAt || existing.expiresAt,
+          graceExpiresAt: existing.expiresAt,
         };
       }
 
@@ -204,7 +206,7 @@ export class PaymentMatchingService {
       const actualQrAmount = Number((cleanRequested + decimalFraction).toFixed(2));
 
       const timerExpiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes UI countdown
-      const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 60 minutes late match
+      const expiresAt = new Date(timerExpiresAt.getTime() + 15 * 60 * 1000); // 15-minute grace period after timerExpiresAt for late match
 
       // Record rate limit timestamp
       userTimestamps.push(nowMs);
@@ -265,7 +267,8 @@ export class PaymentMatchingService {
         upiDeepLink,
         qrCodeDataUrl,
         timerExpiresAt,
-        expiresAt,
+        expiresAt: timerExpiresAt,
+        graceExpiresAt: expiresAt,
       };
     } finally {
       release();
@@ -351,7 +354,7 @@ export class PaymentMatchingService {
       });
     }
 
-    // Check if 60-minute cutoff expired -> transition to EXPIRED & release slot
+    // Check if grace period cutoff expired -> transition to EXPIRED & release slot
     if (
       (tx.status === TransactionStatus.PENDING || tx.status === TransactionStatus.AWAITING_LATE_MATCH) &&
       tx.expiresAt &&
@@ -373,7 +376,8 @@ export class PaymentMatchingService {
       requestedAmount: tx.requestedAmount ? Number(tx.requestedAmount) : Number(tx.amount),
       actualQrAmount: tx.actualQrAmount ? Number(tx.actualQrAmount) : Number(tx.amount),
       timerExpiresAt: tx.timerExpiresAt,
-      expiresAt: tx.expiresAt,
+      expiresAt: tx.timerExpiresAt || tx.expiresAt,
+      graceExpiresAt: tx.expiresAt,
       balance: tx.wallet ? Number(tx.wallet.balance) : 0,
     };
   }

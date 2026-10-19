@@ -35,6 +35,13 @@ export default function DynamicDepositModal({
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Helper to compute remaining milliseconds clamped at 0
+  const computeRemainingMs = (targetDate: string | Date | null | undefined): number => {
+    if (!targetDate) return 0;
+    const diff = new Date(targetDate).getTime() - Date.now();
+    return Math.max(0, diff);
+  };
+
   // 1. Initiate Deposit Order on open
   useEffect(() => {
     if (!open || amount <= 0) return;
@@ -55,14 +62,17 @@ export default function DynamicDepositModal({
           setOrder(res.data);
           setCreditedAmount(res.data.requestedAmount);
 
-          // Calculate remaining seconds if timerExpiresAt is returned
-          if (res.data.timerExpiresAt) {
-            const diffMs = new Date(res.data.timerExpiresAt).getTime() - Date.now();
-            const sec = Math.max(0, Math.floor(diffMs / 1000));
+          // Calculate remaining seconds strictly from the server's absolute expiry
+          const targetExpiry = res.data.expiresAt || res.data.timerExpiresAt;
+          if (targetExpiry) {
+            const remainingMs = computeRemainingMs(targetExpiry);
+            const sec = Math.floor(remainingMs / 1000);
             setTimeLeft(sec);
             if (sec <= 0) {
               setIsTimerExpired(true);
             }
+          } else {
+            setTimeLeft(FIVE_MINUTES_SECONDS);
           }
         } else {
           setError(res.message || 'Failed to generate payment QR');
@@ -81,29 +91,46 @@ export default function DynamicDepositModal({
     };
   }, [open, amount]);
 
-  // 2. Countdown timer interval (5 minutes)
+  // 2. Absolute Expiry Countdown Timer & Visibility/Focus Sync
   useEffect(() => {
-    if (!order || isSuccess) return;
+    if (!order || isSuccess || isTimerExpired) return;
 
-    countdownIntervalRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setIsTimerExpired(true);
-          clearInterval(countdownIntervalRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const targetExpiry = order.expiresAt || order.timerExpiresAt;
+    if (!targetExpiry) return;
+
+    const syncRemainingTime = () => {
+      const remainingMs = computeRemainingMs(targetExpiry);
+      const sec = Math.floor(remainingMs / 1000);
+      setTimeLeft(sec);
+      if (sec <= 0) {
+        setIsTimerExpired(true);
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      }
+    };
+
+    syncRemainingTime();
+    countdownIntervalRef.current = setInterval(syncRemainingTime, 1000);
+
+    const handleVisibilityOrFocus = () => {
+      syncRemainingTime();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('pageshow', handleVisibilityOrFocus);
 
     return () => {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('pageshow', handleVisibilityOrFocus);
     };
-  }, [order, isSuccess]);
+  }, [order, isSuccess, isTimerExpired]);
 
-  // 3. Polling for payment match every 2.5 seconds
+  // 3. Polling for payment match every 2.5 seconds (only while active and not expired)
   useEffect(() => {
-    if (!order || isSuccess) return;
+    if (!order || isSuccess || isTimerExpired) return;
 
     const checkStatus = async () => {
       try {
@@ -115,8 +142,10 @@ export default function DynamicDepositModal({
             if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
             onSuccess(res.data.balance);
-          } else if (res.data.isLateMatch || res.data.status === 'AWAITING_LATE_MATCH') {
+          } else if (res.data.isExpired || res.data.status === 'EXPIRED') {
             setIsTimerExpired(true);
+            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
           }
         }
       } catch (err) {
@@ -129,7 +158,7 @@ export default function DynamicDepositModal({
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
-  }, [order, isSuccess, onSuccess]);
+  }, [order, isSuccess, isTimerExpired, onSuccess]);
 
   if (!open) return null;
 
@@ -238,8 +267,34 @@ export default function DynamicDepositModal({
             </div>
           )}
 
+          {/* Expired State */}
+          {!loading && !error && !isSuccess && order && isTimerExpired && (
+            <div className="py-6 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/25 mx-auto flex items-center justify-center text-orange-400 shadow-lg shadow-orange-500/10">
+                <Clock className="w-7 h-7 stroke-[2.2]" />
+              </div>
+
+              <div>
+                <h4 className="text-xl font-black text-white">Deposit request expired</h4>
+                <div className="mt-3 p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-200 text-xs leading-relaxed max-w-sm mx-auto">
+                  <p className="font-semibold text-orange-300">
+                    If you already paid, your wallet will be credited automatically within 15 minutes. Do not pay again.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn-fire w-full py-3.5 rounded-xl font-bold text-white shadow-lg"
+              >
+                Start New Deposit
+              </button>
+            </div>
+          )}
+
           {/* Active QR & Countdown State */}
-          {!loading && !error && !isSuccess && order && (
+          {!loading && !error && !isSuccess && order && !isTimerExpired && (
             <div className="space-y-4 pt-3">
               {/* Amount Banner — Shows exact actual amount with paise offset */}
               <div className="text-center p-3 rounded-2xl bg-white/[0.04] border border-white/5">
@@ -292,26 +347,14 @@ export default function DynamicDepositModal({
                 </div>
               </div>
 
-              {/* Status or Late Match Banner */}
-              {isTimerExpired ? (
-                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
-                    <span>Taking a bit longer than usual</span>
-                  </div>
-                  <p className="text-zinc-300 text-[11px] leading-relaxed">
-                    If you&apos;ve already paid, please don&apos;t pay again — it will be verified automatically. If it doesn&apos;t reflect in 15 minutes, contact support with your UTR.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white/5 border border-white/5 text-xs text-zinc-300">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-fire-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-fire-500" />
-                  </span>
-                  <span className="font-medium">Waiting for payment verification...</span>
-                </div>
-              )}
+              {/* Verification in progress */}
+              <div className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white/5 border border-white/5 text-xs text-zinc-300">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-fire-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-fire-500" />
+                </span>
+                <span className="font-medium">Waiting for payment verification...</span>
+              </div>
 
               {/* Mobile 1-Click Pay via UPI Deep Link */}
               <div className="grid grid-cols-2 gap-2 pt-1">

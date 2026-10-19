@@ -63,6 +63,60 @@ function DepositContent() {
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const STORAGE_KEY = 'firearena_deposit_order';
+
+  // Helper to compute remaining milliseconds clamped at 0
+  const computeRemainingMs = (targetDate: string | Date | null | undefined): number => {
+    if (!targetDate) return 0;
+    const diff = new Date(targetDate).getTime() - Date.now();
+    return Math.max(0, diff);
+  };
+
+  // Restore order on reload and check expiry (Requirement 5)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const savedOrder: DynamicDepositOrder = JSON.parse(raw);
+        const targetExpiry = savedOrder.expiresAt || savedOrder.timerExpiresAt;
+        const remainingMs = computeRemainingMs(targetExpiry);
+
+        if (remainingMs <= 0) {
+          // Timer expired -> show expired screen on reload as required
+          setOrder(savedOrder);
+          setIsTimerExpired(true);
+          setTimeLeft(0);
+        } else {
+          setOrder(savedOrder);
+          setTimeLeft(Math.floor(remainingMs / 1000));
+          setIsTimerExpired(false);
+        }
+
+        // Verify with server if order was already completed in the background
+        if (savedOrder.transactionId) {
+          dynamicDepositApi.getStatus(savedOrder.transactionId).then((res) => {
+            if (res.success && res.data) {
+              if (res.data.isCompleted) {
+                setIsSuccess(true);
+                setCreditedAmount(res.data.requestedAmount);
+                if (typeof res.data.balance === 'number') setNewBalance(res.data.balance);
+                try {
+                  localStorage.removeItem(STORAGE_KEY);
+                } catch {}
+              } else if (res.data.isExpired || res.data.status === 'EXPIRED') {
+                setIsTimerExpired(true);
+              }
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+    }
+  }, []);
+
   // Redirect to login if unauthenticated
   useEffect(() => {
     if (!authLoading && !user) {
@@ -85,11 +139,15 @@ function DepositContent() {
       if (res.success && res.data) {
         setOrder(res.data);
         setCreditedAmount(res.data.requestedAmount);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data));
+        } catch {}
         
-        // Calculate remaining seconds strictly from the server's timerExpiresAt
-        if (res.data.timerExpiresAt) {
-          const diffMs = new Date(res.data.timerExpiresAt).getTime() - Date.now();
-          const sec = Math.max(0, Math.floor(diffMs / 1000));
+        // Calculate remaining seconds strictly from the server's absolute expiry
+        const targetExpiry = res.data.expiresAt || res.data.timerExpiresAt;
+        if (targetExpiry) {
+          const remainingMs = computeRemainingMs(targetExpiry);
+          const sec = Math.floor(remainingMs / 1000);
           setTimeLeft(sec);
           if (sec <= 0) {
             setIsTimerExpired(true);
@@ -108,6 +166,9 @@ function DepositContent() {
   };
 
   const handleCancelOrder = async () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
     if (order?.transactionId) {
       try {
         await dynamicDepositApi.cancel(order.transactionId);
@@ -121,36 +182,71 @@ function DepositContent() {
     router.replace('/wallet/deposit');
   };
 
-  // Automatically start order if initialAmount was in URL params
+  const handleStartNewDeposit = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    setOrder(null);
+    setIsTimerExpired(false);
+    setTimeLeft(FIVE_MINUTES_SECONDS);
+    router.replace('/wallet/deposit');
+  };
+
+  // Automatically start order if initialAmount was in URL params AND no saved order exists
   useEffect(() => {
-    if (initialAmount > 0 && !order && !loading && !isSuccess) {
+    if (initialAmount > 0 && !order && !loading && !isSuccess && !isTimerExpired) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return;
+      } catch {}
       startDeposit(initialAmount);
     }
-  }, [initialAmount]);
+  }, [initialAmount, order, isTimerExpired]);
 
-  // 5-minute Countdown Interval: counts down by 1 second every 1000ms
+  // Absolute Expiry Countdown Timer & Visibility/Focus Sync
   useEffect(() => {
-    if (!order || isSuccess) return;
+    if (!order || isSuccess || isTimerExpired) return;
 
-    countdownIntervalRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setIsTimerExpired(true);
-          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const targetExpiry = order.timerExpiresAt || order.expiresAt;
+    if (!targetExpiry) return;
+
+    const syncRemainingTime = () => {
+      const remainingMs = computeRemainingMs(targetExpiry);
+      const sec = Math.floor(remainingMs / 1000);
+      setTimeLeft(sec);
+      if (sec <= 0) {
+        setIsTimerExpired(true);
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      }
+    };
+
+    // Run immediately to ensure fresh timestamp comparison
+    syncRemainingTime();
+
+    // Regular 1-second tick recalculating remaining = expiresAt - Date.now()
+    countdownIntervalRef.current = setInterval(syncRemainingTime, 1000);
+
+    // Event listeners to handle browser background throttling (mobile/tab switch)
+    const handleVisibilityOrFocus = () => {
+      syncRemainingTime();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('pageshow', handleVisibilityOrFocus);
 
     return () => {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('pageshow', handleVisibilityOrFocus);
     };
-  }, [order, isSuccess]);
+  }, [order, isSuccess, isTimerExpired]);
 
-  // Status Polling every 2.5 seconds
+  // Status Polling every 2.5 seconds (only while order is active and timer has NOT expired)
   useEffect(() => {
-    if (!order || isSuccess) return;
+    if (!order || isSuccess || isTimerExpired) return;
 
     const checkStatus = async () => {
       try {
@@ -162,10 +258,15 @@ function DepositContent() {
             if (typeof res.data.balance === 'number') {
               setNewBalance(res.data.balance);
             }
+            try {
+              localStorage.removeItem(STORAGE_KEY);
+            } catch {}
             if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          } else if (res.data.isLateMatch || res.data.status === 'AWAITING_LATE_MATCH') {
+          } else if (res.data.isLateMatch || res.data.status === 'AWAITING_LATE_MATCH' || res.data.isExpired || res.data.status === 'EXPIRED') {
             setIsTimerExpired(true);
+            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
           }
         }
       } catch {
@@ -178,7 +279,7 @@ function DepositContent() {
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
-  }, [order, isSuccess]);
+  }, [order, isSuccess, isTimerExpired]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
@@ -255,6 +356,42 @@ function DepositContent() {
                 className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
               >
                 Return to Wallet
+              </button>
+            </motion.div>
+          ) : order && isTimerExpired ? (
+            /* ==================================================== */
+            /* EXPIRED SCREEN (Requirement 3 & 5)                  */
+            /* ==================================================== */
+            <motion.div
+              key="expired-card"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card rounded-2xl p-8 sm:p-10 border border-orange-500/30 text-center shadow-2xl relative overflow-hidden fire-glow"
+            >
+              <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-orange-500/10 border border-orange-500/25 flex items-center justify-center text-orange-400 shadow-xl shadow-orange-500/10">
+                <Clock className="w-8 h-8 stroke-[2.2]" />
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl font-display font-black text-white mb-3 tracking-tight">
+                Deposit request expired
+              </h1>
+
+              <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-200 text-xs sm:text-sm leading-relaxed max-w-md mx-auto mb-8 space-y-2">
+                <p className="font-semibold text-orange-300">
+                  If you already paid, your wallet will be credited automatically within 15 minutes. Do not pay again.
+                </p>
+                <p className="text-[11px] text-zinc-400">
+                  Our system keeps listening for late bank notifications during this grace period so your funds remain safe.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleStartNewDeposit}
+                className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
+              >
+                Start New Deposit
               </button>
             </motion.div>
           ) : order ? (
@@ -385,88 +522,53 @@ function DepositContent() {
                 </div>
               </div>
 
-              {/* Waiting for verification indicator OR Late Match Transition */}
+              {/* Waiting for verification indicator */}
               <div className="mt-5 pt-5 border-t border-white/5">
-                {!isTimerExpired ? (
-                  /* Freework Dribbble-style circular wave loader */
-                  <div className="flex flex-col items-center justify-center py-2 text-center">
-                    {/* Staggered radial dots wave loader with brand orange-to-blue gradient */}
-                    <div className="relative w-12 h-12 mb-3 flex items-center justify-center">
-                      {/* Ambient background glow aura */}
-                      <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/15 via-transparent to-orange-500/15 blur-md pointer-events-none" />
+                {/* Freework Dribbble-style circular wave loader */}
+                <div className="flex flex-col items-center justify-center py-2 text-center">
+                  {/* Staggered radial dots wave loader with brand orange-to-blue gradient */}
+                  <div className="relative w-12 h-12 mb-3 flex items-center justify-center">
+                    {/* Ambient background glow aura */}
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/15 via-transparent to-orange-500/15 blur-md pointer-events-none" />
 
-                      {/* 8 Radial Staggered Pulsing Dots */}
-                      {FREEWORK_LOADER_DOTS.map((dot, i) => (
-                        <div
-                          key={i}
-                          className="absolute top-1/2 left-1/2 -ml-1 -mt-1 w-2 h-2 flex items-center justify-center pointer-events-none"
-                          style={{
-                            transform: `rotate(${dot.angle}deg) translateY(-16px)`,
-                          }}
-                        >
-                          <div
-                            className="w-2 h-2 rounded-full freework-wave-dot"
-                            style={{
-                              backgroundColor: dot.color,
-                              color: dot.color,
-                              animationDelay: `${-1.2 + (i * 1.2) / FREEWORK_LOADER_DOTS.length}s`,
-                            }}
-                          />
-                        </div>
-                      ))}
-
-                      {/* Delicate ambient center core */}
-                      <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-blue-400/40 to-orange-400/40 blur-[0.5px] pointer-events-none" />
-                    </div>
-
-                    {/* Status Headline */}
-                    <div className="flex items-center justify-center gap-1 text-sm font-bold text-white tracking-wide">
-                      <span>Verifying your payment</span>
-                      <span className="flex space-x-0.5">
-                        <span className="animate-bounce delay-100 text-blue-400 font-bold">.</span>
-                        <span className="animate-bounce delay-200 text-blue-400 font-bold">.</span>
-                        <span className="animate-bounce delay-300 text-orange-400 font-bold">.</span>
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-zinc-400 mt-1 max-w-xs leading-relaxed">
-                      Please complete the transfer in your UPI app. This page will update automatically.
-                    </p>
-                  </div>
-                ) : (
-                  /* Requirement 5: Timer Expired / Late Match State */
-                  <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/25 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-bold text-orange-300 mb-1">
-                          Payment Taking Longer Than Usual
-                        </h4>
-                        <p className="text-xs text-orange-200/90 leading-relaxed">
-                          Taking a bit longer than usual. If you&apos;ve already paid, please don&apos;t pay again — it will be verified automatically. If it doesn&apos;t reflect within 15 minutes, contact support with your UTR.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-2 border-t border-orange-500/15 text-xs text-orange-400 font-medium">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500" />
-                      </span>
-                      <span>Still verifying your transfer in the background...</span>
-                    </div>
-
-                    <div className="pt-2 border-t border-orange-500/15">
-                      <button
-                        type="button"
-                        onClick={handleCancelOrder}
-                        className="w-full py-2.5 px-3 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 font-semibold text-xs border border-orange-500/30 transition-colors"
+                    {/* 8 Radial Staggered Pulsing Dots */}
+                    {FREEWORK_LOADER_DOTS.map((dot, i) => (
+                      <div
+                        key={i}
+                        className="absolute top-1/2 left-1/2 -ml-1 -mt-1 w-2 h-2 flex items-center justify-center pointer-events-none"
+                        style={{
+                          transform: `rotate(${dot.angle}deg) translateY(-16px)`,
+                        }}
                       >
-                        Start New Deposit Request
-                      </button>
-                    </div>
+                        <div
+                          className="w-2 h-2 rounded-full freework-wave-dot"
+                          style={{
+                            backgroundColor: dot.color,
+                            color: dot.color,
+                            animationDelay: `${-1.2 + (i * 1.2) / FREEWORK_LOADER_DOTS.length}s`,
+                          }}
+                        />
+                      </div>
+                    ))}
+
+                    {/* Delicate ambient center core */}
+                    <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-blue-400/40 to-orange-400/40 blur-[0.5px] pointer-events-none" />
                   </div>
-                )}
+
+                  {/* Status Headline */}
+                  <div className="flex items-center justify-center gap-1 text-sm font-bold text-white tracking-wide">
+                    <span>Verifying your payment</span>
+                    <span className="flex space-x-0.5">
+                      <span className="animate-bounce delay-100 text-blue-400 font-bold">.</span>
+                      <span className="animate-bounce delay-200 text-blue-400 font-bold">.</span>
+                      <span className="animate-bounce delay-300 text-orange-400 font-bold">.</span>
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-zinc-400 mt-1 max-w-xs leading-relaxed">
+                    Please complete the transfer in your UPI app. This page will update automatically.
+                  </p>
+                </div>
               </div>
 
               {/* Security note */}
