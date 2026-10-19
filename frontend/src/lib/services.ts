@@ -818,6 +818,8 @@ export const depositApi = {
 
 export interface DynamicDepositOrder {
   transactionId: string;
+  tr?: string;
+  amount?: number;
   requestedAmount: number;
   actualQrAmount: number;
   upiDeepLink: string;
@@ -887,6 +889,17 @@ export interface AutoDepositSummary {
 }
 
 export const dynamicDepositApi = {
+  getActive: async (): Promise<{ success: boolean; data: DynamicDepositOrder | null }> => {
+    try {
+      const res = await api.get('/payment/deposit/active');
+      return res.data;
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        return { success: false, data: null };
+      }
+      throw err;
+    }
+  },
   initiate: async (amount: number): Promise<{ success: boolean; data: DynamicDepositOrder; message?: string }> => {
     const res = await api.post('/payment/deposit/initiate', { amount });
     return res.data;

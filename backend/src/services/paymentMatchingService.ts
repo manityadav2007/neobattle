@@ -38,6 +38,8 @@ const MAX_CREATIONS_PER_WINDOW = 5;
 
 export interface DepositOrderResult {
   transactionId: string;
+  tr: string;
+  amount: number;
   requestedAmount: number;
   actualQrAmount: number;
   upiDeepLink: string;
@@ -166,6 +168,8 @@ export class PaymentMatchingService {
 
         return {
           transactionId: existing.id,
+          tr: existing.id,
+          amount: actualQrAmount,
           requestedAmount: cleanRequested,
           actualQrAmount,
           upiDeepLink,
@@ -262,6 +266,8 @@ export class PaymentMatchingService {
 
       return {
         transactionId: transaction.id,
+        tr: transaction.id,
+        amount: actualQrAmount,
         requestedAmount: cleanRequested,
         actualQrAmount,
         upiDeepLink,
@@ -327,6 +333,64 @@ export class PaymentMatchingService {
     });
 
     return { success: true, message: 'Deposit order cancelled and slot released' };
+  }
+
+  /**
+   * Returns the logged-in user's most recent deposit that is still pending
+   * AND strictly within its 5-minute payment window (timerExpiresAt > now).
+   * Does NOT return orders that are cancelled, completed, or beyond the 5-minute window.
+   */
+  async getActiveDepositOrder(userId: string): Promise<DepositOrderResult | null> {
+    await this.cleanupExpiredOrders();
+
+    const now = new Date();
+    const upiId = (process.env.MERCHANT_UPI_ID || process.env.UPI_ID || '').trim();
+    const merchantName = (process.env.UPI_MERCHANT_NAME || 'NeoBattle').trim();
+
+    const tx = await prisma.transaction.findFirst({
+      where: {
+        userId,
+        type: TransactionType.DEPOSIT,
+        status: TransactionStatus.PENDING,
+        timerExpiresAt: { gt: now },
+        decimalOffset: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!tx || !tx.actualQrAmount || !tx.timerExpiresAt) {
+      return null;
+    }
+
+    const actualQrAmount = Number(tx.actualQrAmount);
+    const requestedAmount = tx.requestedAmount ? Number(tx.requestedAmount) : Math.floor(actualQrAmount);
+    const transactionRef = tx.id;
+    const upiDeepLink = (tx.metadata as any)?.upiDeepLink || this.buildUpiUri(
+      upiId,
+      merchantName,
+      actualQrAmount,
+      transactionRef,
+      `${merchantName} Deposit`
+    );
+
+    const qrCodeDataUrl = await QRCode.toDataURL(upiDeepLink, {
+      margin: 1,
+      width: 320,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+
+    return {
+      transactionId: tx.id,
+      tr: tx.id,
+      amount: actualQrAmount,
+      requestedAmount,
+      actualQrAmount,
+      upiDeepLink,
+      qrCodeDataUrl,
+      timerExpiresAt: tx.timerExpiresAt,
+      expiresAt: tx.timerExpiresAt,
+      graceExpiresAt: tx.expiresAt || new Date(tx.timerExpiresAt.getTime() + 15 * 60 * 1000),
+    };
   }
 
   /**

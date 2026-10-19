@@ -252,6 +252,22 @@ export async function cancelDepositOrder(req: AuthenticatedRequest, res: Respons
   }
 }
 
+export async function getActiveDepositOrder(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const userId = req.user!.id;
+
+  try {
+    const active = await paymentMatchingService.getActiveDepositOrder(userId);
+    if (!active) {
+      res.status(404).json({ success: false, message: 'No active deposit request' });
+      return;
+    }
+    res.json({ success: true, data: active });
+  } catch (err: any) {
+    console.error('[Payment] getActiveDepositOrder error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to check active deposit' });
+  }
+}
+
 // ── Admin: Unmatched Payments Management ────────────────────────────────────
 
 export async function listUnmatchedPayments(req: AuthenticatedRequest, res: Response): Promise<void> {

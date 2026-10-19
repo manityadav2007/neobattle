@@ -60,6 +60,9 @@ function DepositContent() {
   const [newBalance, setNewBalance] = useState<number | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  const [checkingActive, setCheckingActive] = useState(true);
+  const hasCheckedActiveRef = useRef(false);
+
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -71,51 +74,6 @@ function DepositContent() {
     const diff = new Date(targetDate).getTime() - Date.now();
     return Math.max(0, diff);
   };
-
-  // Restore order on reload and check expiry (Requirement 5)
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const savedOrder: DynamicDepositOrder = JSON.parse(raw);
-        const targetExpiry = savedOrder.expiresAt || savedOrder.timerExpiresAt;
-        const remainingMs = computeRemainingMs(targetExpiry);
-
-        if (remainingMs <= 0) {
-          // Timer expired -> show expired screen on reload as required
-          setOrder(savedOrder);
-          setIsTimerExpired(true);
-          setTimeLeft(0);
-        } else {
-          setOrder(savedOrder);
-          setTimeLeft(Math.floor(remainingMs / 1000));
-          setIsTimerExpired(false);
-        }
-
-        // Verify with server if order was already completed in the background
-        if (savedOrder.transactionId) {
-          dynamicDepositApi.getStatus(savedOrder.transactionId).then((res) => {
-            if (res.success && res.data) {
-              if (res.data.isCompleted) {
-                setIsSuccess(true);
-                setCreditedAmount(res.data.requestedAmount);
-                if (typeof res.data.balance === 'number') setNewBalance(res.data.balance);
-                try {
-                  localStorage.removeItem(STORAGE_KEY);
-                } catch {}
-              } else if (res.data.isExpired || res.data.status === 'EXPIRED') {
-                setIsTimerExpired(true);
-              }
-            }
-          }).catch(() => {});
-        }
-      }
-    } catch {
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch {}
-    }
-  }, []);
 
   // Redirect to login if unauthenticated
   useEffect(() => {
@@ -165,6 +123,53 @@ function DepositContent() {
     }
   };
 
+  // Resume active deposit on load (Requirement 1, 2, 3)
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setCheckingActive(false);
+      return;
+    }
+    if (hasCheckedActiveRef.current) return;
+    hasCheckedActiveRef.current = true;
+
+    const checkActiveDeposit = async () => {
+      try {
+        const res = await dynamicDepositApi.getActive();
+        if (res.success && res.data) {
+          const targetExpiry = res.data.expiresAt || res.data.timerExpiresAt;
+          const remainingMs = computeRemainingMs(targetExpiry);
+          if (remainingMs > 0) {
+            setOrder(res.data);
+            setTimeLeft(Math.floor(remainingMs / 1000));
+            setIsTimerExpired(false);
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data));
+            } catch {}
+            setCheckingActive(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch active deposit:', err);
+      }
+
+      // No active deposit within 5 minutes: show amount selection
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+      setOrder(null);
+      setIsTimerExpired(false);
+      setCheckingActive(false);
+
+      if (initialAmount > 0) {
+        startDeposit(initialAmount);
+      }
+    };
+
+    checkActiveDeposit();
+  }, [user, authLoading, initialAmount]);
+
   const handleCancelOrder = async () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -191,17 +196,6 @@ function DepositContent() {
     setTimeLeft(FIVE_MINUTES_SECONDS);
     router.replace('/wallet/deposit');
   };
-
-  // Automatically start order if initialAmount was in URL params AND no saved order exists
-  useEffect(() => {
-    if (initialAmount > 0 && !order && !loading && !isSuccess && !isTimerExpired) {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) return;
-      } catch {}
-      startDeposit(initialAmount);
-    }
-  }, [initialAmount, order, isTimerExpired]);
 
   // Absolute Expiry Countdown Timer & Visibility/Focus Sync
   useEffect(() => {
@@ -297,7 +291,7 @@ function DepositContent() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || checkingActive) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />

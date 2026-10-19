@@ -116,3 +116,24 @@ export function evaluateDepositEligibility(params: {
     remainingGraceMs: 0,
   };
 }
+
+/**
+ * Evaluates whether a deposit order qualifies as an "active deposit" to resume.
+ * Criteria:
+ * 1. Must be PENDING (not COMPLETED, CANCELLED, AWAITING_LATE_MATCH, or EXPIRED)
+ * 2. Must be strictly within the 5-minute payment window (now < timerExpiresAt)
+ */
+export function isDepositActive(params: {
+  status: string;
+  timerExpiresAt: Date | string | number;
+  nowMs?: number;
+}): boolean {
+  const now = params.nowMs ?? Date.now();
+  const timerMs = new Date(params.timerExpiresAt).getTime();
+
+  if (params.status !== 'PENDING') {
+    return false;
+  }
+
+  return now < timerMs;
+}
