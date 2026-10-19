@@ -1102,7 +1102,7 @@ export default function HostDashboardPage() {
                                       return (
                                         <div
                                           key={m.id || mIdx}
-                                          className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] border border-white/5 text-xs"
+                                          className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] border border-white/5 text-xs min-w-0 gap-2"
                                         >
                                           <div className="flex items-center gap-2 min-w-0">
                                             <span
@@ -1127,7 +1127,7 @@ export default function HostDashboardPage() {
                                             </div>
                                           </div>
                                           <div className="flex items-center gap-2 shrink-0">
-                                            <span className="font-mono text-zinc-400 text-[11px] bg-black/40 px-2 py-0.5 rounded border border-white/5" title="Free Fire UID">
+                                            <span className="font-mono text-zinc-400 text-[11px] bg-black/40 px-2 py-0.5 rounded border border-white/5 shrink-0 flex-shrink-0 whitespace-nowrap" title="Free Fire UID">
                                               {uid}
                                             </span>
                                             {level != null && (

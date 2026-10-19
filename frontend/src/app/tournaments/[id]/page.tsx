@@ -1269,21 +1269,21 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
                     <div className="space-y-3">
                       {/* Slot #1: Captain (You) */}
-                      <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                      <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 min-w-0 overflow-hidden">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider shrink-0 flex-shrink-0 whitespace-nowrap">
                             Captain
                           </span>
-                          <span className="text-sm font-semibold text-white truncate">{user?.username}</span>
+                          <span className="text-sm font-semibold text-white truncate min-w-0" title={user?.username}>{user?.username}</span>
                           {user?.ign && (
-                            <span className="text-xs font-mono text-zinc-400 truncate">({user.ign})</span>
+                            <span className="text-xs font-mono text-zinc-400 truncate shrink-0 max-w-[45%]" title={user.ign}>({user.ign})</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded">
+                        <div className="flex items-center gap-2 shrink-0 flex-shrink-0 whitespace-nowrap">
+                          <span className="text-xs font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded shrink-0 flex-shrink-0 whitespace-nowrap">
                             UID: {user?.freeFireId || '—'}
                           </span>
-                          <span className="text-[11px] text-zinc-400 font-semibold">Lvl {user?.gameLevel ?? 0}</span>
+                          <span className="text-[11px] text-zinc-400 font-semibold shrink-0 flex-shrink-0 whitespace-nowrap">Lvl {user?.gameLevel ?? 0}</span>
                         </div>
                       </div>
 
@@ -1358,30 +1358,30 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
             {/* Registered Teams / Participants Section */}
             {tournament.entries && tournament.entries.length > 0 && (
-              <div className="p-6 rounded-2xl bg-zinc-900/50 backdrop-blur-xl border border-white/10 space-y-4">
+              <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/50 backdrop-blur-xl border border-white/10 space-y-4 min-w-0 overflow-hidden">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Users className="w-4 h-4 text-fire-400" />
-                  <span>{isTeam ? 'Registered Teams' : 'Registered Participants'} ({tournament.entries.length})</span>
+                  <Users className="w-4 h-4 text-fire-400 shrink-0" />
+                  <span className="truncate">{isTeam ? 'Registered Teams' : 'Registered Participants'} ({tournament.entries.length})</span>
                 </h3>
 
                 {isTeam ? (
-                  <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="grid sm:grid-cols-2 gap-3 min-w-0">
                     {tournament.entries.map((entry: any) => {
                       const tName = entry.team?.name || `${entry.user?.username || 'Player'}'s Team`;
                       const members = entry.team?.members || [];
                       return (
-                        <div key={entry.id} className="p-4 rounded-xl bg-black/40 border border-white/10 hover:border-white/20 transition-all">
-                          <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-white/5">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-bold text-white text-sm truncate">{tName}</span>
+                        <div key={entry.id} className="p-3.5 sm:p-4 rounded-xl bg-black/40 border border-white/10 hover:border-white/20 transition-all min-w-0 overflow-hidden">
+                          <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-white/5 min-w-0 gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="font-bold text-white text-sm truncate min-w-0" title={tName}>{tName}</span>
                               {entry.team?.tag && (
-                                <span className="font-mono text-xs font-bold text-fire-400 bg-fire-500/10 px-1.5 py-0.5 rounded border border-fire-500/20 shrink-0">
+                                <span className="font-mono text-xs font-bold text-fire-400 bg-fire-500/10 px-1.5 py-0.5 rounded border border-fire-500/20 shrink-0 flex-shrink-0 whitespace-nowrap">
                                   [{entry.team.tag}]
                                 </span>
                               )}
                             </div>
                             {entry.placement && (
-                              <span className="px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-400 text-xs font-bold font-mono">
+                              <span className="px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-400 text-xs font-bold font-mono shrink-0 flex-shrink-0 whitespace-nowrap ml-auto">
                                 #{entry.placement}
                               </span>
                             )}
@@ -1389,22 +1389,45 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                           <div className="space-y-1.5">
                             {members.length > 0 ? (
                               members.map((m: any, idx: number) => (
-                                <div key={m.id || idx} className="flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <span className="text-zinc-500 font-mono">#{idx + 1}</span>
-                                    <span className="text-zinc-200 font-medium truncate">{m.user?.username}</span>
-                                    {m.user?.ign && <span className="text-zinc-500 font-mono truncate">({m.user.ign})</span>}
+                                <div key={m.id || idx} className="flex items-center justify-between text-xs min-w-0 gap-2">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                    <span className="text-zinc-500 font-mono shrink-0 flex-shrink-0 whitespace-nowrap">#{idx + 1}</span>
+                                    <span
+                                      className="text-zinc-200 font-medium truncate min-w-0"
+                                      title={m.user?.username}
+                                    >
+                                      {m.user?.username}
+                                    </span>
+                                    {m.user?.ign && (
+                                      <span
+                                        className="text-zinc-500 font-mono truncate shrink-0 max-w-[45%]"
+                                        title={m.user.ign}
+                                      >
+                                        ({m.user.ign})
+                                      </span>
+                                    )}
                                   </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <span className="font-mono text-zinc-400 text-[11px]">{m.user?.freeFireId}</span>
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-emerald-400 font-semibold">Lvl {m.user?.gameLevel || 0}</span>
+                                  <div className="flex items-center gap-2 shrink-0 flex-shrink-0 whitespace-nowrap ml-auto">
+                                    <span className="font-mono text-zinc-400 text-[11px] shrink-0 flex-shrink-0 whitespace-nowrap">
+                                      {m.user?.freeFireId}
+                                    </span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-emerald-400 font-semibold shrink-0 flex-shrink-0 whitespace-nowrap">
+                                      Lvl {m.user?.gameLevel || 0}
+                                    </span>
                                   </div>
                                 </div>
                               ))
                             ) : (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-zinc-300">{entry.user?.username}</span>
-                                <span className="font-mono text-zinc-500">{entry.user?.freeFireId}</span>
+                              <div className="flex items-center justify-between text-xs min-w-0 gap-2">
+                                <span
+                                  className="text-zinc-300 truncate min-w-0"
+                                  title={entry.user?.username}
+                                >
+                                  {entry.user?.username}
+                                </span>
+                                <span className="font-mono text-zinc-500 shrink-0 flex-shrink-0 whitespace-nowrap ml-auto">
+                                  {entry.user?.freeFireId}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -1413,16 +1436,37 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                     })}
                   </div>
                 ) : (
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5 min-w-0">
                     {tournament.entries.map((entry: any) => (
-                      <div key={entry.id} className="p-3 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-white font-medium truncate">{entry.user?.username}</span>
-                          {entry.user?.ign && <span className="text-zinc-500 truncate">({entry.user.ign})</span>}
+                      <div
+                        key={entry.id}
+                        className="p-3 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between text-xs min-w-0 overflow-hidden gap-2"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span
+                            className="text-white font-medium truncate min-w-0"
+                            title={entry.user?.username}
+                          >
+                            {entry.user?.username}
+                          </span>
+                          {entry.user?.ign && (
+                            <span
+                              className="text-zinc-500 truncate shrink-0 max-w-[45%]"
+                              title={entry.user.ign}
+                            >
+                              ({entry.user.ign})
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="font-mono text-zinc-400">{entry.user?.freeFireId}</span>
-                          {entry.placement && <span className="text-yellow-400 font-bold">#{entry.placement}</span>}
+                        <div className="flex items-center gap-2 shrink-0 flex-shrink-0 whitespace-nowrap ml-auto">
+                          <span className="font-mono text-zinc-400 shrink-0 flex-shrink-0 whitespace-nowrap">
+                            {entry.user?.freeFireId}
+                          </span>
+                          {entry.placement && (
+                            <span className="text-yellow-400 font-bold shrink-0 flex-shrink-0 whitespace-nowrap">
+                              #{entry.placement}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1861,21 +1905,21 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                                   {matchedTeam.team.members?.map((m: any, idx: number) => {
                                     const isLeader = m.role === 'LEADER' || m.user?.id === (matchedTeam.team.leaderId || matchedTeam.entry?.userId);
                                     return (
-                                      <div key={m.id || idx} className="flex items-center justify-between text-[11px] text-zinc-300">
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          <span className="text-zinc-500 font-mono text-[10px]">#{idx + 1}</span>
-                                          <span className="font-semibold text-zinc-100 truncate">
+                                      <div key={m.id || idx} className="flex items-center justify-between text-[11px] text-zinc-300 min-w-0 gap-2">
+                                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                          <span className="text-zinc-500 font-mono text-[10px] shrink-0 flex-shrink-0 whitespace-nowrap">#{idx + 1}</span>
+                                          <span className="font-semibold text-zinc-100 truncate min-w-0" title={m.user?.inGameNickname || m.user?.ign || m.user?.username || 'Player'}>
                                             {m.user?.inGameNickname || m.user?.ign || m.user?.username || 'Player'}
                                           </span>
                                           {isLeader && (
-                                            <span className="text-[9px] px-1 rounded bg-yellow-500/20 text-yellow-400 font-bold uppercase shrink-0">
+                                            <span className="text-[9px] px-1 rounded bg-yellow-500/20 text-yellow-400 font-bold uppercase shrink-0 flex-shrink-0 whitespace-nowrap">
                                               Capt
                                             </span>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 shrink-0">
-                                          <span>{m.user?.freeFireId || 'No UID'}</span>
-                                          <span className="text-emerald-400 font-semibold bg-white/5 px-1 py-0.2 rounded">
+                                        <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 shrink-0 flex-shrink-0 whitespace-nowrap ml-auto">
+                                          <span className="shrink-0 flex-shrink-0 whitespace-nowrap">{m.user?.freeFireId || 'No UID'}</span>
+                                          <span className="text-emerald-400 font-semibold bg-white/5 px-1 py-0.2 rounded shrink-0 flex-shrink-0 whitespace-nowrap">
                                             Lvl {m.user?.gameLevel || 0}
                                           </span>
                                         </div>
@@ -1896,17 +1940,17 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                           {!isTeam && enteredVal.trim() && (
                             matchedSolo ? (
                               <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 space-y-1 text-xs">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-bold text-white truncate">
+                                <div className="flex items-center justify-between min-w-0 gap-2">
+                                  <span className="font-bold text-white truncate min-w-0" title={matchedSolo.user?.inGameNickname || matchedSolo.user?.ign || matchedSolo.user?.username}>
                                     {matchedSolo.user?.inGameNickname || matchedSolo.user?.ign || matchedSolo.user?.username}
                                   </span>
-                                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5">
+                                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 shrink-0 flex-shrink-0 whitespace-nowrap ml-auto">
                                     <Check className="w-3 h-3" /> Matched
                                   </span>
                                 </div>
-                                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
-                                  <span>UID: {matchedSolo.user?.freeFireId}</span>
-                                  <span className="text-emerald-400 font-semibold">Lvl {matchedSolo.user?.gameLevel || 0}</span>
+                                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono min-w-0 gap-2">
+                                  <span className="shrink-0 flex-shrink-0 whitespace-nowrap">UID: {matchedSolo.user?.freeFireId}</span>
+                                  <span className="text-emerald-400 font-semibold shrink-0 flex-shrink-0 whitespace-nowrap ml-auto">Lvl {matchedSolo.user?.gameLevel || 0}</span>
                                 </div>
                               </div>
                             ) : (
