@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Response, NextFunction } from 'express';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -280,98 +280,109 @@ export async function listMyDepositClaims(req: AuthenticatedRequest, res: Respon
  * Admin Queue: Lists all pending deposit requests with signed screenshot URLs and auto-suggested SMS matches.
  * RLS: Admin and Super Admin only (Moderator is forbidden).
  */
-export async function listDepositRequests(req: AuthenticatedRequest, res: Response): Promise<void> {
+export async function listDepositRequests(req: AuthenticatedRequest, res: Response, next?: NextFunction): Promise<void> {
   // Enforce Admin and Super Admin only (moderators cannot approve money)
   if (!req.user || (req.user.role !== UserRole.ADMIN && req.user.role !== UserRole.SUPER_ADMIN)) {
     res.status(403).json({ success: false, message: 'Admin or Super Admin access required' });
     return;
   }
 
-  const requests = await prisma.depositRequest.findMany({
-    where: { status: 'PENDING' },
-    include: {
-      user: { select: { id: true, username: true, email: true } },
-      depositTransaction: {
-        select: {
-          id: true,
-          amount: true,
-          requestedAmount: true,
-          actualQrAmount: true,
-          createdAt: true,
-          expiresAt: true,
-          timerExpiresAt: true,
-          status: true,
+  try {
+    const requests = await prisma.depositRequest.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        user: { select: { id: true, username: true, email: true } },
+        depositTransaction: {
+          select: {
+            id: true,
+            amount: true,
+            requestedAmount: true,
+            actualQrAmount: true,
+            createdAt: true,
+            expiresAt: true,
+            timerExpiresAt: true,
+            status: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      orderBy: { createdAt: 'desc' },
+    });
 
-  // Fetch pending unmatched payments for auto-suggestions
-  const pendingUnmatched = await prisma.unmatchedPayment.findMany({
-    where: { status: 'PENDING' },
-    orderBy: { receivedAt: 'desc' },
-    take: 100,
-  });
+    // Fetch pending unmatched payments for auto-suggestions
+    const pendingUnmatched = await prisma.unmatchedPayment.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { receivedAt: 'desc' },
+      take: 100,
+    });
 
-  const enrichedRequests = await Promise.all(
-    requests.map(async (r) => {
-      // Short-lived signed URL for admin viewing (15 min)
-      const signedUrl = await privateStorageService.getAdminSignedUrl(
-        r.screenshotStorageKey || r.screenshotUrl
-      );
+    const enrichedRequests = await Promise.all(
+      requests.map(async (r) => {
+        // Short-lived signed URL for admin viewing (15 min)
+        const signedUrl = await privateStorageService.getAdminSignedUrl(
+          r.screenshotStorageKey || r.screenshotUrl
+        );
 
-      const exactAmt = r.exactAmount ? Number(r.exactAmount) : Number(r.amount);
-      const baseAmt = r.baseAmount ? Number(r.baseAmount) : Number(r.amount);
+        const exactAmt = r.exactAmount ? Number(r.exactAmount) : Number(r.amount);
+        const baseAmt = r.baseAmount ? Number(r.baseAmount) : Number(r.amount);
 
-      // Auto-suggest matching bank SMS from Unmatched (SMS) list:
-      // Match if exact amount matches OR UTR matches
-      const suggested = pendingUnmatched.find((u) => {
-        const uAmt = Number(u.amount);
-        const amountMatch = Math.abs(uAmt - exactAmt) < 0.005;
-        const utrMatch = r.utrNumber && u.utrNumber && r.utrNumber.trim() === u.utrNumber.trim();
-        return utrMatch || amountMatch;
-      });
+        // Auto-suggest matching bank SMS from Unmatched (SMS) list:
+        // Match if exact amount matches OR UTR matches
+        const suggested = pendingUnmatched.find((u) => {
+          const uAmt = Number(u.amount);
+          const amountMatch = Math.abs(uAmt - exactAmt) < 0.005;
+          const utrMatch = r.utrNumber && u.utrNumber && r.utrNumber.trim() === u.utrNumber.trim();
+          return utrMatch || amountMatch;
+        });
 
-      const reqCreatedAt = r.depositTransaction?.createdAt || r.createdAt;
-      const reqExpiredAt =
-        r.depositTransaction?.timerExpiresAt || r.depositTransaction?.expiresAt || null;
+        const reqCreatedAt = r.depositTransaction?.createdAt || r.createdAt;
+        const reqExpiredAt =
+          r.depositTransaction?.timerExpiresAt || r.depositTransaction?.expiresAt || null;
 
-      const timeSinceExpiryMs = reqExpiredAt ? Math.max(0, Date.now() - new Date(reqExpiredAt).getTime()) : 0;
+        const timeSinceExpiryMs = reqExpiredAt ? Math.max(0, Date.now() - new Date(reqExpiredAt).getTime()) : 0;
 
-      return {
-        id: r.id,
-        userId: r.userId,
-        user: r.user,
-        amount: baseAmt,
-        exactAmount: exactAmt,
-        baseAmount: baseAmt,
-        utrNumber: r.utrNumber,
-        notes: r.notes,
-        screenshotUrl: signedUrl,
-        status: r.status,
-        createdAt: r.createdAt,
-        requestCreatedAt: reqCreatedAt,
-        requestExpiredAt: reqExpiredAt,
-        timeSinceExpiryMs,
-        suggestedMatch: suggested
-          ? {
-              id: suggested.id,
-              amount: Number(suggested.amount),
-              sender: suggested.sender,
-              utrNumber: suggested.utrNumber,
-              receivedAt: suggested.receivedAt,
-              rawMessage: suggested.rawMessage,
-            }
-          : null,
-      };
-    })
-  );
+        return {
+          id: r.id,
+          userId: r.userId,
+          user: r.user,
+          amount: baseAmt,
+          exactAmount: exactAmt,
+          baseAmount: baseAmt,
+          utrNumber: r.utrNumber,
+          notes: r.notes,
+          screenshotUrl: signedUrl,
+          status: r.status,
+          createdAt: r.createdAt,
+          requestCreatedAt: reqCreatedAt,
+          requestExpiredAt: reqExpiredAt,
+          timeSinceExpiryMs,
+          suggestedMatch: suggested
+            ? {
+                id: suggested.id,
+                amount: Number(suggested.amount),
+                sender: suggested.sender,
+                utrNumber: suggested.utrNumber,
+                receivedAt: suggested.receivedAt,
+                rawMessage: suggested.rawMessage,
+              }
+            : null,
+        };
+      })
+    );
 
-  res.json({
-    success: true,
-    data: enrichedRequests,
-  });
+    res.json({
+      success: true,
+      data: enrichedRequests,
+    });
+  } catch (err: any) {
+    console.error('[DepositController.listDepositRequests] Error querying deposit requests:', err);
+    if (next) {
+      return next(err);
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve deposit requests',
+    });
+  }
 }
 
 /**

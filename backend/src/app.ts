@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import hpp from 'hpp';
 import passport from './config/passport';
-import { connectDatabase, disconnectDatabase } from './config/db';
+import { connectDatabase, disconnectDatabase, prisma } from './config/db';
 import { connectRedis, disconnectRedis } from './config/redis';
 import { globalLimiter, apiLimiter } from './middleware/rateLimiter';
 import routes from './routes';
@@ -69,32 +69,125 @@ const killCounterDir = path.resolve(process.cwd(), 'uploads', 'kill-counter');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 if (!fs.existsSync(killCounterDir)) fs.mkdirSync(killCounterDir, { recursive: true });
 
+// ── Process-level crash prevention ───────────────────────────────────────────
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  console.error('[CRITICAL] Unhandled Promise Rejection at:', promise, 'reason:', reason?.message || reason);
+  if (reason?.stack) {
+    console.error(reason.stack);
+  }
+});
+
+process.on('uncaughtException', (err: Error) => {
+  console.error('[CRITICAL] Uncaught Exception:', err.message);
+  if (err.stack) {
+    console.error(err.stack);
+  }
+});
+
 app.use('/uploads', express.static(uploadsDir));
 app.use(globalLimiter);
 app.use(passport.initialize());
 
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ success: true, message: 'NEOBATTLE API is running', version: '1.0.0' });
+// ── Health check with database readiness probe ──────────────────────────────
+app.get(['/health', '/api/health'], async (_req: Request, res: Response) => {
+  try {
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('DB ping timeout')), 3000)),
+    ]);
+
+    res.json({
+      success: true,
+      status: 'ok',
+      database: 'connected',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+    });
+  } catch (dbErr: any) {
+    console.warn('[Health Check] Database probe failed:', dbErr?.message || dbErr);
+    res.status(503).json({
+      success: false,
+      status: 'degraded',
+      database: 'disconnected',
+      timestamp: new Date().toISOString(),
+      message: 'Database connectivity degraded',
+    });
+  }
 });
 
 app.use('/api', optionalAuth, apiLimiter, routes);
 app.use('/auth', authRoutes);
 
-
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
 
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('[Error]', err.message);
-  res.status(500).json({
+// ── Central Error Handler: Sanitized, no SQL or internal paths leaked ───────
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[Central Error Handler]', {
+    name: err?.name,
+    message: err?.message,
+    code: err?.code,
+    stack: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
+  });
+
+  // Prisma known errors (P2022 column does not exist, P2002 unique constraint, etc.)
+  if (err?.code && typeof err.code === 'string' && err.code.startsWith('P')) {
+    res.status(500).json({
+      success: false,
+      message: 'A database error occurred. The operation could not be completed.',
+    });
+    return;
+  }
+
+  const statusCode = typeof err.statusCode === 'number' ? err.statusCode : 500;
+  res.status(statusCode).json({
     success: false,
-    message: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+    message: statusCode < 500 ? (err.message || 'Request failed') : 'Internal server error',
   });
 });
 
+async function checkDatabaseSchema(): Promise<void> {
+  try {
+    const requiredChecks = [
+      { table: 'DepositRequest', column: 'exactAmount' },
+      { table: 'DepositRequest', column: 'baseAmount' },
+      { table: 'DepositRequest', column: 'utrNumber' },
+      { table: 'DepositRequest', column: 'depositTransactionId' },
+    ];
+
+    const results: any[] = await prisma.$queryRaw`
+      SELECT table_name, column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+        AND table_name = 'DepositRequest';
+    `;
+
+    const existingColumns = new Set(results.map((r: any) => `${r.table_name}.${r.column_name}`));
+    const missing: string[] = [];
+    for (const req of requiredChecks) {
+      if (!existingColumns.has(`${req.table}.${req.column}`)) {
+        missing.push(`${req.table}.${req.column}`);
+      }
+    }
+
+    if (missing.length > 0) {
+      console.warn(
+        `⚠️ [DATABASE WARNING] Missing expected columns in live database:\n` +
+        missing.map((m) => `   - ${m}`).join('\n') +
+        `\n   Please execute database migration to resolve schema drift.`
+      );
+    } else {
+      console.log('✅ Database schema verified: core columns present.');
+    }
+  } catch (err: any) {
+    console.warn('⚠️ [DATABASE WARNING] Could not verify database schema columns:', err?.message || err);
+  }
+}
+
 async function startServer(): Promise<void> {
   await connectDatabase();
+  await checkDatabaseSchema();
   await connectRedis();
 
   startTournamentNotifier();

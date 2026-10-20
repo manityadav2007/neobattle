@@ -5,6 +5,7 @@ import * as depositController from '../controllers/deposit.controller';
 import * as paymentController from '../controllers/payment.controller';
 import { authenticate } from '../middleware/authMiddleware';
 import { adminOnly } from '../middleware/adminCheck';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
@@ -27,21 +28,21 @@ const depositClaimIpLimiter = rateLimit({
 });
 
 // 1. Static routes must always be declared BEFORE parameterized routes
-router.get('/active', authenticate, paymentController.getActiveDepositOrder);
-router.get('/my-claims', authenticate, depositController.listMyDepositClaims);
-router.get('/pending', authenticate, adminOnly, depositController.listDepositRequests);
+router.get('/active', authenticate, asyncHandler(paymentController.getActiveDepositOrder));
+router.get('/my-claims', authenticate, asyncHandler(depositController.listMyDepositClaims));
+router.get('/pending', authenticate, adminOnly, asyncHandler(depositController.listDepositRequests));
 router.post(
   '/claim',
   authenticate,
   depositClaimIpLimiter,
   memoryUpload.single('screenshot'),
-  depositController.submitDepositClaim
+  asyncHandler(depositController.submitDepositClaim)
 );
-router.post('/request', authenticate, depositController.createDepositRequest);
-router.get('/screenshot/view', depositController.viewFallbackScreenshot);
+router.post('/request', authenticate, asyncHandler(depositController.createDepositRequest));
+router.get('/screenshot/view', asyncHandler(depositController.viewFallbackScreenshot));
 
 // 2. Parameterized routes with guard against reserved static paths
-router.get('/:id/resume', authenticate, paymentController.getResumableDepositOrder);
+router.get('/:id/resume', authenticate, asyncHandler(paymentController.getResumableDepositOrder));
 router.get('/:id', authenticate, (req, res, next) => {
   // Prevent any known static sub-path from being treated as an ID
   const reservedPaths = ['pending', 'active', 'request', 'my-claims', 'claim', 'screenshot'];
@@ -50,8 +51,8 @@ router.get('/:id', authenticate, (req, res, next) => {
     res.status(404).json({ success: false, message: 'Deposit request not found' });
     return;
   }
-  return paymentController.getResumableDepositOrder(req as any, res);
+  return asyncHandler(paymentController.getResumableDepositOrder)(req as any, res, next);
 });
-router.patch('/:id/review', authenticate, adminOnly, depositController.reviewDepositRequest);
+router.patch('/:id/review', authenticate, adminOnly, asyncHandler(depositController.reviewDepositRequest));
 
 export default router;
