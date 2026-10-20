@@ -9,6 +9,8 @@ import { connectDatabase, disconnectDatabase } from './config/db';
 import { connectRedis, disconnectRedis } from './config/redis';
 import { globalLimiter, apiLimiter } from './middleware/rateLimiter';
 import routes from './routes';
+import fs from 'fs';
+import { optionalAuth } from './middleware/authMiddleware';
 import { startTournamentNotifier } from './jobs/tournament-notifier';
 import { startTournamentCompleter } from './jobs/tournament-completer';
 import { startDepositCleanupJob } from './jobs/deposit-cleanup';
@@ -62,7 +64,12 @@ app.use(mongoSanitize());
 // ── HTTP Parameter Pollution prevention ────────────────────────────────────
 app.use(hpp());
 
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+const uploadsDir = path.resolve(process.cwd(), 'uploads');
+const killCounterDir = path.resolve(process.cwd(), 'uploads', 'kill-counter');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(killCounterDir)) fs.mkdirSync(killCounterDir, { recursive: true });
+
+app.use('/uploads', express.static(uploadsDir));
 app.use(globalLimiter);
 app.use(passport.initialize());
 
@@ -70,7 +77,7 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ success: true, message: 'NEOBATTLE API is running', version: '1.0.0' });
 });
 
-app.use('/api', apiLimiter, routes);
+app.use('/api', optionalAuth, apiLimiter, routes);
 app.use('/auth', authRoutes);
 
 

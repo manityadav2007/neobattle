@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, CheckCircle, AlertCircle, Loader2, Smartphone, ShieldCheck, Clock, RefreshCw, Copy, Check, Info
@@ -128,35 +129,81 @@ export default function DynamicDepositModal({
     };
   }, [order, isSuccess, isTimerExpired]);
 
-  // 3. Polling for payment match every 2.5 seconds (only while active and not expired)
+  // 3. Polling for payment match with backoff on errors and immediate halt on 4xx/expiry
   useEffect(() => {
-    if (!order || isSuccess || isTimerExpired) return;
+    if (!order?.transactionId || order.transactionId === 'pending' || isSuccess || isTimerExpired) {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      return;
+    }
+
+    let isSubscribed = true;
+    let consecutiveErrors = 0;
+    const baseIntervalMs = 2500;
+
+    const scheduleNext = (delayMs: number) => {
+      if (!isSubscribed) return;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = setTimeout(checkStatus, delayMs);
+    };
 
     const checkStatus = async () => {
+      if (!isSubscribed || !order?.transactionId || isSuccess || isTimerExpired) return;
+
       try {
         const res = await dynamicDepositApi.getStatus(order.transactionId);
+        if (!isSubscribed) return;
+
+        consecutiveErrors = 0;
+
         if (res.success && res.data) {
           if (res.data.isCompleted) {
             setIsSuccess(true);
             setCreditedAmount(res.data.requestedAmount);
-            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
             onSuccess(res.data.balance);
+            return;
           } else if (res.data.isExpired || res.data.status === 'EXPIRED') {
             setIsTimerExpired(true);
-            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            return;
           }
         }
-      } catch (err) {
-        // Silently continue polling on network blips
+        scheduleNext(baseIntervalMs);
+      } catch (err: any) {
+        if (!isSubscribed) return;
+
+        if (axios.isAxiosError(err) && err.response?.status) {
+          const status = err.response.status;
+          if (status >= 400 && status < 500 && status !== 429) {
+            console.warn(`[DepositModal] Status check returned ${status}, halting polling.`);
+            setIsTimerExpired(true);
+            return;
+          }
+        }
+
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= 8) {
+          console.warn('[DepositModal] Max consecutive polling errors exceeded, halting.');
+          return;
+        }
+
+        const backoffMultiplier = Math.min(6, Math.pow(1.5, consecutiveErrors));
+        const delayMs = Math.round(baseIntervalMs * backoffMultiplier);
+        scheduleNext(delayMs);
       }
     };
 
-    pollTimerRef.current = setInterval(checkStatus, 2500);
+    scheduleNext(baseIntervalMs);
 
     return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      isSubscribed = false;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
     };
   }, [order, isSuccess, isTimerExpired, onSuccess]);
 

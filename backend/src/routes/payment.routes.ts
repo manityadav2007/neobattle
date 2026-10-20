@@ -15,7 +15,8 @@ router.get('/deposit/:id', authenticate, (req, res, next) => {
   const reserved = ['active', 'initiate', 'status', 'cancel', 'pending', 'resume'];
   const idStr = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   if (idStr && reserved.includes(idStr.toLowerCase())) {
-    return next();
+    res.status(404).json({ success: false, message: 'Deposit request not found' });
+    return;
   }
   return paymentController.getResumableDepositOrder(req as any, res);
 });

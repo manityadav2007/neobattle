@@ -19,6 +19,7 @@ import {
   CreditCard,
   Info,
 } from 'lucide-react';
+import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
 import { dynamicDepositApi, DynamicDepositOrder, formatCurrency, walletApi, WalletLimits } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
@@ -289,13 +290,35 @@ function DepositContent() {
     };
   }, [order, isSuccess, isTimerExpired]);
 
-  // Status Polling every 2.5 seconds (only while order is active and timer has NOT expired)
+  // Status Polling: Polls while order is active, with exponential backoff on errors and immediate halt on 4xx/expiry
   useEffect(() => {
-    if (!order || isSuccess || isTimerExpired) return;
+    if (!order?.transactionId || order.transactionId === 'pending' || isSuccess || isTimerExpired) {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      return;
+    }
+
+    let isSubscribed = true;
+    let consecutiveErrors = 0;
+    const baseIntervalMs = 2500;
+
+    const scheduleNext = (delayMs: number) => {
+      if (!isSubscribed) return;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = setTimeout(checkStatus, delayMs);
+    };
 
     const checkStatus = async () => {
+      if (!isSubscribed || !order?.transactionId || isSuccess || isTimerExpired) return;
+
       try {
         const res = await dynamicDepositApi.getStatus(order.transactionId);
+        if (!isSubscribed) return;
+
+        consecutiveErrors = 0;
+
         if (res.success && res.data) {
           if (res.data.isCompleted) {
             setIsSuccess(true);
@@ -306,23 +329,52 @@ function DepositContent() {
             try {
               localStorage.removeItem(STORAGE_KEY);
             } catch {}
-            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            return;
           } else if (res.data.isLateMatch || res.data.status === 'AWAITING_LATE_MATCH' || res.data.isExpired || res.data.status === 'EXPIRED') {
             setIsTimerExpired(true);
-            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            return;
           }
         }
-      } catch {
-        // Silently continue polling on transient network issues
+        // Success but pending: schedule next standard poll
+        scheduleNext(baseIntervalMs);
+      } catch (err: any) {
+        if (!isSubscribed) return;
+
+        // If server returns 404, 400, 401, 403 (any 4xx client error other than 429), deposit request is not valid -> STOP immediately
+        if (axios.isAxiosError(err) && err.response?.status) {
+          const status = err.response.status;
+          if (status >= 400 && status < 500 && status !== 429) {
+            console.warn(`[Deposit] Status check returned ${status}, halting polling.`);
+            setIsTimerExpired(true);
+            return;
+          }
+        }
+
+        consecutiveErrors += 1;
+        // Stop polling after 8 consecutive network / rate-limit failures
+        if (consecutiveErrors >= 8) {
+          console.warn('[Deposit] Consecutive polling errors exceeded limit, halting polling.');
+          return;
+        }
+
+        // Exponential backoff for 429 or transient network errors: 3.5s -> 5.5s -> 8.5s -> 12s -> 15s max
+        const backoffMultiplier = Math.min(6, Math.pow(1.5, consecutiveErrors));
+        const delayMs = Math.round(baseIntervalMs * backoffMultiplier);
+        scheduleNext(delayMs);
       }
     };
 
-    pollTimerRef.current = setInterval(checkStatus, 2500);
+    // Kick off first status check after baseInterval
+    scheduleNext(baseIntervalMs);
 
     return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      isSubscribed = false;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
     };
   }, [order, isSuccess, isTimerExpired]);
 
