@@ -22,6 +22,13 @@ const upload = multer({
 
 export const screenshotUploadMiddleware = upload.array('screenshots', 8);
 
+interface UploadedFile {
+  buffer: Buffer;
+  size: number;
+  originalname?: string;
+  mimetype?: string;
+}
+
 /**
  * POST /api/results/tournament/:id/submit-screenshots
  * Host-facing endpoint: Upload 1-8 scoreboard screenshots and required Winner UID.
@@ -110,7 +117,7 @@ export async function submitHostScreenshots(req: AuthenticatedRequest, res: Resp
   }
 
   // 5. File upload validation (1 to 8 images, max 5MB, genuine magic bytes)
-  const files = (req.files as Express.Multer.File[]) || [];
+  const files = (req.files as UploadedFile[]) || [];
   if (files.length === 0) {
     res.status(400).json({ success: false, message: 'Please upload at least 1 match screenshot' });
     return;
@@ -445,7 +452,7 @@ export async function scanScreenshots(req: AuthenticatedRequest, res: Response):
     }
   }
 
-  const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+  const uploadedFiles = (req.files as UploadedFile[]) || [];
   for (const f of uploadedFiles) {
     const magicCheck = privateStorageService.validateImageMagicBytes(f.buffer);
     if (magicCheck.valid && magicCheck.format) {
