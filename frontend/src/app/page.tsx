@@ -8,6 +8,7 @@ import ParticleCanvas from '@/components/ParticleCanvas';
 import TournamentCard from '@/components/TournamentCard';
 import LeaderboardSnapshot from '@/components/LeaderboardSnapshot';
 import LogoAsset from '@/components/LogoAsset';
+import DownloadSection from '@/components/DownloadSection';
 import { useTournaments } from '@/hooks/useTournaments';
 import { useAuth } from '@/hooks/useAuth';
 import { statsApi, isTournamentEnded } from '@/lib/services';
@@ -101,6 +102,9 @@ const tournaments = allTournaments.filter((t) => !isTournamentEnded(t));
           </div>
         </div>
       </section>
+
+      {/* Download NeoBattle Section */}
+      <DownloadSection />
 
       <section className="relative z-10 py-20 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
