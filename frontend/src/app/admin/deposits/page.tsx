@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import axios from 'axios';
 import {
   ArrowLeft, Shield, Banknote, AlertCircle, CheckCircle, XCircle, Eye, RefreshCw, Loader2,
 } from 'lucide-react';
@@ -19,6 +20,11 @@ export default function AdminDepositsPage() {
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
 
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [retrySeconds, setRetrySeconds] = useState(0);
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (!loading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
   }, [user, loading, isAdmin, isSuperAdmin, router]);
@@ -26,11 +32,38 @@ export default function AdminDepositsPage() {
   const loadData = async () => {
     setLoadingData(true);
     setError('');
+    setIsRateLimited(false);
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+
     try {
       const res = await adminApi.pendingDeposits();
       setDeposits(res.data || []);
-    } catch (err) {
-      setError(getErrorMessage(err));
+      setError('');
+    } catch (err: any) {
+      const is429 = axios.isAxiosError(err) && err.response?.status === 429;
+      if (is429) {
+        setIsRateLimited(true);
+        const retryDelay = 5;
+        setRetrySeconds(retryDelay);
+        setError('Too many requests. Retrying automatically...');
+
+        countdownTimerRef.current = setInterval(() => {
+          setRetrySeconds((prev) => {
+            if (prev <= 1) {
+              if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        retryTimerRef.current = setTimeout(() => {
+          loadData();
+        }, retryDelay * 1000);
+      } else {
+        setError(getErrorMessage(err));
+      }
     } finally {
       setLoadingData(false);
     }
@@ -38,6 +71,10 @@ export default function AdminDepositsPage() {
 
   useEffect(() => {
     if (isAdmin || isSuperAdmin) loadData();
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    };
   }, [isAdmin, isSuperAdmin]);
 
   const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
@@ -82,6 +119,20 @@ export default function AdminDepositsPage() {
 
         {loadingData ? (
           <div className="p-20 flex justify-center"><Loader2 className="w-8 h-8 text-fire-400 animate-spin" /></div>
+        ) : isRateLimited || error ? (
+          <div className="glass-card rounded-2xl p-10 text-center space-y-3">
+            <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-2" />
+            <p className="text-amber-400 font-medium">
+              {isRateLimited ? `Server busy (rate limit). Retrying in ${retrySeconds}s...` : error}
+            </p>
+            <button
+              type="button"
+              onClick={loadData}
+              className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold inline-flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry Now
+            </button>
+          </div>
         ) : deposits.length === 0 ? (
           <div className="glass-card rounded-2xl p-10 text-center">
             <Banknote className="w-12 h-12 text-zinc-600 mx-auto mb-4" />

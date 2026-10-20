@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ShoppingBag, Plus, Loader2, CheckCircle, AlertCircle, Copy } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Plus, Loader2, CheckCircle, AlertCircle, Copy, RefreshCw } from 'lucide-react';
+import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { getErrorMessage } from '@/lib/api';
@@ -16,29 +17,68 @@ export default function AdminStorePage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [retrySeconds, setRetrySeconds] = useState(0);
 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ code: '', type: 'GOOGLE_PLAY', amount: 100 });
   const [saving, setSaving] = useState(false);
 
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (!authLoading && (!user || (!isSuperAdmin && !isAdmin))) router.push('/dashboard');
   }, [user, authLoading, isAdmin, isSuperAdmin, router]);
 
-  const loadCodes = async () => {
+  const loadCodes = useCallback(async (isRetry = false) => {
+    if (!isRetry) setLoading(true);
+    setErr('');
+    setIsRateLimited(false);
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+
     try {
       const res = await api.get('/store/codes');
       setCodes(res.data.data || []);
-    } catch {
-      setErr('Failed to load codes');
+      setErr('');
+      setIsRateLimited(false);
+    } catch (error: any) {
+      const is429 = axios.isAxiosError(error) && error.response?.status === 429;
+      if (is429) {
+        setIsRateLimited(true);
+        const retryDelay = 5;
+        setRetrySeconds(retryDelay);
+        setErr('Too many requests. Retrying automatically...');
+
+        countdownTimerRef.current = setInterval(() => {
+          setRetrySeconds((prev) => {
+            if (prev <= 1) {
+              if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        retryTimerRef.current = setTimeout(() => {
+          loadCodes(true);
+        }, retryDelay * 1000);
+      } else {
+        setErr(getErrorMessage(error) || 'Failed to load codes');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (isAdmin || isSuperAdmin) loadCodes();
-  }, [isAdmin, isSuperAdmin]);
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    };
+  }, [isAdmin, isSuperAdmin, loadCodes]);
 
   const handleAdd = async () => {
     if (!form.code || !form.type || !form.amount) return;
@@ -76,7 +116,35 @@ export default function AdminStorePage() {
           </button>
         </div>
 
-        {err && <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm mb-6"><AlertCircle className="w-4 h-4" /> {err}</div>}
+        {isRateLimited ? (
+          <div className="flex items-center justify-between p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm mb-6">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>Too many requests. Retrying automatically in {retrySeconds}s...</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadCodes(false)}
+              className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-xs transition-colors flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry Now
+            </button>
+          </div>
+        ) : err ? (
+          <div className="flex items-center justify-between p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm mb-6">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{err}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadCodes(false)}
+              className="px-3 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 font-semibold text-xs transition-colors flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry
+            </button>
+          </div>
+        ) : null}
         {msg && <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm mb-6"><CheckCircle className="w-4 h-4" /> {msg}</div>}
 
         {showAdd && (
@@ -142,6 +210,19 @@ export default function AdminStorePage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          ) : isRateLimited || err ? (
+            <div className="py-10 text-center space-y-3">
+              <p className="text-amber-400 text-sm font-medium">
+                {isRateLimited ? `Server busy (rate limit). Retrying in ${retrySeconds}s...` : err}
+              </p>
+              <button
+                type="button"
+                onClick={() => loadCodes(false)}
+                className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold inline-flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Retry Now
+              </button>
             </div>
           ) : (
             <p className="text-zinc-500 text-sm text-center py-8">No codes yet. Add your first gift code.</p>

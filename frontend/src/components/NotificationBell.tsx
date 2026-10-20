@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Bell, CheckCheck, Loader2, X, Calendar, AlertTriangle, Ban, Trophy } from 'lucide-react';
+import { Bell, CheckCheck, Loader2, X, Calendar, AlertTriangle, Ban, Trophy, RefreshCw } from 'lucide-react';
+import axios from 'axios';
 import { api, isAuthenticated } from '@/lib/api';
 import { formatDate } from '@/lib/services';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,6 +44,7 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = async () => {
@@ -51,7 +53,11 @@ export default function NotificationBell() {
       const res = await api.get('/notifications', { params: { limit: 10 } });
       setNotifications(res.data.data || []);
       setUnreadCount(res.data.unreadCount || 0);
-    } catch {}
+      setFetchError(null);
+    } catch (err: any) {
+      const is429 = axios.isAxiosError(err) && err.response?.status === 429;
+      setFetchError(is429 ? 'Server busy (Rate limit reached)' : 'Unable to load notifications');
+    }
   };
 
   useEffect(() => {
@@ -131,7 +137,20 @@ export default function NotificationBell() {
 
             <div className="max-h-96 overflow-y-auto">
               {notifications.length === 0 ? (
-                <div className="p-8 text-center text-zinc-500 text-sm">No notifications yet</div>
+                fetchError ? (
+                  <div className="p-6 text-center space-y-2">
+                    <p className="text-amber-400 text-xs font-medium">{fetchError}</p>
+                    <button
+                      type="button"
+                      onClick={() => fetchNotifications()}
+                      className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs inline-flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Retry
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-zinc-500 text-sm">No notifications yet</div>
+                )
               ) : (
                 notifications.map((notif) => {
                   const Icon = typeIcons[notif.type] || Bell;

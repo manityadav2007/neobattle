@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import axios from 'axios';
 import {
   Shield, Users, Trophy, AlertCircle, CheckCircle, XCircle,
   Activity, RefreshCw, DollarSign, Banknote, Gift, Ban, ShoppingBag,
@@ -41,14 +42,21 @@ export default function AdminPage() {
 
   const [recentUsers, setRecentUsers] = useState<RecentUserItem[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState('');
+  const [usersRateLimited, setUsersRateLimited] = useState(false);
+  const [usersRetrySeconds, setUsersRetrySeconds] = useState(0);
 
   const [pendingPayouts, setPendingPayouts] = useState<WinnerProof[]>([]);
   const [deposits, setDeposits] = useState<DepositRequest[]>([]);
   const [redeems, setRedeems] = useState<RedeemRequest[]>([]);
+  const [queueErrors, setQueueErrors] = useState<{ payouts?: string; deposits?: string; redeems?: string }>({});
 
   const [queuesLoading, setQueuesLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
   const [actionError, setActionError] = useState('');
+
+  const usersRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const usersCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!loading && !user && !isAuthenticated()) {
@@ -62,6 +70,8 @@ export default function AdminPage() {
 
   const loadData = useCallback(async () => {
     setActionError('');
+    if (usersRetryTimerRef.current) clearTimeout(usersRetryTimerRef.current);
+    if (usersCountdownTimerRef.current) clearInterval(usersCountdownTimerRef.current);
 
     // 1. Fetch dashboard stats independently
     setStatsLoading(true);
@@ -72,24 +82,53 @@ export default function AdminPage() {
         setStats(statsRes.data);
         if (Array.isArray(statsRes.data.recentUsers) && statsRes.data.recentUsers.length > 0) {
           setRecentUsers(statsRes.data.recentUsers);
+          setUsersError('');
+          setUsersRateLimited(false);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Dashboard stats load error:', err);
       setStatsError(getErrorMessage(err));
     } finally {
       setStatsLoading(false);
     }
 
-    // 2. Fetch users list (as fallback if stats.recentUsers was empty or failed)
+    // 2. Fetch users list (as fallback or primary list for recent users)
     setUsersLoading(true);
+    setUsersError('');
+    setUsersRateLimited(false);
     try {
       const usersRes = await adminApi.users();
       if (Array.isArray(usersRes?.data) && usersRes.data.length > 0) {
         setRecentUsers((prev) => (prev.length > 0 ? prev : usersRes.data.slice(0, 10)));
+        setUsersError('');
+        setUsersRateLimited(false);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Users fallback load error:', err);
+      const is429 = axios.isAxiosError(err) && err.response?.status === 429;
+      if (is429) {
+        setUsersRateLimited(true);
+        const retryDelay = 5;
+        setUsersRetrySeconds(retryDelay);
+        setUsersError('Too many requests. Retrying automatically...');
+
+        usersCountdownTimerRef.current = setInterval(() => {
+          setUsersRetrySeconds((prev) => {
+            if (prev <= 1) {
+              if (usersCountdownTimerRef.current) clearInterval(usersCountdownTimerRef.current);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        usersRetryTimerRef.current = setTimeout(() => {
+          loadData();
+        }, retryDelay * 1000);
+      } else {
+        setUsersError(getErrorMessage(err) || 'Failed to load users');
+      }
     } finally {
       setUsersLoading(false);
     }
@@ -97,6 +136,8 @@ export default function AdminPage() {
     // 3. Fetch Super Admin pending queues with Promise.allSettled (fully resilient)
     if (isSuperAdmin) {
       setQueuesLoading(true);
+      const newQueueErrors: { payouts?: string; deposits?: string; redeems?: string } = {};
+
       const results = await Promise.allSettled([
         winnerProofApi.pending(),
         adminApi.pendingDeposits(),
@@ -108,6 +149,7 @@ export default function AdminPage() {
         setPendingPayouts(Array.isArray(results[0].value.data) ? results[0].value.data : []);
       } else if (results[0].status === 'rejected') {
         console.warn('Pending payouts call failed:', results[0].reason);
+        newQueueErrors.payouts = getErrorMessage(results[0].reason);
       }
 
       // Pending Deposits
@@ -115,6 +157,7 @@ export default function AdminPage() {
         setDeposits(Array.isArray(results[1].value.data) ? results[1].value.data : []);
       } else if (results[1].status === 'rejected') {
         console.warn('Pending deposits call failed:', results[1].reason);
+        newQueueErrors.deposits = getErrorMessage(results[1].reason);
       }
 
       // Pending Redeems
@@ -122,11 +165,20 @@ export default function AdminPage() {
         setRedeems(Array.isArray(results[2].value.data) ? results[2].value.data : []);
       } else if (results[2].status === 'rejected') {
         console.warn('Pending redeems call failed:', results[2].reason);
+        newQueueErrors.redeems = getErrorMessage(results[2].reason);
       }
 
+      setQueueErrors(newQueueErrors);
       setQueuesLoading(false);
     }
   }, [isSuperAdmin]);
+
+  useEffect(() => {
+    return () => {
+      if (usersRetryTimerRef.current) clearTimeout(usersRetryTimerRef.current);
+      if (usersCountdownTimerRef.current) clearInterval(usersCountdownTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (isAdmin || isSuperAdmin) loadData();
@@ -497,6 +549,19 @@ export default function AdminPage() {
             <div className="flex items-center justify-center py-8 text-zinc-500 text-sm gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-fire-400" />
               <span>Loading users...</span>
+            </div>
+          ) : usersRateLimited || usersError ? (
+            <div className="py-8 text-center space-y-3">
+              <p className="text-amber-400 text-sm font-medium">
+                {usersRateLimited ? `Server busy (rate limit). Retrying in ${usersRetrySeconds}s...` : usersError}
+              </p>
+              <button
+                type="button"
+                onClick={() => loadData()}
+                className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold inline-flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Retry Now
+              </button>
             </div>
           ) : (
             <p className="text-zinc-500 text-sm text-center py-8">No users yet</p>
