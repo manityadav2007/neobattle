@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, use, useState, useRef } from 'react';
+import { useEffect, use, useState, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
-  Trophy, Users, MapPin, Clock, IndianRupee,
+  Trophy, Users, MapPin, X, Clock, IndianRupee,
   CheckCircle, AlertCircle, Loader2, Gamepad2, Copy, ClipboardCheck, Shield, Wallet, Trash2, UserPlus, Settings, Check, BadgeCheck,
   Crosshair, Sparkles, UploadCloud, Film, FileVideo, Crown,
 } from 'lucide-react';
@@ -43,6 +43,129 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [loadingMyTeam, setLoadingMyTeam] = useState(false);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
+
+  // Host screenshot upload state for PER_KILL tournaments
+  const [hostScreenshots, setHostScreenshots] = useState<File[]>([]);
+  const [hostWinnerUid, setHostWinnerUid] = useState<string>('');
+  const [submittingHostScreenshots, setSubmittingHostScreenshots] = useState(false);
+  const [hostScreenshotError, setHostScreenshotError] = useState<string>('');
+  const [isDraggingScreenshots, setIsDraggingScreenshots] = useState(false);
+
+  // Candidate roster for quick winner selection and validation
+  const registeredCandidates = useMemo(() => {
+    if (!tournament?.entries) return [];
+    const list: Array<{ id: string; username: string; ign: string; freeFireId: string; teamName?: string }> = [];
+    const seen = new Set<string>();
+
+    for (const entry of tournament.entries) {
+      if (entry.user && !seen.has(entry.user.id)) {
+        seen.add(entry.user.id);
+        list.push({
+          id: entry.user.id,
+          username: entry.user.username,
+          ign: entry.user.inGameNickname || entry.user.ign || entry.user.username,
+          freeFireId: entry.user.freeFireId || '',
+          teamName: entry.team?.name || entry.team?.tag,
+        });
+      }
+      if (entry.team) {
+        const members = [
+          ...(entry.team.leader ? [{ user: entry.team.leader }] : []),
+          ...(entry.team.members || []),
+        ];
+        for (const m of members) {
+          if (m.user && !seen.has(m.user.id)) {
+            seen.add(m.user.id);
+            list.push({
+              id: m.user.id,
+              username: m.user.username,
+              ign: m.user.inGameNickname || m.user.ign || m.user.username,
+              freeFireId: m.user.freeFireId || '',
+              teamName: entry.team?.name || entry.team?.tag,
+            });
+          }
+        }
+      }
+    }
+    return list;
+  }, [tournament]);
+
+  const handleAddHostScreenshots = (files: FileList | File[]) => {
+    setHostScreenshotError('');
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const added: File[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (!validTypes.includes(f.type)) {
+        setHostScreenshotError(`File "${f.name}" is not supported (JPG, PNG, WebP only).`);
+        return;
+      }
+      if (f.size > 5 * 1024 * 1024) {
+        setHostScreenshotError(`File "${f.name}" exceeds the 5 MB limit.`);
+        return;
+      }
+      added.push(f);
+    }
+
+    setHostScreenshots((prev) => {
+      const combined = [...prev, ...added];
+      if (combined.length > 8) {
+        setHostScreenshotError('Maximum 8 screenshots allowed per match.');
+        return combined.slice(0, 8);
+      }
+      return combined;
+    });
+  };
+
+  const handleRemoveHostScreenshot = (index: number) => {
+    setHostScreenshots((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitHostScreenshots = async () => {
+    if (!tournament) return;
+    setHostScreenshotError('');
+
+    if (hostScreenshots.length === 0) {
+      setHostScreenshotError('Please upload at least 1 match scoreboard screenshot (1 to 8 images).');
+      return;
+    }
+
+    const trimmedUid = hostWinnerUid.trim();
+    if (!trimmedUid) {
+      setHostScreenshotError('Please enter the Winner UID (Free Fire UID of the Booyah winner).');
+      return;
+    }
+
+    const matched = registeredCandidates.find(
+      (c) => (c.freeFireId && c.freeFireId.trim() === trimmedUid) || c.username.toLowerCase() === trimmedUid.toLowerCase()
+    );
+
+    if (!matched) {
+      setHostScreenshotError(`Winner UID "${trimmedUid}" does not match any registered player in this tournament.`);
+      return;
+    }
+
+    setSubmittingHostScreenshots(true);
+    try {
+      const fd = new FormData();
+      fd.append('winnerUid', matched.freeFireId || trimmedUid);
+      for (const file of hostScreenshots) {
+        fd.append('screenshots', file);
+      }
+
+      const res = await resultApi.submitScreenshots(tournament.id, fd);
+      setMessage(res.message || 'Screenshots submitted successfully! Awaiting admin review.');
+      setHostScreenshots([]);
+      const myRes = await resultApi.mine();
+      const mine = (myRes.data || []).find((s: ResultSubmission) => s.tournamentId === tournament.id);
+      setMySubmission(mine || null);
+    } catch (err: any) {
+      setHostScreenshotError(getErrorMessage(err));
+    } finally {
+      setSubmittingHostScreenshots(false);
+    }
+  };
 
   const fetchMyTeam = () => {
     if (!user) return;
@@ -435,6 +558,12 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     tournament != null &&
     (tournament.status === 'COMPLETED' || tournament.status === 'ACTIVE') &&
     mySubmission?.status !== 'PENDING' &&
+    mySubmission?.status !== 'APPROVED';
+
+  const canSubmitPerKillScreenshots =
+    isHostCreator &&
+    tournament != null &&
+    (tournament.status === 'COMPLETED' || tournament.status === 'ACTIVE') &&
     mySubmission?.status !== 'APPROVED';
 
   const handleDistributePrizes = async () => {
@@ -1533,312 +1662,222 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 Results rejected{mySubmission.rejectionReason ? `: ${mySubmission.rejectionReason}` : ''} — edit below and resubmit.
               </div>
             )}
-            {canSubmitResults && (
-              tournament.tournamentFormat === 'PER_KILL' ? (
+            {/* Host Result Submissions */}
+            {tournament.tournamentFormat === 'PER_KILL' ? (
+              canSubmitPerKillScreenshots && (
                 <div className="p-6 sm:p-7 rounded-2xl bg-zinc-900/80 backdrop-blur-xl border border-amber-500/30 space-y-6 shadow-[0_0_35px_rgba(245,158,11,0.08)]">
                   <div className="flex items-center justify-between flex-wrap gap-2 pb-4 border-b border-white/10">
                     <div>
                       <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2.5">
                         <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                          <Sparkles className="w-4 h-4" />
+                          <Trophy className="w-4 h-4" />
                         </span>
-                        AI Kill Counter — Host Result Verification
+                        Match Result Submission — Scoreboard Screenshots
                       </h3>
                       <p className="text-xs text-zinc-400 mt-1">
-                        Upload your match gameplay recording. Gemini AI Vision will detect eliminate banners, match IGNs with registered players, and tally kills.
+                        Upload 1 to 8 match end scoreboard screenshots. An admin will review and distribute kill prizes.
                       </p>
                     </div>
-                    <span className="text-xs px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold">
-                      ₹{Number(tournament.perKillRate) || 0} / kill
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold">
+                        ₹{Number(tournament.perKillRate) || 0} / kill
+                      </span>
+                      {Number(tournament.booyahPrize) > 0 && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-yellow-500/15 text-yellow-300 border border-yellow-500/30 font-bold">
+                          ₹{Number(tournament.booyahPrize) || 0} Booyah
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Video Upload Dropzone */}
+                  {/* Pending Notice for Host */}
+                  {mySubmission?.status === 'PENDING' && (
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 shrink-0" />
+                        <span>
+                          <strong>Pending Review:</strong> Match screenshots submitted with Winner UID <strong>{mySubmission.firstUid || 'N/A'}</strong>. You may upload new screenshots below to replace your submission before an admin begins review.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {hostScreenshotError && (
+                    <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{hostScreenshotError}</span>
+                    </div>
+                  )}
+
+                  {/* Drag-and-drop Screenshot Uploader */}
                   <div className="space-y-3">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300">
-                      Upload Match Recording (.mp4, .mkv, .mov, .webm)
-                    </label>
-                    <div className="relative border-2 border-dashed border-white/15 hover:border-amber-500/50 rounded-2xl p-6 text-center transition-all bg-black/40">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                        Scoreboard Screenshots (1 to 8 images)
+                      </label>
+                      <span className="text-xs font-mono text-zinc-400">
+                        {hostScreenshots.length} / 8 selected
+                      </span>
+                    </div>
+
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingScreenshots(true); }}
+                      onDragLeave={() => setIsDraggingScreenshots(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingScreenshots(false);
+                        if (e.dataTransfer.files) handleAddHostScreenshots(e.dataTransfer.files);
+                      }}
+                      className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer ${
+                        isDraggingScreenshots
+                          ? 'border-amber-400 bg-amber-500/10'
+                          : 'border-white/15 hover:border-amber-500/50 bg-black/40'
+                      }`}
+                    >
                       <input
                         type="file"
-                        accept="video/*"
-                        onChange={(e) => handleVideoFileSelect(e.target.files?.[0] || null)}
-                        disabled={processingAi}
+                        multiple
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={(e) => {
+                          if (e.target.files) handleAddHostScreenshots(e.target.files);
+                        }}
+                        disabled={submittingHostScreenshots}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                       />
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
                           <UploadCloud className="w-7 h-7" />
                         </div>
-                        {videoFile ? (
-                          <div>
-                            <p className="text-sm font-semibold text-white">{videoFile.name}</p>
-                            <p className="text-xs text-amber-400/80 font-mono mt-0.5">
-                              {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
-                              {videoDuration && ` · ~${(videoDuration / 60).toFixed(1)} mins`}
-                              {estimatedApiCalls !== null && ` · Est. ${estimatedApiCalls} API requests (1 frame/1.0s · 30 frames/batch)`}
-                            </p>
-                          </div>
-                        ) : (
-                          <div>
-                            <p className="text-sm font-semibold text-zinc-300">Drop your match video here or click to browse</p>
-                            <p className="text-xs text-zinc-500 mt-0.5">Maximum file size: 250 MB</p>
-                          </div>
-                        )}
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-200">
+                            Drop match screenshots here or click to browse
+                          </p>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            Supported: JPG, PNG, WebP • Max 5 MB per screenshot • 1 to 8 images
+                          </p>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Screen Region Cropper OR Full Playable Video View */}
-                    {firstFrameDataUrl && isCropping ? (
-                      <ScreenRegionCropper
-                        imageUrl={firstFrameDataUrl}
-                        crop={cropRegion}
-                        onChange={setCropRegion}
-                        onConfirm={() => setIsCropping(false)}
-                        disabled={processingAi}
-                      />
-                    ) : videoPreviewUrl ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between px-1 flex-wrap gap-2">
-                          <span className="text-xs text-zinc-300 flex items-center gap-1.5 font-medium">
-                            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                            {cropRegion ? 'Kill-feed crop area confirmed' : 'Full-frame scan selected'}
-                          </span>
-                          {firstFrameDataUrl && (
-                            <button
-                              type="button"
-                              onClick={() => setIsCropping(true)}
-                              disabled={processingAi}
-                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all cursor-pointer"
+                    {/* Screenshot Thumbnails */}
+                    {hostScreenshots.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                        {hostScreenshots.map((file, idx) => {
+                          const previewUrl = URL.createObjectURL(file);
+                          return (
+                            <div
+                              key={idx}
+                              className="relative group rounded-xl overflow-hidden border border-white/15 bg-black/60 aspect-[16/10] flex flex-col justify-end p-2"
                             >
-                              <Crosshair className="w-3.5 h-3.5" /> Adjust Crop Area
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Isolated Cropped Kill-Feed Area Preview Banner */}
-                        {cropRegion && croppedSliceDataUrl && cropPixelDimensions && (
-                          <div className="p-3 rounded-xl bg-slate-950/90 border border-amber-500/40 space-y-2 shadow-inner">
-                            <div className="flex items-center justify-between text-xs flex-wrap gap-1">
-                              <span className="font-semibold text-amber-300 flex items-center gap-1.5">
-                                <Crosshair className="w-3.5 h-3.5 text-amber-400" />
-                                Isolated Kill-Feed Crop Slice (Only this region is sent to AI)
-                              </span>
-                              <span className="text-[11px] font-mono text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
-                                {cropPixelDimensions.areaPercent}% of full frame
-                              </span>
-                            </div>
-
-                            {/* Visual Cropped Slice */}
-                            <div className="w-full flex justify-center bg-black/90 rounded-lg p-2 border border-slate-800 overflow-hidden">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
-                                src={croppedSliceDataUrl}
-                                alt="Cropped Kill Feed Region"
-                                className="max-h-24 object-contain rounded border border-amber-400/50 shadow-md"
+                                src={previewUrl}
+                                alt={`Screenshot ${idx + 1}`}
+                                className="absolute inset-0 w-full h-full object-cover"
                               />
-                            </div>
-
-                            {/* Exact Pixel Resolution Readout */}
-                            <div className="flex flex-wrap items-center justify-between text-[11px] font-mono text-zinc-300 pt-1 border-t border-slate-800/80 gap-2">
-                              <span>
-                                Crop Size: <strong className="text-amber-300">{cropPixelDimensions.pixelWidth} × {cropPixelDimensions.pixelHeight} px</strong>
-                              </span>
-                              <span>
-                                Offset: <strong className="text-white">X={cropPixelDimensions.pixelLeft}px, Y={cropPixelDimensions.pixelTop}px</strong>
-                              </span>
-                              <span>
-                                Source: <strong className="text-zinc-400">{cropPixelDimensions.sourceWidth} × {cropPixelDimensions.sourceHeight} px</strong>
-                              </span>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="rounded-xl overflow-hidden bg-black/90 border border-white/10 max-w-xl mx-auto shadow-lg">
-                          <video
-                            ref={videoPlayerRef}
-                            src={videoPreviewUrl ? encodeURI(sanitizeMediaUrl(videoPreviewUrl)) : undefined}
-                            controls
-                            autoPlay
-                            playsInline
-                            className="w-full max-h-72 object-contain"
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* AI Process Trigger Button */}
-                    <button
-                      type="button"
-                      onClick={handleProcessAiVideo}
-                      disabled={processingAi || !videoFile}
-                      className="w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 shadow-[0_0_25px_rgba(245,158,11,0.25)] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {processingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      {processingAi ? 'Running Gemini Vision AI Detection...' : 'Process with AI & Detect Kills'}
-                    </button>
-
-                    {/* Processing Progress Bar */}
-                    {processingAi && (
-                      <div className="p-4 rounded-xl bg-black/60 border border-amber-500/30 space-y-2">
-                        <div className="flex items-center justify-between text-xs font-semibold text-amber-300">
-                          <span className="flex items-center gap-2">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            {aiStatusMessage || 'Processing gameplay recording...'}
-                          </span>
-                          <span>{aiProgress}%</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-300 rounded-full"
-                            style={{ width: `${aiProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Kills List / Roster Table */}
-                  {aiKillsData && aiKillsData.length > 0 && (
-                    <div className="space-y-4 pt-2">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
-                            <Crosshair className="w-4 h-4 text-amber-400" />
-                            Participants &amp; Kills Verification ({aiKillsData.length} Players)
-                          </h4>
-                          <p className="text-[11px] text-zinc-400 mt-0.5">
-                            Verify AI detected kill counts or adjust manually before submitting.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300 font-mono">
-                            Total Kills: <strong className="text-amber-400">{aiKillsData.reduce((s, p) => s + (Number(p.kills) || 0), 0)}</strong>
-                          </span>
-                          <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300 font-mono">
-                            Total Prize: <strong className="text-emerald-400">
-                              {formatCurrency(
-                                aiKillsData.reduce((s, p) => {
-                                  const kills = Number(p.kills) || 0;
-                                  const isBooyah = p.userId === booyahUserId || Boolean(p.isBooyah);
-                                  return s + (kills * (Number(tournament.perKillRate) || 0)) + (isBooyah ? (Number(tournament.booyahPrize) || 0) : 0);
-                                }, 0)
-                              )}
-                            </strong>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-white/10 overflow-hidden bg-black/50 divide-y divide-white/5">
-                        {aiKillsData.map((player) => {
-                          const kills = Number(player.kills) || 0;
-                          const rate = Number(tournament.perKillRate) || 0;
-                          const isBooyah = player.userId === booyahUserId || Boolean(player.isBooyah);
-                          const prize = (kills * rate) + (isBooyah ? (Number(tournament.booyahPrize) || 0) : 0);
-
-                          return (
-                            <div key={player.userId} className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors">
-                              {/* Player details */}
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <Avatar alt={player.ign || player.username} size={32} />
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm font-bold text-white truncate">{player.ign || player.username}</span>
-                                    {player.teamName && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                        {player.teamName}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[11px] text-zinc-400 font-mono mt-0.5">
-                                    <span>@{player.username}</span>
-                                    <span>·</span>
-                                    <span>UID: {player.freeFireId || 'No UID'}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Kills and Booyah controls */}
-                              <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                                {/* Booyah toggle */}
-                                <button
-                                  type="button"
-                                  onClick={() => setBooyahUserId(isBooyah ? '' : player.userId)}
-                                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                                    isBooyah
-                                      ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40 shadow-[0_0_12px_rgba(234,179,8,0.2)]'
-                                      : 'bg-white/5 text-zinc-400 border-white/10 hover:text-zinc-200'
-                                  }`}
-                                  title="Mark as Booyah Match Winner"
-                                >
-                                  <Crown className={`w-3.5 h-3.5 ${isBooyah ? 'text-yellow-400' : 'text-zinc-500'}`} />
-                                  <span>Booyah</span>
-                                </button>
-
-                                {/* Kills adjustment */}
-                                <div className="flex items-center gap-1 bg-zinc-900 border border-white/10 rounded-lg p-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdatePlayerKills(player.userId, kills - 1)}
-                                    disabled={kills <= 0}
-                                    className="w-6 h-6 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 text-sm font-bold cursor-pointer"
-                                  >
-                                    -
-                                  </button>
-                                  <span className="w-8 text-center text-sm font-mono font-bold text-amber-400">
-                                    {kills}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdatePlayerKills(player.userId, kills + 1)}
-                                    className="w-6 h-6 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 text-sm font-bold cursor-pointer"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-
-                                {/* Prize total */}
-                                <div className="text-right min-w-[75px]">
-                                  <span className="text-sm font-black text-emerald-400 block font-mono">
-                                    {formatCurrency(prize)}
-                                  </span>
-                                  <span className="text-[10px] text-zinc-500 block">
-                                    {kills} kill{kills === 1 ? '' : 's'}{isBooyah ? ' + Booyah' : ''}
-                                  </span>
-                                </div>
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveHostScreenshot(idx)}
+                                className="absolute top-1.5 right-1.5 p-1 rounded-full bg-rose-500/80 hover:bg-rose-600 text-white shadow-lg transition-transform hover:scale-110 z-10 cursor-pointer"
+                                title="Remove screenshot"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                              <div className="relative z-10 flex items-center justify-between text-[10px] text-zinc-200 font-mono">
+                                <span className="font-bold text-amber-300">#{idx + 1}</span>
+                                <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
                               </div>
                             </div>
                           );
                         })}
                       </div>
+                    )}
+                  </div>
 
-                      {/* Proof screenshot if needed */}
-                      <div>
-                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
-                          Optional Proof Screenshot
-                        </label>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleResultScreenshot}
-                          className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:bg-fire-500/20 file:text-fire-400 file:text-xs file:font-semibold hover:file:bg-fire-500/30 transition-all cursor-pointer"
-                        />
-                      </div>
-
-                      {/* Final submit button */}
-                      <button
-                        type="button"
-                        onClick={handleSubmitPerKillResult}
-                        disabled={submittingResult}
-                        className="btn-fire w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 shadow-[0_0_25px_rgba(245,158,11,0.25)] transition-all flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        {submittingResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                        {submittingResult ? 'Submitting Results...' : 'Submit Kill List for Super Admin Approval'}
-                      </button>
+                  {/* Required Winner UID Field */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+                        <Crown className="w-3.5 h-3.5 text-yellow-400" />
+                        Winner UID (Booyah Champion) <span className="text-rose-400">*</span>
+                      </label>
+                      {hostWinnerUid && (
+                        (() => {
+                          const matched = registeredCandidates.find(
+                            (c) => (c.freeFireId && c.freeFireId.trim() === hostWinnerUid.trim()) || c.username.toLowerCase() === hostWinnerUid.trim().toLowerCase()
+                          );
+                          return matched ? (
+                            <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5" /> Verified: {matched.ign} (@{matched.username})
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold text-rose-400 flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5" /> Unregistered UID
+                            </span>
+                          );
+                        })()
+                      )}
                     </div>
-                  )}
+                    <input
+                      type="text"
+                      value={hostWinnerUid}
+                      onChange={(e) => setHostWinnerUid(e.target.value)}
+                      placeholder="Enter registered player Free Fire UID (e.g. 1029384756)"
+                      className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-amber-500 font-mono"
+                    />
+
+                    {/* Quick registered player selector pills */}
+                    {registeredCandidates.length > 0 && (
+                      <div className="pt-1">
+                        <p className="text-[11px] text-zinc-400 mb-1.5">Or select from registered tournament players:</p>
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                          {registeredCandidates.map((cand) => (
+                            <button
+                              key={cand.id}
+                              type="button"
+                              onClick={() => setHostWinnerUid(cand.freeFireId || cand.username)}
+                              className={`text-xs px-2.5 py-1 rounded-lg border font-mono transition-all cursor-pointer ${
+                                hostWinnerUid === cand.freeFireId || hostWinnerUid === cand.username
+                                  ? 'bg-amber-500/25 border-amber-500 text-amber-300 font-bold'
+                                  : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10'
+                              }`}
+                            >
+                              {cand.ign} {cand.freeFireId ? `(${cand.freeFireId})` : ''}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submission Button */}
+                  <div className="space-y-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleSubmitHostScreenshots}
+                      disabled={submittingHostScreenshots || hostScreenshots.length === 0 || !hostWinnerUid.trim()}
+                      className="btn-fire w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 shadow-[0_0_25px_rgba(245,158,11,0.25)] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {submittingHostScreenshots ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4" />
+                      )}
+                      {submittingHostScreenshots
+                        ? 'Submitting Screenshots...'
+                        : mySubmission?.status === 'PENDING'
+                        ? 'Replace and Re-submit Match Screenshots'
+                        : 'Submit Match Screenshots for Admin Review'}
+                    </button>
+                    <p className="text-center text-[11px] text-zinc-500">
+                      Screenshots are safely stored and encrypted. No payouts are made until an admin reviews the submission.
+                    </p>
+                  </div>
                 </div>
-              ) : (
+              )
+            ) : (
+              canSubmitResults && (
                 <div className="p-6 rounded-2xl bg-zinc-900/70 backdrop-blur-xl border border-white/10 space-y-4 shadow-xl">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <h3 className="text-base font-bold text-white flex items-center gap-2">

@@ -726,6 +726,7 @@ export interface ResultSubmission {
   secondUid: string | null;
   thirdUid: string | null;
   screenshotUrl: string | null;
+  screenshotUrls?: string[] | null;
   videoUrl?: string | null;
   killList?: any[] | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -842,6 +843,13 @@ export const resultApi = {
     }
   ) => {
     const res = await api.post(`/results/tournament/${tournamentId}/submit`, data);
+    return res.data;
+  },
+  submitScreenshots: async (tournamentId: string, formData: FormData) => {
+    const res = await api.post(`/results/tournament/${tournamentId}/submit-screenshots`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
     return res.data;
   },
   mine: async () => {
@@ -1366,6 +1374,42 @@ export const killCounterApi = {
       startedAt?: number;
       completedAt?: number;
     }>>(`/admin/kill-counter/jobs/${jobId}/status`);
+    return res.data;
+  },
+  getScreenshotData: async (id: string) => {
+    const res = await api.get<ApiResponse<{
+      tournament: any;
+      candidates: any[];
+      isTeamTournament: boolean;
+      existingScreenshots: Array<{ key: string; url: string }>;
+      pendingSubmission: any;
+      finalKillList: any;
+    }>>(`/admin/kill-counter/tournaments/${id}/screenshot-data`);
+    return res.data;
+  },
+  scanScreenshots: async (formData: FormData) => {
+    const res = await api.post<ApiResponse<{
+      matchedRows: any[];
+      rawDetections: any[];
+      usage: any;
+    }>>('/admin/kill-counter/scan-screenshots', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
+    return res.data;
+  },
+  distributePerKill: async (payload: {
+    tournamentId: string;
+    confirmedWinnerUid: string;
+    kills: Record<string, number>;
+  }) => {
+    const res = await api.post<ApiResponse<{
+      totalKills: number;
+      totalPrize: number;
+      hostCommission: number;
+      platformCommission: number;
+      winner: string;
+    }>>('/admin/kill-counter/distribute-per-kill', payload);
     return res.data;
   },
   finalizeKills: async (tournamentId: string, finalKills: any[], unmatchedCount?: number) => {

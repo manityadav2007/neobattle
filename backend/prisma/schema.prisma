@@ -595,6 +595,7 @@ model ResultSubmission {
   secondUid       String?
   thirdUid        String?
   screenshotUrl   String?
+  screenshotUrls  Json?
   videoUrl        String?
   killList        Json?
   status          String   @default("PENDING")
@@ -608,6 +609,19 @@ model ResultSubmission {
   host       User       @relation("ResultSubmissions", fields: [hostId], references: [id], onDelete: Cascade)
 
   @@index([status])
+}
+
+model ScreenshotHash {
+  id           String   @id @default(cuid())
+  hash         String   @unique
+  tournamentId String
+  uploadedById String
+  storageKey   String
+  createdAt    DateTime @default(now())
+
+  @@index([tournamentId])
+  @@index([uploadedById])
+  @@index([hash])
 }
 
 model EsportsSeason {

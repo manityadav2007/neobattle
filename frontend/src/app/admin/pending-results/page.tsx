@@ -212,52 +212,80 @@ export default function AdminPendingResultsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-white">{sub.tournament?.title}</p>
+                      <p className="font-bold text-white text-base">{sub.tournament?.title}</p>
+                      <span className="text-xs font-mono text-zinc-400">UID: {sub.tournament?.uid}</span>
                       {sub.tournament?.tournamentFormat === 'PER_KILL' ? (
                         <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold uppercase flex items-center gap-1">
                           <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                          AI Per-Kill
+                          Per-Kill
                         </span>
-                      ) : sub.tournament?.format ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase">
-                          {sub.tournament.format}
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold uppercase">
+                          Placement
                         </span>
+                      )}
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase">
+                        {sub.tournament?.format || 'SOLO'}
+                      </span>
+                    </div>
+
+                    {/* Metadata line: Host, Player count, Rates */}
+                    <div className="flex items-center gap-3 text-xs text-zinc-400 mt-1 flex-wrap">
+                      <span>Host: <strong className="text-zinc-200">@{sub.host?.username}</strong></span>
+                      <span>•</span>
+                      <span>Players: <strong className="text-zinc-200">{(sub.tournament as any)?._count?.entries || sub.tournament?.entries?.length || sub.participants?.length || 0}</strong></span>
+                      {sub.tournament?.tournamentFormat === 'PER_KILL' ? (
+                        <>
+                          <span>•</span>
+                          <span>Rate: <strong className="text-amber-300 font-mono">₹{Number(sub.tournament?.perKillRate) || 0} / kill</strong></span>
+                          <span>•</span>
+                          <span>Booyah: <strong className="text-yellow-400 font-mono">₹{Number(sub.tournament?.booyahPrize) || 0}</strong></span>
+                        </>
                       ) : null}
                     </div>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      UID {sub.tournament?.uid} · Host: {sub.host?.username}
-                    </p>
-                    {sub.tournament?.tournamentFormat === 'PER_KILL' ? (
-                      <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
-                        <span className="text-amber-300 font-mono flex items-center gap-1">
-                          <Crosshair className="w-3.5 h-3.5" />
-                          {Array.isArray(sub.killList) ? sub.killList.reduce((s: number, k: any) => s + (Number(k.kills) || 0), 0) : 0} total kills
-                        </span>
-                        <span className="text-zinc-400 font-mono">
-                          (₹{sub.tournament?.perKillRate || 0}/kill)
-                        </span>
-                        {sub.videoUrl && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/25 flex items-center gap-1">
-                            <Video className="w-2.5 h-2.5" /> Video Attached
+
+                    {/* Winner UID & Screenshots info */}
+                    <div className="flex items-center gap-3 mt-2 text-xs flex-wrap">
+                      <span className="text-yellow-300 font-mono flex items-center gap-1">
+                        <Crown className="w-3.5 h-3.5 text-yellow-400" />
+                        Host Winner UID: <strong>{sub.firstUid || 'N/A'}</strong>
+                      </span>
+                      {sub.tournament?.tournamentFormat === 'PER_KILL' && (
+                        Array.isArray(sub.screenshotUrls) && sub.screenshotUrls.length > 0 ? (
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 font-mono">
+                            {sub.screenshotUrls.length} screenshot{sub.screenshotUrls.length === 1 ? '' : 's'}
                           </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
-                        <span className="text-yellow-300 font-mono">🥇 {sub.firstUid}</span>
-                        {sub.secondUid && <span className="text-zinc-300 font-mono">🥈 {sub.secondUid}</span>}
-                        {sub.thirdUid && <span className="text-zinc-300 font-mono">🥉 {sub.thirdUid}</span>}
-                      </div>
-                    )}
+                        ) : sub.screenshotUrl ? (
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 font-mono">
+                            1 screenshot
+                          </span>
+                        ) : null
+                      )}
+                    </div>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-lg font-black gradient-text">
                       {formatCurrency(Number(sub.tournament?.prizePool ?? 0))}
                     </p>
                     <p className="text-[11px] text-zinc-500">{formatDate(sub.createdAt)}</p>
-                    <span className="text-[11px] text-fire-400 inline-flex items-center gap-1 mt-1">
-                      Review <Eye className="w-3 h-3" />
-                    </span>
+                    <div className="flex items-center justify-end gap-2 mt-2">
+                      {sub.tournament?.tournamentFormat === 'PER_KILL' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/admin/screenshot-kill-counter?tournamentId=${sub.tournamentId}`);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-xs shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Categorize Kills
+                        </button>
+                      )}
+                      <span className="text-[11px] text-fire-400 inline-flex items-center gap-1">
+                        Review <Eye className="w-3 h-3" />
+                      </span>
+                    </div>
                   </div>
                 </div>
               </button>
@@ -291,6 +319,25 @@ export default function AdminPendingResultsPage() {
             <div className="mt-5">
               {selected.tournament.tournamentFormat === 'PER_KILL' ? (
                 <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        AI Multimodal Screenshot Kill Counter
+                      </p>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Scan scoreboard screenshots with Gemini AI, verify fuzzy IGN matches against the roster, and distribute prizes.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/admin/screenshot-kill-counter?tournamentId=${selected.tournamentId}`)}
+                      className="btn-fire px-4 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)] cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Categorize Kills Studio
+                    </button>
+                  </div>
                   <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-white/10">
                     <p className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
                       <Crosshair className="w-3.5 h-3.5 text-amber-400" />

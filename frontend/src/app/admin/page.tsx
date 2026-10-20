@@ -250,6 +250,7 @@ export default function AdminPage() {
         { href: '/admin/tournaments', label: 'Tournaments', desc: 'Create, schedule & manage', icon: Trophy, tone: 'bg-amber-500/15 text-amber-400' },
         { href: '/admin/pending-results', label: 'Pending Results', desc: 'Review winner match proofs', icon: Trophy, tone: 'bg-orange-500/15 text-orange-400' },
         { href: '/admin/esports', label: 'Esports Config', desc: 'Seasons & prize distribution', icon: Trophy, tone: 'bg-yellow-500/15 text-yellow-400' },
+        { href: '/admin/screenshot-kill-counter', label: 'Screenshot Kill Counter', desc: 'OCR scoreboard screenshot scanner', icon: Sparkles, tone: 'bg-amber-500/15 text-amber-400' },
         { href: '/admin/kill-counter', label: 'AI Kill Counter', desc: 'Scan match video for kills', icon: Crosshair, tone: 'bg-rose-500/15 text-rose-400' },
         { href: '/admin/test-ai-counter', label: 'Test AI Counter', desc: 'Feed tester & CV playground', icon: Sparkles, tone: 'bg-violet-500/15 text-violet-400' },
       ],
