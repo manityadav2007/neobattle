@@ -7,11 +7,18 @@ const router = Router();
 
 // Dynamic QR Automated Deposit Flow
 router.get('/deposit/active', authenticate, paymentController.getActiveDepositOrder);
-router.get('/deposit/resume/:id', authenticate, paymentController.getResumableDepositOrder);
-router.get('/deposit/:id', authenticate, paymentController.getResumableDepositOrder);
 router.post('/deposit/initiate', authenticate, paymentController.initiateDynamicDeposit);
 router.get('/deposit/status/:transactionId', authenticate, paymentController.getDepositOrderStatus);
 router.post('/deposit/cancel/:transactionId', authenticate, paymentController.cancelDepositOrder);
+router.get('/deposit/resume/:id', authenticate, paymentController.getResumableDepositOrder);
+router.get('/deposit/:id', authenticate, (req, res, next) => {
+  const reserved = ['active', 'initiate', 'status', 'cancel', 'pending', 'resume'];
+  const idStr = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  if (idStr && reserved.includes(idStr.toLowerCase())) {
+    return next();
+  }
+  return paymentController.getResumableDepositOrder(req as any, res);
+});
 
 // Admin Unmatched & Auto Deposits Management
 router.get('/unmatched', authenticate, adminCheck, paymentController.listUnmatchedPayments);
