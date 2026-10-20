@@ -62,7 +62,12 @@ export async function getDashboardStats(_req: AuthenticatedRequest, res: Respons
     prisma.tournament.aggregate({ _sum: { platformCommission: true } }),
     prisma.winnerProof.count({ where: { status: 'PENDING' } }),
     prisma.depositRequest.count({ where: { status: 'PENDING' } }),
-    prisma.redeemRequest.count({ where: { status: 'PENDING' } }),
+    Promise.all([
+      prisma.transaction.count({
+        where: { type: TransactionType.WITHDRAWAL, status: TransactionStatus.PENDING },
+      }),
+      prisma.redeemRequest.count({ where: { status: 'PENDING' } }),
+    ]).then(([txCount, reqCount]) => txCount + reqCount),
     prisma.user.count({ where: { role: 'HOST' } }),
   ]);
 
