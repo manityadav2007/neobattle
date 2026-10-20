@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { APP_APK_URL } from '@/config/download';
 
 export { APP_APK_URL };
@@ -79,16 +79,13 @@ export const IOS_STEPS = [
 
 export default function DownloadSection() {
   const [isInstalled, setIsInstalled] = useState(false);
-  const [isAndroid, setIsAndroid] = useState(false);
   const [isIosModalOpen, setIsIosModalOpen] = useState(false);
+  const [showAndroidToast, setShowAndroidToast] = useState(false);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (isInstalledApp()) {
       setIsInstalled(true);
-    }
-
-    if (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)) {
-      setIsAndroid(true);
     }
 
     // Reactive listener for standalone display-mode changes
@@ -114,6 +111,21 @@ export default function DownloadSection() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isIosModalOpen]);
 
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  const handleAndroidClick = () => {
+    setShowAndroidToast(true);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setShowAndroidToast(false);
+    }, 4500);
+  };
+
   // Hide the whole section when already running as an installed app
   if (isInstalled) {
     return null;
@@ -121,45 +133,84 @@ export default function DownloadSection() {
 
   return (
     <>
-      <section className="relative z-10 py-12 sm:py-16 border-t border-white/5">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-md mx-auto glass-card rounded-2xl p-5 sm:p-6 text-center border border-white/10 hover:border-white/20 transition-all">
-            <h2 className="text-xl sm:text-2xl font-display font-bold text-white mb-5 tracking-tight">
-              Download NeoBattle
-            </h2>
+      {/* MOBILE ONLY (md:hidden), NO BOX, transparent background, standard section rhythm */}
+      <section className="md:hidden relative z-10 py-10 sm:py-12 border-t border-white/5 bg-transparent overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          {/* Section heading with blue-to-orange gradient text */}
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-center tracking-tight text-white mb-6">
+            Download <span className="gradient-text">NeoBattle</span>
+          </h2>
 
-            <div className="flex flex-col min-[360px]:flex-row items-center justify-center gap-3 w-full">
+          {/* Button container with soft blurred glow behind */}
+          <div className="relative w-full max-w-sm min-[480px]:max-w-lg mx-auto">
+            {/* Soft blurred glow using theme colors, fading into page background */}
+            <div
+              className="absolute -inset-3 bg-gradient-to-r from-neo-500/20 via-neo-400/10 to-fire-500/20 rounded-full blur-2xl opacity-60 pointer-events-none -z-10"
+              aria-hidden="true"
+            />
+
+            {/* Pill-shaped buttons: stacked full-width on phones <= 430px, side by side if room */}
+            <div className="flex flex-col min-[480px]:flex-row gap-3.5 w-full">
+              {/* Android Download Button */}
               <a
                 href={APP_APK_URL}
                 download
-                className="w-full min-[360px]:w-auto min-w-[130px] sm:min-w-[140px] px-5 py-3 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all duration-200 active:scale-[0.98] bg-white/[0.05] hover:bg-white/[0.1] text-white border border-white/10 hover:border-fire-500/50 hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] cursor-pointer"
-                title="Download NeoBattle for Android"
+                onClick={handleAndroidClick}
+                className="group relative p-[1px] rounded-full pwa-pill-border w-full min-w-0 transition-transform duration-200 active:scale-[0.98] shadow-lg shadow-black/40 block focus:outline-none focus:ring-2 focus:ring-neo-400/50 cursor-pointer"
+                title="Download NeoBattle APK for Android"
               >
-                <AndroidIcon className="w-5 h-5 text-emerald-400 shrink-0" />
-                <span>Android</span>
+                <div className="w-full min-h-[56px] px-5 py-2.5 rounded-full bg-[#0c0c14]/85 hover:bg-[#0c0c14]/75 backdrop-blur-md flex items-center gap-3.5 transition-colors">
+                  <div className="w-10 h-10 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center shrink-0 shadow-inner group-hover:bg-white/[0.12] transition-colors">
+                    <AndroidIcon className="w-5 h-5 text-emerald-400 shrink-0" />
+                  </div>
+                  <div className="text-left flex flex-col justify-center min-w-0">
+                    <span className="text-[11px] text-zinc-400 font-medium leading-tight block truncate">
+                      Download for
+                    </span>
+                    <span className="text-base font-bold text-white tracking-wide block leading-tight mt-0.5">
+                      Android
+                    </span>
+                  </div>
+                </div>
               </a>
 
+              {/* iOS Add to Home Screen Button */}
               <button
                 type="button"
                 onClick={() => setIsIosModalOpen(true)}
-                className="w-full min-[360px]:w-auto min-w-[130px] sm:min-w-[140px] px-5 py-3 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all duration-200 active:scale-[0.98] bg-white/[0.05] hover:bg-white/[0.1] text-white border border-white/10 hover:border-neo-400/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] cursor-pointer"
-                title="Install NeoBattle on iOS"
+                className="group relative p-[1px] rounded-full pwa-pill-border w-full min-w-0 transition-transform duration-200 active:scale-[0.98] shadow-lg shadow-black/40 block focus:outline-none focus:ring-2 focus:ring-fire-400/50 cursor-pointer"
+                title="Add NeoBattle to iOS Home Screen"
               >
-                <AppleIcon className="w-5 h-5 text-zinc-100 shrink-0" />
-                <span>iOS</span>
+                <div className="w-full min-h-[56px] px-5 py-2.5 rounded-full bg-[#0c0c14]/85 hover:bg-[#0c0c14]/75 backdrop-blur-md flex items-center gap-3.5 transition-colors">
+                  <div className="w-10 h-10 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center shrink-0 shadow-inner group-hover:bg-white/[0.12] transition-colors">
+                    <AppleIcon className="w-5 h-5 text-zinc-100 shrink-0" />
+                  </div>
+                  <div className="text-left flex flex-col justify-center min-w-0">
+                    <span className="text-[11px] text-zinc-400 font-medium leading-tight block truncate">
+                      Add to Home Screen
+                    </span>
+                    <span className="text-base font-bold text-white tracking-wide block leading-tight mt-0.5">
+                      iOS
+                    </span>
+                  </div>
+                </div>
               </button>
             </div>
 
-            {isAndroid && (
-              <p className="mt-3.5 text-xs text-zinc-400">
+            {/* Android Post-Tap Hint Toast */}
+            {showAndroidToast && (
+              <div
+                role="status"
+                className="mt-3 text-center text-xs text-zinc-400 animate-in fade-in slide-in-from-top-1 duration-200"
+              >
                 Allow &apos;Install unknown apps&apos; when asked.
-              </p>
+              </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* iOS Installation Modal */}
+      {/* iOS Installation Modal - Restyled with matching glass look and gradient border */}
       {isIosModalOpen && (
         <div
           role="dialog"
@@ -169,41 +220,48 @@ export default function DownloadSection() {
           onClick={() => setIsIosModalOpen(false)}
         >
           <div
-            className="glass-card rounded-2xl p-5 sm:p-6 border border-white/15 max-w-xs sm:max-w-sm w-full space-y-4 shadow-2xl relative"
+            className="relative p-[1px] rounded-3xl pwa-pill-border max-w-xs sm:max-w-sm w-full shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <AppleIcon className="w-5 h-5 text-white shrink-0" />
-                <h3 id="ios-modal-title" className="text-base font-bold text-white">
-                  Install NeoBattle on iOS
-                </h3>
+            <div className="rounded-[23px] bg-[#0c0c14]/95 backdrop-blur-xl p-5 sm:p-6 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center shrink-0">
+                    <AppleIcon className="w-4 h-4 text-white" />
+                  </div>
+                  <h3 id="ios-modal-title" className="text-base font-bold text-white tracking-wide">
+                    Add to Home Screen
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsIosModalOpen(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Close"
+                >
+                  <CloseIcon className="w-5 h-5" />
+                </button>
               </div>
+
+              <ol className="space-y-3 text-sm text-zinc-300">
+                {IOS_STEPS.map((step, idx) => (
+                  <li key={step} className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-full bg-white/10 text-white flex items-center justify-center text-xs font-bold font-mono shrink-0">
+                      {idx + 1}
+                    </span>
+                    <span>{step.replace(/^\d+\.\s*/, '')}</span>
+                  </li>
+                ))}
+              </ol>
+
               <button
                 type="button"
                 onClick={() => setIsIosModalOpen(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                aria-label="Close"
+                className="w-full py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-white text-sm font-semibold transition-colors mt-2 cursor-pointer"
               >
-                <CloseIcon className="w-5 h-5" />
+                Close
               </button>
             </div>
-
-            <ol className="space-y-2.5 text-sm text-zinc-300">
-              {IOS_STEPS.map((step) => (
-                <li key={step} className="flex items-center gap-2.5">
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-
-            <button
-              type="button"
-              onClick={() => setIsIosModalOpen(false)}
-              className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-semibold transition-colors mt-2 cursor-pointer"
-            >
-              Close
-            </button>
           </div>
         </div>
       )}

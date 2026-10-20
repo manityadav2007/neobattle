@@ -116,3 +116,29 @@ body {
   will-change: transform, opacity;
 }
 
+/* PWA Pill Button Gradient Border & Shimmer */
+@keyframes pwa-border-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.pwa-pill-border {
+  background: linear-gradient(115deg, rgba(59, 130, 246, 0.55) 0%, rgba(96, 165, 250, 0.85) 30%, rgba(249, 115, 22, 0.85) 70%, rgba(234, 88, 12, 0.55) 100%);
+  background-size: 250% 250%;
+  animation: pwa-border-shimmer 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pwa-pill-border {
+    animation: none !important;
+  }
+}
+
+

@@ -96,41 +96,62 @@ test('DownloadSection component - fulfills all specifications', () => {
 
   const content = fs.readFileSync(componentPath, 'utf8');
 
-  // 1. Heading "Download NeoBattle"
-  assert.ok(content.includes('Download NeoBattle'), 'Must have heading "Download NeoBattle"');
+  // 1. MOBILE ONLY: md:hidden hides it on desktop/PC
+  assert.ok(content.includes('md:hidden'), 'Must include md:hidden to hide section on desktop/tablet');
 
-  // 2. Buttons: Android and iOS
-  assert.ok(content.includes('>Android<') || content.includes('<span>Android</span>'), 'Must include Android button');
-  assert.ok(content.includes('>iOS<') || content.includes('<span>iOS</span>'), 'Must include iOS button');
+  // 2. NO BOX: section has transparent background and no square card container
+  assert.ok(content.includes('bg-transparent'), 'Must use transparent background, blending with page');
 
-  // 3. Inline SVGs only (no <img> or external image assets)
+  // 3. Heading "Download NeoBattle" with gradient
+  assert.ok(content.includes('Download NeoBattle') || content.includes('Download <span className="gradient-text">NeoBattle</span>'), 'Must have heading "Download NeoBattle"');
+
+  // 4. Buttons: Android and iOS with two-line labels
+  assert.ok(content.includes('Android'), 'Must include Android button');
+  assert.ok(content.includes('iOS'), 'Must include iOS button');
+  assert.ok(content.includes('Download for'), 'Android button must include "Download for" tiny label');
+  assert.ok(content.includes('Add to Home Screen'), 'iOS button must include "Add to Home Screen" tiny label');
+  assert.ok(content.includes('min-h-[56px]'), 'Buttons must have minimum tap height of 56px');
+
+  // 5. Soft blurred glow behind buttons
+  assert.ok(content.includes('blur-2xl'), 'Must include soft blurred glow behind buttons');
+
+  // 6. Inline SVGs only (no <img> or external image assets)
   assert.ok(!content.includes('<img'), 'Must not use external <img> elements');
   assert.ok(!content.includes('next/image'), 'Must not import next/image');
   assert.ok(content.includes('<svg'), 'Must use inline SVG icons');
 
-  // 4. Android muted text: "Allow 'Install unknown apps' when asked."
+  // 7. Android muted text: "Allow 'Install unknown apps' when asked."
   assert.ok(
     content.includes("Allow 'Install unknown apps' when asked.") ||
     content.includes("Allow &apos;Install unknown apps&apos; when asked."),
     'Must include exact muted Android warning text'
   );
 
-  // 5. iOS modal steps:
+  // 8. iOS modal steps:
   // "1. Open this site in Safari  2. Tap the Share button  3. Choose Add to Home Screen  4. Tap Add"
   assert.ok(content.includes('Open this site in Safari'), 'iOS modal must include Step 1');
   assert.ok(content.includes('Tap the Share button'), 'iOS modal must include Step 2');
   assert.ok(content.includes('Choose Add to Home Screen'), 'iOS modal must include Step 3');
   assert.ok(content.includes('Tap Add'), 'iOS modal must include Step 4');
 
-  // 6. Mobile responsiveness: narrow screen stacking (min-[360px]:flex-row or flex-col)
-  assert.ok(content.includes('flex-col'), 'Must stack buttons vertically on very narrow screens');
-  assert.ok(content.includes('flex-row'), 'Must place buttons side by side on wider screens');
+  // 9. Mobile responsiveness: stacked on narrow screens up to 430px
+  assert.ok(content.includes('flex-col'), 'Must stack buttons vertically on narrow screens');
 
-  // 7. Standalone app detection
+  // 10. Standalone app detection
   assert.ok(content.includes("display-mode: standalone"), 'Must check display-mode: standalone');
   assert.ok(content.includes("standalone"), 'Must check navigator.standalone');
   assert.ok(content.includes("android-app://"), 'Must check android-app:// referrer');
 
-  // 8. Download attribute on Android button
+  // 11. Download attribute on Android button
   assert.ok(content.includes('download'), 'Android button must trigger APK download');
+});
+
+test('Globals CSS - contains shimmer and reduced motion media query', () => {
+  const cssPath = path.resolve(__dirname, '../../../frontend/src/app/globals.css');
+  assert.ok(fs.existsSync(cssPath), 'globals.css must exist');
+
+  const css = fs.readFileSync(cssPath, 'utf8');
+  assert.ok(css.includes('pwa-pill-border'), 'Must define pwa-pill-border');
+  assert.ok(css.includes('pwa-border-shimmer'), 'Must define pwa-border-shimmer animation');
+  assert.ok(css.includes('prefers-reduced-motion'), 'Must disable animation on prefers-reduced-motion');
 });
