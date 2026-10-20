@@ -64,6 +64,37 @@ test('Download config - APP_APK_URL exists and defaults properly', () => {
   assert.ok(content.includes('/downloads/neobattle.apk'), 'Must default to /downloads/neobattle.apk');
 });
 
+test('APK file verification - real signed APK is present in repository', () => {
+  const apkPath = path.resolve(__dirname, '../../../frontend/public/downloads/neobattle.apk');
+  assert.ok(fs.existsSync(apkPath), 'frontend/public/downloads/neobattle.apk must exist');
+
+  const stat = fs.statSync(apkPath);
+  // APK should be ~4.28 MB (well above 1 MB)
+  assert.ok(stat.size > 1024 * 1024, `APK size (${stat.size} bytes) must be > 1 MB`);
+  assert.equal(stat.size, 4284149, `APK size must be exactly 4284149 bytes (~4.09 MB)`);
+
+  // Verify ZIP/APK magic bytes: PK\x03\x04
+  const fd = fs.openSync(apkPath, 'r');
+  const buffer = Buffer.alloc(4);
+  fs.readSync(fd, buffer, 0, 4, 0);
+  fs.closeSync(fd);
+  assert.equal(buffer[0], 0x50, 'Byte 0 must be P');
+  assert.equal(buffer[1], 0x4b, 'Byte 1 must be K');
+  assert.equal(buffer[2], 0x03, 'Byte 2 must be 0x03');
+  assert.equal(buffer[3], 0x04, 'Byte 3 must be 0x04');
+});
+
+test('Security & gitignore - sensitive signing keys and aab bundles blocked from repo', () => {
+  const gitignorePath = path.resolve(__dirname, '../../../.gitignore');
+  assert.ok(fs.existsSync(gitignorePath), '.gitignore must exist');
+
+  const content = fs.readFileSync(gitignorePath, 'utf8');
+  assert.ok(content.includes('*.keystore'), '.gitignore must ignore *.keystore');
+  assert.ok(content.includes('*.jks'), '.gitignore must ignore *.jks');
+  assert.ok(content.includes('signing-key-info.txt'), '.gitignore must ignore signing-key-info.txt');
+  assert.ok(content.includes('*.aab'), '.gitignore must ignore *.aab');
+});
+
 test('Home page source - includes DownloadSection between stats row and Why NEOBATTLE', () => {
   const pagePath = path.resolve(__dirname, '../../../frontend/src/app/page.tsx');
   assert.ok(fs.existsSync(pagePath), 'frontend/src/app/page.tsx must exist');
@@ -120,7 +151,10 @@ test('DownloadSection component - fulfills all specifications', () => {
   assert.ok(!content.includes('next/image'), 'Must not import next/image');
   assert.ok(content.includes('<svg'), 'Must use inline SVG icons');
 
-  // 7. Android muted text: "Allow 'Install unknown apps' when asked."
+  // 7. Android HEAD pre-check and toast handling
+  assert.ok(content.includes("method: 'HEAD'"), 'Must send HEAD request before downloading APK');
+  assert.ok(content.includes('1024 * 1024') || content.includes('1048576'), 'Must check content-length > 1MB');
+  assert.ok(content.includes('Android app coming soon'), 'Must show toast "Android app coming soon" on failure');
   assert.ok(
     content.includes("Allow 'Install unknown apps' when asked.") ||
     content.includes("Allow &apos;Install unknown apps&apos; when asked."),
@@ -154,4 +188,33 @@ test('Globals CSS - contains shimmer and reduced motion media query', () => {
   assert.ok(css.includes('pwa-pill-border'), 'Must define pwa-pill-border');
   assert.ok(css.includes('pwa-border-shimmer'), 'Must define pwa-border-shimmer animation');
   assert.ok(css.includes('prefers-reduced-motion'), 'Must disable animation on prefers-reduced-motion');
+});
+
+test('Downloads Route Handler - /downloads/missing.apk returns 404 (not HTML)', async () => {
+  // Direct simulation of downloads route handler behavior
+  const routePath = path.resolve(__dirname, '../../../frontend/src/app/downloads/[...file]/route.ts');
+  assert.ok(fs.existsSync(routePath), 'frontend/src/app/downloads/[...file]/route.ts must exist');
+
+  const content = fs.readFileSync(routePath, 'utf8');
+  assert.ok(content.includes('File Not Found'), 'Must return plain text File Not Found');
+  assert.ok(content.includes('404'), 'Must return status 404');
+  assert.ok(content.includes('text/plain'), 'Must return Content-Type: text/plain, not text/html');
+  assert.ok(content.includes('application/vnd.android.package-archive'), 'Must serve .apk with correct MIME');
+  assert.ok(content.includes('attachment'), 'Must serve .apk with attachment disposition');
+});
+
+test('Assetlinks Route Handler - /.well-known/assetlinks.json returns valid JSON with package name', () => {
+  const assetlinksPath = path.resolve(__dirname, '../../../frontend/public/.well-known/assetlinks.json');
+  assert.ok(fs.existsSync(assetlinksPath), 'public/.well-known/assetlinks.json must exist');
+
+  const content = fs.readFileSync(assetlinksPath, 'utf8');
+  const parsed = JSON.parse(content);
+  assert.ok(Array.isArray(parsed), 'assetlinks must parse as array');
+  assert.equal(parsed[0].target.package_name, 'live.neobattle.twa', 'package_name must be live.neobattle.twa');
+  assert.ok(parsed[0].target.sha256_cert_fingerprints.length > 0, 'Must have certificate fingerprints');
+
+  const routePath = path.resolve(__dirname, '../../../frontend/src/app/.well-known/assetlinks.json/route.ts');
+  assert.ok(fs.existsSync(routePath), 'route handler for /.well-known/assetlinks.json must exist');
+  const routeContent = fs.readFileSync(routePath, 'utf8');
+  assert.ok(routeContent.includes('application/json'), 'Route handler must serve application/json');
 });

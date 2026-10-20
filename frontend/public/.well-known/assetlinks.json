@@ -1,12 +1,8 @@
-[
-  {
-    "relation": ["delegate_permission/common.handle_all_urls"],
-    "target": {
-      "namespace": "android_app",
-      "package_name": "com.neobattle.app",
-      "sha256_cert_fingerprints": [
-        "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
-      ]
-    }
-  }
-]
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "live.neobattle.twa",
+        "sha256_cert_fingerprints": ["B9:C3:E5:FF:3D:51:68:17:B6:4D:07:D6:AD:31:0D:6B:C6:06:C5:DB:D4:25:E9:B9:8B:36:7A:44:C3:2A:21:9F"]
+      }
+    }]

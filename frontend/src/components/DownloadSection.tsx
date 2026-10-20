@@ -80,7 +80,8 @@ export const IOS_STEPS = [
 export default function DownloadSection() {
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIosModalOpen, setIsIosModalOpen] = useState(false);
-  const [showAndroidToast, setShowAndroidToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isCheckingApk, setIsCheckingApk] = useState(false);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -118,12 +119,43 @@ export default function DownloadSection() {
     };
   }, []);
 
-  const handleAndroidClick = () => {
-    setShowAndroidToast(true);
+  const showToast = (message: string, duration = 4500) => {
+    setToastMessage(message);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => {
-      setShowAndroidToast(false);
-    }, 4500);
+      setToastMessage(null);
+    }, duration);
+  };
+
+  const handleAndroidClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isCheckingApk) return;
+    setIsCheckingApk(true);
+
+    try {
+      // Send HEAD request to verify APK exists and is > 1MB
+      const res = await fetch(APP_APK_URL, { method: 'HEAD' });
+      const contentLengthHeader = res.headers.get('content-length');
+      const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
+
+      if (res.status === 200 && contentLength > 1024 * 1024) {
+        // Trigger download
+        const link = document.createElement('a');
+        link.href = APP_APK_URL;
+        link.setAttribute('download', 'neobattle.apk');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast("Allow 'Install unknown apps' when asked.");
+      } else {
+        showToast('Android app coming soon');
+      }
+    } catch {
+      showToast('Android app coming soon');
+    } finally {
+      setIsCheckingApk(false);
+    }
   };
 
   // Hide the whole section when already running as an installed app
@@ -197,13 +229,13 @@ export default function DownloadSection() {
               </button>
             </div>
 
-            {/* Android Post-Tap Hint Toast */}
-            {showAndroidToast && (
+            {/* Android Post-Tap Hint / Status Toast */}
+            {toastMessage && (
               <div
                 role="status"
                 className="mt-3 text-center text-xs text-zinc-400 animate-in fade-in slide-in-from-top-1 duration-200"
               >
-                Allow &apos;Install unknown apps&apos; when asked.
+                {toastMessage}
               </div>
             )}
           </div>

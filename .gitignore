@@ -5,3 +5,9 @@ dist/
 *.log
 .next/
 .DS_Store
+
+# Android signing keys and App Bundle artifacts (sensitive)
+*.keystore
+*.jks
+signing-key-info.txt
+*.aab

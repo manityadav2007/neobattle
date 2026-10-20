@@ -115,6 +115,7 @@ test('Digital Asset Links - /.well-known/assetlinks.json exists with valid JSON'
   assert.ok(parsed[0].relation, 'assetlinks.json must have relation field');
   assert.ok(parsed[0].target, 'assetlinks.json must have target field');
   assert.equal(parsed[0].target.namespace, 'android_app');
+  assert.equal(parsed[0].target.package_name, 'live.neobattle.twa');
 });
 
 test('Next.js Config - headers configure correct Content-Types for APK and assetlinks', () => {
