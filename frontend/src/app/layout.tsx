@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
 import ConditionalFooter from '@/components/ConditionalFooter';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import SplashScreen from '@/components/SplashScreen';
 import { AuthProvider } from '@/hooks/useAuth';
 import './globals.css';
 
@@ -44,8 +45,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="NeoBattle" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;var r=document.referrer&&document.referrer.indexOf('android-app://')===0;var t=s||r;var d=sessionStorage.getItem('neobattle_splash_shown');if(d){document.documentElement.classList.add('twa-splash-dismissed');}else if(t){document.documentElement.classList.add('twa-splash-active');}}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className={`${inter.variable} ${orbitron.variable} font-body antialiased`}>
+        <SplashScreen />
         <AuthProvider>
           <ServiceWorkerRegister />
           <Navbar />

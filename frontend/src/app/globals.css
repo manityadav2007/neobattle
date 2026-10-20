@@ -141,4 +141,142 @@ body {
   }
 }
 
+/* TWA Standalone Mode & Startup Splash Screen */
+@media (display-mode: standalone) {
+  html,
+  body {
+    background-color: #000000 !important;
+  }
+}
+
+html.twa-splash-active,
+html.twa-splash-active body {
+  background-color: #000000 !important;
+}
+
+#twa-splash-screen {
+  display: none;
+}
+
+@media (display-mode: standalone) {
+  #twa-splash-screen {
+    display: flex;
+  }
+}
+
+html.twa-splash-active #twa-splash-screen {
+  display: flex;
+}
+
+html.twa-splash-dismissed #twa-splash-screen {
+  display: none !important;
+}
+
+/* Splash Screen Pulsing Radial Glow */
+@keyframes splash-pulse-glow {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+.splash-glow {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.35) 0%, rgba(249, 115, 22, 0.22) 50%, transparent 70%);
+  filter: blur(35px);
+  animation: splash-pulse-glow 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Splash Logo Container and Diagonal Shine Sweep */
+.splash-logo-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.splash-logo-container::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.05) 35%,
+    rgba(255, 255, 255, 0.75) 50%,
+    rgba(255, 255, 255, 0.05) 65%,
+    transparent 80%
+  );
+  transform: translate(-100%, -100%) rotate(25deg);
+  animation: splash-shine-sweep 1.8s ease-in-out infinite;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  mask-image: radial-gradient(circle at center, black 75%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle at center, black 75%, transparent 100%);
+}
+
+@keyframes splash-shine-sweep {
+  0% {
+    transform: translate(-120%, -120%) rotate(25deg);
+  }
+  50%, 100% {
+    transform: translate(120%, 120%) rotate(25deg);
+  }
+}
+
+/* Faint Floating Particles */
+@keyframes splash-particle-float {
+  0% {
+    transform: translateY(0) scale(0.8);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.55;
+  }
+  75% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(-90px) scale(1.1);
+    opacity: 0;
+  }
+}
+
+.splash-particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: splash-particle-float 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-glow {
+    animation: none !important;
+    opacity: 0.5 !important;
+    transform: none !important;
+  }
+  .splash-logo-container::after {
+    animation: none !important;
+    display: none !important;
+  }
+  .splash-particle {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
+
 

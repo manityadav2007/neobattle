@@ -140,3 +140,103 @@ test('Next.js Config - headers configure correct Content-Types for APK and asset
     'next.config.js must configure application/json for assetlinks'
   );
 });
+
+test('Startup Splash Screen - Component and detection logic meet all specs', () => {
+  const splashPath = path.join(frontendDir, 'src', 'components', 'SplashScreen.tsx');
+  assert.ok(fs.existsSync(splashPath), 'SplashScreen.tsx must exist');
+
+  const splashContent = fs.readFileSync(splashPath, 'utf8');
+
+  // Must detect standalone mode and android-app:// referrer
+  assert.ok(
+    splashContent.includes('(display-mode: standalone)'),
+    'SplashScreen must detect (display-mode: standalone)'
+  );
+  assert.ok(
+    splashContent.includes('android-app://'),
+    'SplashScreen must detect android-app:// referrer'
+  );
+
+  // Must use sessionStorage wrapped in try/catch to show once per app launch
+  assert.ok(
+    splashContent.includes('sessionStorage.getItem'),
+    'SplashScreen must check sessionStorage'
+  );
+  assert.ok(
+    splashContent.includes('sessionStorage.setItem'),
+    'SplashScreen must write sessionStorage'
+  );
+  assert.ok(
+    splashContent.includes('try') && splashContent.includes('catch'),
+    'SplashScreen must wrap storage in try/catch'
+  );
+
+  // Must use existing logo
+  assert.ok(
+    splashContent.includes('/logo/image_21332e.jpg'),
+    'SplashScreen must use existing logo /logo/image_21332e.jpg'
+  );
+
+  // Timing: ~2s duration, 300ms fadeout, safety <= 3s
+  assert.ok(
+    splashContent.includes('1800') || splashContent.includes('2000'),
+    'SplashScreen must trigger fadeout around 1.8-2.0s'
+  );
+  assert.ok(
+    splashContent.includes('duration-300'),
+    'SplashScreen must use 300ms fadeout transition'
+  );
+  assert.ok(
+    splashContent.includes('2800') || splashContent.includes('3000'),
+    'SplashScreen must have safety timeout <= 3s'
+  );
+});
+
+test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash and respect motion settings', () => {
+  const layoutPath = path.join(frontendDir, 'src', 'app', 'layout.tsx');
+  const layoutContent = fs.readFileSync(layoutPath, 'utf8');
+
+  assert.ok(
+    layoutContent.includes('<SplashScreen'),
+    'layout.tsx must render SplashScreen in root layout'
+  );
+  assert.ok(
+    layoutContent.includes('(display-mode: standalone)'),
+    'layout.tsx head must check standalone mode synchronously'
+  );
+  assert.ok(
+    layoutContent.includes('neobattle_splash_shown'),
+    'layout.tsx head must check sessionStorage'
+  );
+
+  const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
+  const cssContent = fs.readFileSync(cssPath, 'utf8');
+
+  // html/body background #000 in standalone
+  assert.ok(
+    cssContent.includes('@media (display-mode: standalone)') && cssContent.includes('#000000 !important'),
+    'globals.css must set html/body background to #000000 !important for standalone mode'
+  );
+
+  // Shine sweep animation
+  assert.ok(
+    cssContent.includes('splash-shine-sweep'),
+    'globals.css must define splash-shine-sweep keyframes'
+  );
+  assert.ok(
+    cssContent.includes('splash-logo-container::after') || cssContent.includes('.splash-logo-container::after'),
+    'globals.css must have splash-logo-container::after shine sweep'
+  );
+
+  // Pulsing glow
+  assert.ok(
+    cssContent.includes('splash-pulse-glow'),
+    'globals.css must define splash-pulse-glow keyframes'
+  );
+
+  // Prefers-reduced-motion
+  assert.ok(
+    cssContent.includes('prefers-reduced-motion: reduce'),
+    'globals.css must respect prefers-reduced-motion: reduce'
+  );
+});
