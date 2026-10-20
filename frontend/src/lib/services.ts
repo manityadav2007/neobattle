@@ -499,7 +499,7 @@ export const adminApi = {
     return res.data;
   },
   pendingRedeems: async () => {
-    const res = await api.get('/redeem/pending');
+    const res = await api.get('/admin/withdrawals', { params: { status: 'PENDING' } });
     return res.data;
   },
   listRedeems: async (status?: string) => {

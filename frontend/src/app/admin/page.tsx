@@ -162,7 +162,8 @@ export default function AdminPage() {
 
       // Pending Redeems
       if (results[2].status === 'fulfilled' && results[2].value?.data) {
-        setRedeems(Array.isArray(results[2].value.data) ? results[2].value.data : []);
+        const list = Array.isArray(results[2].value.data) ? results[2].value.data : [];
+        setRedeems(list.filter((r: any) => r.status === 'PENDING'));
       } else if (results[2].status === 'rejected') {
         console.warn('Pending redeems call failed:', results[2].reason);
         newQueueErrors.redeems = getErrorMessage(results[2].reason);
@@ -211,12 +212,15 @@ export default function AdminPage() {
   const handleRedeemReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     try {
       setActionError('');
-      await adminApi.reviewRedeem(id, status, status === 'REJECTED' ? { rejectionReason: 'Request denied' } : undefined);
-      setActionMsg(`Redeem ${status.toLowerCase()}`);
+      await adminApi.reviewWithdrawal(id, status === 'APPROVED' ? 'COMPLETED' : 'REJECTED', {
+        rejectionReason: status === 'REJECTED' ? 'Request denied by admin' : undefined,
+      });
+      setActionMsg(`Withdrawal ${status.toLowerCase()}`);
       setRedeems((prev) => prev.filter((r) => r.id !== id));
-      loadData();
+      await loadData();
     } catch (err) {
       setActionError(getErrorMessage(err));
+      await loadData();
     }
   };
 

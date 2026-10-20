@@ -806,7 +806,10 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
 
 export async function listWithdrawals(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const statusParam = (req.query.status as string | undefined)?.toUpperCase();
+    let statusParam = (req.query.status as string | undefined)?.toUpperCase();
+    if (!statusParam && req.path.includes('pending')) {
+      statusParam = 'PENDING';
+    }
 
     // 1. Query Transaction withdrawals
     let txWhere: Prisma.TransactionWhereInput = { type: TransactionType.WITHDRAWAL };
@@ -884,8 +887,14 @@ export async function listWithdrawals(req: AuthenticatedRequest, res: Response):
       };
     });
 
+    // Deduplicate RedeemRequests that are already represented by a Transaction
+    const linkedRedeemIds = new Set(
+      txWithdrawals.map((tx) => (tx.metadata as any)?.redeemRequestId).filter(Boolean)
+    );
+    const unlinkedRedeemRequests = redeemRequests.filter((r) => !linkedRedeemIds.has(r.id));
+
     // Format redeem requests
-    const formattedRedeem = redeemRequests.map((r) => ({
+    const formattedRedeem = unlinkedRedeemRequests.map((r) => ({
       id: r.id,
       userId: r.userId,
       amount: Number(r.amount),
@@ -918,74 +927,121 @@ export async function listWithdrawals(req: AuthenticatedRequest, res: Response):
 }
 
 export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { id } = req.params;
+  const { status, reference, rejectionReason, giftCode } = req.body;
+  const adminId = req.user!.id;
+
+  if (!['COMPLETED', 'APPROVED', 'REJECTED'].includes(status)) {
+    res.status(400).json({ success: false, message: 'Invalid status. Must be COMPLETED, APPROVED, or REJECTED.' });
+    return;
+  }
+
   try {
-    const { id } = req.params;
-    const { status, reference, rejectionReason, giftCode } = req.body;
-    const adminId = req.user!.id;
-
-    if (!['COMPLETED', 'APPROVED', 'REJECTED'].includes(status)) {
-      res.status(400).json({ success: false, message: 'Invalid status. Must be COMPLETED, APPROVED, or REJECTED.' });
-      return;
-    }
-
-    // 1. Check if it's a Transaction withdrawal
-    const tx = await prisma.transaction.findUnique({
-      where: { id },
-      include: { wallet: true, user: true },
-    });
-
-    if (tx && tx.type === TransactionType.WITHDRAWAL) {
-      if (tx.status !== TransactionStatus.PENDING) {
-        res.status(400).json({ success: false, message: `Withdrawal has already been ${tx.status.toLowerCase()}` });
-        return;
-      }
-
-      const meta = (tx.metadata as any) || {};
-
-      if (status === 'COMPLETED' || status === 'APPROVED') {
-        const updatedTx = await prisma.transaction.update({
+    const result = await prisma.$transaction(async (txClient) => {
+      // 1. Try to find and lock Transaction row with FOR UPDATE
+      let lockedTx: any = null;
+      try {
+        const rows = await txClient.$queryRaw<any[]>`
+          SELECT id, status, type, amount, "walletId", "userId", reference, description, metadata
+          FROM "Transaction"
+          WHERE id = ${id}
+          FOR UPDATE;
+        `;
+        if (rows && rows.length > 0) {
+          lockedTx = rows[0];
+        }
+      } catch (_) {
+        // Mock fallback for unit test environments
+        lockedTx = await txClient.transaction.findUnique({
           where: { id },
-          data: {
-            status: TransactionStatus.COMPLETED,
-            reference: reference?.trim() || tx.reference || `WTH-${Date.now().toString(36).toUpperCase()}`,
-            metadata: {
-              ...meta,
-              approvedBy: adminId,
-              approvedAt: new Date().toISOString(),
-              ...(reference ? { reference: reference.trim() } : {}),
-              ...(giftCode ? { giftCode: giftCode.trim() } : {}),
-            },
-          },
+          select: { id: true, status: true, type: true, amount: true, walletId: true, userId: true, reference: true, description: true, metadata: true },
         });
-
-        notificationService.sendToUser(tx.userId, {
-          type: 'PAYOUT_APPROVED',
-          title: '✅ Withdrawal Successful',
-          message: `Your withdrawal of ₹${Number(tx.amount)} has been approved and processed!${reference ? ` Reference: ${reference.trim()}` : ''}`,
-          link: '/wallet/history',
-        }).catch((err) => console.error('[Notification] Failed to notify withdrawal approval:', err));
-
-        res.json({
-          success: true,
-          message: `Withdrawal of ₹${Number(tx.amount)} approved and completed!`,
-          data: updatedTx,
-        });
-        return;
       }
 
-      if (status === 'REJECTED') {
-        const reason = rejectionReason?.trim() || 'Withdrawal rejected by administrator';
+      if (lockedTx && lockedTx.type === TransactionType.WITHDRAWAL) {
+        if (lockedTx.status !== TransactionStatus.PENDING) {
+          const err: any = new Error(`Withdrawal has already been ${lockedTx.status.toLowerCase()}`);
+          err.statusCode = 400;
+          throw err;
+        }
 
-        await prisma.$transaction(async (prismaClient) => {
-          // Refund the wallet balance
-          await prismaClient.wallet.update({
-            where: { id: tx.walletId },
-            data: { balance: { increment: tx.amount } },
+        const meta = (typeof lockedTx.metadata === 'object' && lockedTx.metadata !== null) ? lockedTx.metadata : {};
+        const linkedRedeemId = meta.redeemRequestId;
+        const linkedRedemptionId = meta.redemptionId;
+
+        if (status === 'COMPLETED' || status === 'APPROVED') {
+          const ref = reference?.trim() || lockedTx.reference || `WTH-${Date.now().toString(36).toUpperCase()}`;
+          const updatedMeta = {
+            ...meta,
+            approvedBy: adminId,
+            approvedAt: new Date().toISOString(),
+            ...(reference ? { reference: reference.trim() } : {}),
+            ...(giftCode ? { giftCode: giftCode.trim() } : {}),
+          };
+
+          const updatedTx = await txClient.transaction.update({
+            where: { id: lockedTx.id },
+            data: {
+              status: TransactionStatus.COMPLETED,
+              reference: ref,
+              metadata: updatedMeta,
+            },
+          });
+
+          // Sync linked RedeemRequest inside the exact same atomic transaction
+          if (linkedRedeemId) {
+            await txClient.redeemRequest.updateMany({
+              where: { id: linkedRedeemId, status: RedeemStatus.PENDING },
+              data: {
+                status: status === 'APPROVED' ? RedeemStatus.APPROVED : RedeemStatus.COMPLETED,
+                giftCode: giftCode?.trim() || null,
+                reviewedBy: adminId,
+                reviewedAt: new Date(),
+              },
+            });
+          }
+
+          // Sync linked GiftCardRedemption inside the exact same atomic transaction
+          if (linkedRedemptionId) {
+            await txClient.giftCardRedemption.updateMany({
+              where: { id: linkedRedemptionId, status: 'PENDING' },
+              data: {
+                status: 'APPROVED',
+                code: giftCode?.trim() || null,
+                reviewedAt: new Date(),
+              },
+            });
+          }
+
+          return {
+            type: 'TRANSACTION',
+            action: 'COMPLETED',
+            tx: updatedTx,
+            userId: lockedTx.userId,
+            amount: Number(lockedTx.amount),
+            reference: ref,
+          };
+        }
+
+        if (status === 'REJECTED') {
+          const reason = rejectionReason?.trim() || 'Withdrawal rejected by administrator';
+
+          // Lock wallet row for update
+          try {
+            await txClient.$queryRaw`
+              SELECT id, balance FROM "Wallet" WHERE id = ${lockedTx.walletId} FOR UPDATE;
+            `;
+          } catch (_) {}
+
+          // Refund the wallet balance exactly once
+          await txClient.wallet.update({
+            where: { id: lockedTx.walletId },
+            data: { balance: { increment: lockedTx.amount } },
           });
 
           // Mark withdrawal transaction as CANCELLED
-          await prismaClient.transaction.update({
-            where: { id: tx.id },
+          const updatedTx = await txClient.transaction.update({
+            where: { id: lockedTx.id },
             data: {
               status: TransactionStatus.CANCELLED,
               metadata: {
@@ -998,87 +1054,222 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
           });
 
           // Create REFUND transaction
-          await prismaClient.transaction.create({
+          await txClient.transaction.create({
             data: {
-              walletId: tx.walletId,
-              userId: tx.userId,
+              walletId: lockedTx.walletId,
+              userId: lockedTx.userId,
               type: TransactionType.REFUND,
               status: TransactionStatus.COMPLETED,
-              amount: tx.amount,
-              description: `Refund: Withdrawal of ₹${Number(tx.amount)} rejected (${reason})`,
-              metadata: { originalTransactionId: tx.id, rejectionReason: reason },
+              amount: lockedTx.amount,
+              description: `Refund: Withdrawal of ₹${Number(lockedTx.amount)} rejected (${reason})`,
+              metadata: { originalTransactionId: lockedTx.id, rejectionReason: reason },
             },
           });
-        });
 
-        notificationService.sendToUser(tx.userId, {
+          // Sync linked RedeemRequest inside the exact same atomic transaction
+          if (linkedRedeemId) {
+            await txClient.redeemRequest.updateMany({
+              where: { id: linkedRedeemId, status: RedeemStatus.PENDING },
+              data: {
+                status: RedeemStatus.REJECTED,
+                rejectionReason: reason,
+                reviewedBy: adminId,
+                reviewedAt: new Date(),
+              },
+            });
+          }
+
+          // Sync linked GiftCardRedemption inside the exact same atomic transaction
+          if (linkedRedemptionId) {
+            await txClient.giftCardRedemption.updateMany({
+              where: { id: linkedRedemptionId, status: 'PENDING' },
+              data: {
+                status: 'REJECTED',
+                reviewedAt: new Date(),
+              },
+            });
+          }
+
+          return {
+            type: 'TRANSACTION',
+            action: 'REJECTED',
+            tx: updatedTx,
+            userId: lockedTx.userId,
+            amount: Number(lockedTx.amount),
+            reason,
+          };
+        }
+      }
+
+      // 2. If not a Transaction, check if it's a RedeemRequest
+      let lockedRedeem: any = null;
+      try {
+        const rows = await txClient.$queryRaw<any[]>`
+          SELECT id, status, amount, "userId", type, "accountDetails"
+          FROM "RedeemRequest"
+          WHERE id = ${id}
+          FOR UPDATE;
+        `;
+        if (rows && rows.length > 0) {
+          lockedRedeem = rows[0];
+        }
+      } catch (_) {
+        lockedRedeem = await txClient.redeemRequest.findUnique({ where: { id } });
+      }
+
+      if (lockedRedeem) {
+        if (lockedRedeem.status !== RedeemStatus.PENDING) {
+          const err: any = new Error(`Redeem request has already been ${lockedRedeem.status.toLowerCase()}`);
+          err.statusCode = 400;
+          throw err;
+        }
+
+        if (status === 'COMPLETED' || status === 'APPROVED') {
+          await txClient.redeemRequest.update({
+            where: { id: lockedRedeem.id },
+            data: {
+              status: status === 'APPROVED' ? RedeemStatus.APPROVED : RedeemStatus.COMPLETED,
+              giftCode: giftCode?.trim() || null,
+              reviewedBy: adminId,
+              reviewedAt: new Date(),
+            },
+          });
+
+          // Sync any linked Transaction
+          await txClient.transaction.updateMany({
+            where: {
+              type: TransactionType.WITHDRAWAL,
+              status: TransactionStatus.PENDING,
+              metadata: { path: ['redeemRequestId'], equals: lockedRedeem.id },
+            },
+            data: {
+              status: TransactionStatus.COMPLETED,
+              metadata: {
+                approvedBy: adminId,
+                approvedAt: new Date().toISOString(),
+                giftCode: giftCode?.trim() || null,
+              },
+            },
+          });
+
+          return {
+            type: 'REDEEM_REQUEST',
+            action: 'COMPLETED',
+            userId: lockedRedeem.userId,
+            amount: Number(lockedRedeem.amount),
+          };
+        }
+
+        if (status === 'REJECTED') {
+          const reason = rejectionReason?.trim() || 'Request denied by admin';
+          await txClient.redeemRequest.update({
+            where: { id: lockedRedeem.id },
+            data: {
+              status: RedeemStatus.REJECTED,
+              rejectionReason: reason,
+              reviewedBy: adminId,
+              reviewedAt: new Date(),
+            },
+          });
+
+          const wallet = await txClient.wallet.findUnique({ where: { userId: lockedRedeem.userId } });
+          if (wallet) {
+            try {
+              await txClient.$queryRaw`
+                SELECT id, balance FROM "Wallet" WHERE id = ${wallet.id} FOR UPDATE;
+              `;
+            } catch (_) {}
+
+            await txClient.wallet.update({
+              where: { id: wallet.id },
+              data: { balance: { increment: lockedRedeem.amount } },
+            });
+
+            await txClient.transaction.create({
+              data: {
+                walletId: wallet.id,
+                userId: lockedRedeem.userId,
+                type: TransactionType.REFUND,
+                status: TransactionStatus.COMPLETED,
+                amount: lockedRedeem.amount,
+                description: 'Redeem request rejected — funds returned',
+                metadata: { redeemRequestId: lockedRedeem.id, rejectionReason: reason },
+              },
+            });
+          }
+
+          // Sync any linked Transaction
+          await txClient.transaction.updateMany({
+            where: {
+              type: TransactionType.WITHDRAWAL,
+              status: TransactionStatus.PENDING,
+              metadata: { path: ['redeemRequestId'], equals: lockedRedeem.id },
+            },
+            data: {
+              status: TransactionStatus.CANCELLED,
+              metadata: { rejectionReason: reason },
+            },
+          });
+
+          return {
+            type: 'REDEEM_REQUEST',
+            action: 'REJECTED',
+            userId: lockedRedeem.userId,
+            amount: Number(lockedRedeem.amount),
+            reason,
+          };
+        }
+      }
+
+      const notFoundErr: any = new Error('Withdrawal request not found');
+      notFoundErr.statusCode = 404;
+      throw notFoundErr;
+    });
+
+    // Send notifications outside transaction
+    if (result.type === 'TRANSACTION') {
+      if (result.action === 'COMPLETED') {
+        notificationService.sendToUser(result.userId, {
+          type: 'PAYOUT_APPROVED',
+          title: '✅ Withdrawal Successful',
+          message: `Your withdrawal of ₹${result.amount} has been approved and processed!${result.reference ? ` Reference: ${result.reference}` : ''}`,
+          link: '/wallet/history',
+        }).catch((err) => console.error('[Notification] Failed to notify withdrawal approval:', err));
+
+        res.json({
+          success: true,
+          message: `Withdrawal of ₹${result.amount} approved and completed!`,
+          data: result.tx,
+        });
+        return;
+      } else if (result.action === 'REJECTED') {
+        notificationService.sendToUser(result.userId, {
           type: 'PAYOUT_APPROVED',
           title: '❌ Withdrawal Request Rejected',
-          message: `Your withdrawal request of ₹${Number(tx.amount)} was rejected (${reason}). The amount has been refunded back to your wallet.`,
+          message: `Your withdrawal request of ₹${result.amount} was rejected (${result.reason}). The amount has been refunded back to your wallet.`,
           link: '/wallet',
         }).catch((err) => console.error('[Notification] Failed to notify withdrawal rejection:', err));
 
         res.json({
           success: true,
-          message: `Withdrawal rejected and ₹${Number(tx.amount)} refunded to user's wallet.`,
+          message: `Withdrawal rejected and ₹${result.amount} refunded to user's wallet.`,
         });
         return;
       }
-    }
-
-    // 2. Check if it's a RedeemRequest
-    const redeem = await prisma.redeemRequest.findUnique({ where: { id } });
-    if (redeem) {
-      if (redeem.status !== RedeemStatus.PENDING) {
-        res.status(400).json({ success: false, message: 'Already reviewed' });
+    } else if (result.type === 'REDEEM_REQUEST') {
+      if (result.action === 'COMPLETED') {
+        res.json({ success: true, message: `Redeem request marked as ${status.toLowerCase()}` });
         return;
-      }
-
-      if (status === 'REJECTED') {
-        const reason = rejectionReason?.trim() || 'Request denied by admin';
-        await prisma.redeemRequest.update({
-          where: { id },
-          data: { status: RedeemStatus.REJECTED, rejectionReason: reason, reviewedBy: adminId, reviewedAt: new Date() },
-        });
-
-        const wallet = await prisma.wallet.findUnique({ where: { userId: redeem.userId } });
-        if (wallet) {
-          await prisma.$transaction([
-            prisma.wallet.update({ where: { id: wallet.id }, data: { balance: { increment: redeem.amount } } }),
-            prisma.transaction.create({
-              data: {
-                walletId: wallet.id,
-                userId: redeem.userId,
-                type: TransactionType.REFUND,
-                status: TransactionStatus.COMPLETED,
-                amount: redeem.amount,
-                description: 'Redeem request rejected — funds returned',
-                metadata: { redeemRequestId: id, rejectionReason: reason },
-              },
-            }),
-          ]);
-        }
+      } else {
         res.json({ success: true, message: 'Redeem request rejected and refunded' });
         return;
       }
-
-      if (status === 'COMPLETED' || status === 'APPROVED') {
-        await prisma.redeemRequest.update({
-          where: { id },
-          data: {
-            status: status === 'APPROVED' ? RedeemStatus.APPROVED : RedeemStatus.COMPLETED,
-            giftCode: giftCode?.trim() || null,
-            reviewedBy: adminId,
-            reviewedAt: new Date(),
-          },
-        });
-        res.json({ success: true, message: `Redeem request marked as ${status.toLowerCase()}` });
-        return;
-      }
     }
-
-    res.status(404).json({ success: false, message: 'Withdrawal request not found' });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.statusCode) {
+      res.status(error.statusCode).json({ success: false, message: error.message });
+      return;
+    }
     console.error('[Admin] reviewWithdrawal error:', error);
     res.status(500).json({ success: false, message: 'Failed to review withdrawal request' });
   }
