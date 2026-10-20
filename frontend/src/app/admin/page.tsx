@@ -228,26 +228,44 @@ export default function AdminPage() {
     );
   }
 
-  // All 18 administration sections
-  const adminSections = [
-    { href: '/admin/tournaments', label: 'Tournaments', desc: 'Create, edit & manage', icon: Trophy, tone: 'bg-amber-500/15 text-amber-400' },
-    { href: '/admin/users', label: 'User Management', desc: 'Roles, levels & bans', icon: Users, tone: 'bg-fire-500/15 text-fire-400' },
-    { href: '/admin/payments', label: 'UPI Payments', desc: 'Deposit approvals & QR', icon: DollarSign, tone: 'bg-emerald-500/15 text-emerald-400' },
-    { href: '/admin/withdrawals', label: 'Withdrawals', desc: 'Redeem & refund requests', icon: Banknote, tone: 'bg-sky-500/15 text-sky-400' },
-    { href: '/admin/pending-results', label: 'Pending Results', desc: 'Approve winner payouts', icon: Trophy, tone: 'bg-orange-500/15 text-orange-400' },
-    { href: '/admin/kill-counter', label: 'AI Kill Counter', desc: 'Scan video & count kills', icon: Crosshair, tone: 'bg-rose-500/15 text-rose-400' },
-    { href: '/admin/test-ai-counter', label: 'Test AI Counter', desc: 'AI feed playground & tester', icon: Sparkles, tone: 'bg-violet-500/15 text-violet-400' },
-    { href: '/admin/deposits', label: 'Manual Deposits', desc: 'Screenshot review queue', icon: Banknote, tone: 'bg-teal-500/15 text-teal-400' },
-    { href: '/admin/redeems', label: 'Redeem Requests', desc: 'Shop rewards & payouts', icon: Gift, tone: 'bg-purple-500/15 text-purple-400' },
-    { href: '/admin/store', label: 'Store Manager', desc: 'Shop items & pricing', icon: ShoppingBag, tone: 'bg-green-500/15 text-green-400' },
-    { href: '/admin/gift-cards', label: 'Gift Cards', desc: 'Catalog & fulfillment', icon: Gift, tone: 'bg-pink-500/15 text-pink-400' },
-    { href: '/admin/revenue', label: 'Platform Revenue', desc: 'Commission & revenue', icon: DollarSign, tone: 'bg-yellow-500/15 text-yellow-400' },
-    { href: '/admin/transactions', label: 'Transactions', desc: 'Ledger & audit history', icon: Activity, tone: 'bg-cyan-500/15 text-cyan-400' },
-    { href: '/admin/wallet-adjust', label: 'Wallet Adjust', desc: 'Manual balance edits', icon: Wallet, tone: 'bg-indigo-500/15 text-indigo-400' },
-    { href: '/admin/verify', label: 'Player Verification', desc: 'Free Fire ID & level checks', icon: Shield, tone: 'bg-lime-500/15 text-lime-400' },
-    { href: '/admin/esports', label: 'Esports Config', desc: 'Seasons & prize pools', icon: Trophy, tone: 'bg-yellow-500/15 text-yellow-400' },
-    { href: '/admin/esports-bans', label: 'Ban List', desc: 'Banned players & hacks', icon: Ban, tone: 'bg-red-500/15 text-red-400' },
-    { href: '/admin/support', label: 'Support', desc: 'User tickets & queries', icon: MessageSquareMore, tone: 'bg-blue-500/15 text-blue-400' },
+  // Categorized administration sections
+  const sectionCategories = [
+    {
+      title: 'Money & Balances',
+      items: [
+        { href: '/admin/payments', label: 'UPI Payments & Deposits', desc: 'Auto SMS, QR & claims review', icon: DollarSign, tone: 'bg-emerald-500/15 text-emerald-400' },
+        { href: '/admin/withdrawals', label: 'Withdrawals & Payouts', desc: 'UPI & bank payout requests', icon: Banknote, tone: 'bg-sky-500/15 text-sky-400' },
+        { href: '/admin/revenue', label: 'Platform Revenue', desc: 'Commission & match revenue', icon: DollarSign, tone: 'bg-yellow-500/15 text-yellow-400' },
+        { href: '/admin/transactions', label: 'Transactions', desc: 'Master ledger & audit history', icon: Activity, tone: 'bg-cyan-500/15 text-cyan-400' },
+        { href: '/admin/wallet-adjust', label: 'Wallet Adjust', desc: 'Manual balance adjustments', icon: Wallet, tone: 'bg-indigo-500/15 text-indigo-400' },
+      ],
+    },
+    {
+      title: 'Tournaments & Competition',
+      items: [
+        { href: '/admin/tournaments', label: 'Tournaments', desc: 'Create, schedule & manage', icon: Trophy, tone: 'bg-amber-500/15 text-amber-400' },
+        { href: '/admin/pending-results', label: 'Pending Results', desc: 'Review winner match proofs', icon: Trophy, tone: 'bg-orange-500/15 text-orange-400' },
+        { href: '/admin/esports', label: 'Esports Config', desc: 'Seasons & prize distribution', icon: Trophy, tone: 'bg-yellow-500/15 text-yellow-400' },
+        { href: '/admin/kill-counter', label: 'AI Kill Counter', desc: 'Scan match video for kills', icon: Crosshair, tone: 'bg-rose-500/15 text-rose-400' },
+        { href: '/admin/test-ai-counter', label: 'Test AI Counter', desc: 'Feed tester & CV playground', icon: Sparkles, tone: 'bg-violet-500/15 text-violet-400' },
+      ],
+    },
+    {
+      title: 'Users & Safety',
+      items: [
+        { href: '/admin/users', label: 'User Management', desc: 'Roles, levels & bans', icon: Users, tone: 'bg-fire-500/15 text-fire-400' },
+        { href: '/admin/verify', label: 'Player Verification', desc: 'Free Fire UID & level checks', icon: Shield, tone: 'bg-lime-500/15 text-lime-400' },
+        { href: '/admin/esports-bans', label: 'Ban List', desc: 'Banned accounts & anti-cheat', icon: Ban, tone: 'bg-red-500/15 text-red-400' },
+        { href: '/admin/support', label: 'Support Tickets', desc: 'Player queries & reports', icon: MessageSquareMore, tone: 'bg-blue-500/15 text-blue-400' },
+      ],
+    },
+    {
+      title: 'Store & Rewards',
+      items: [
+        { href: '/admin/store?tab=catalog', label: 'Store & Gift Cards', desc: 'Gift cards, pricing & stock', icon: ShoppingBag, tone: 'bg-green-500/15 text-green-400' },
+        { href: '/admin/store?tab=orders', label: 'Orders & Redemptions', desc: 'Deliver codes & refunds', icon: Gift, tone: 'bg-purple-500/15 text-purple-400' },
+      ],
+    },
   ];
 
   return (
@@ -273,24 +291,33 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* All 18 Admin Quick Links */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {adminSections.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="glass-card rounded-xl p-4 flex flex-col items-start gap-2.5 transition-all hover:border-fire-500/30 hover:bg-white/[0.05] group"
-              >
-                <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
-                  <item.icon className="w-4 h-4" />
-                </span>
-                <div>
-                  <span className="block text-xs font-semibold text-white leading-tight group-hover:text-fire-400 transition-colors">
-                    {item.label}
-                  </span>
-                  <span className="block text-[10px] text-zinc-500 mt-0.5 line-clamp-1">{item.desc}</span>
+          {/* Grouped Admin Quick Links */}
+          <div className="space-y-6">
+            {sectionCategories.map((cat) => (
+              <div key={cat.title}>
+                <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2.5 px-0.5">
+                  {cat.title}
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {cat.items.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="glass-card rounded-xl p-4 flex flex-col items-start gap-2.5 transition-all hover:border-fire-500/30 hover:bg-white/[0.05] group"
+                    >
+                      <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}>
+                        <item.icon className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <span className="block text-xs font-semibold text-white leading-tight group-hover:text-fire-400 transition-colors">
+                          {item.label}
+                        </span>
+                        <span className="block text-[10px] text-zinc-500 mt-0.5 line-clamp-1">{item.desc}</span>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         </div>
@@ -343,15 +370,15 @@ export default function AdminPage() {
                   <p className="text-2xl font-bold text-white">{formatCurrency(stats.totalCommissionCollected ?? 0)}</p>
                   <p className="text-xs text-zinc-500 mt-1">Total Commission Collected</p>
                 </Link>
-                <Link href="/admin/deposits" className="glass-card rounded-xl p-5 border border-fire-500/20 block hover:bg-white/[0.04] transition-colors group">
-                  <Banknote className="w-5 h-5 text-fire-400 mb-2 group-hover:scale-110 transition-transform" />
+                <Link href="/admin/payments" className="glass-card rounded-xl p-5 border border-fire-500/20 block hover:bg-white/[0.04] transition-colors group">
+                  <DollarSign className="w-5 h-5 text-fire-400 mb-2 group-hover:scale-110 transition-transform" />
                   <p className="text-2xl font-bold text-white">{stats.pendingDeposits ?? 0}</p>
-                  <p className="text-xs text-zinc-500 mt-1">Pending Deposits</p>
+                  <p className="text-xs text-zinc-500 mt-1">Pending Deposits (UPI / Claims)</p>
                 </Link>
-                <Link href="/admin/redeems" className="glass-card rounded-xl p-5 border border-green-500/20 block hover:bg-white/[0.04] transition-colors group">
-                  <Gift className="w-5 h-5 text-green-400 mb-2 group-hover:scale-110 transition-transform" />
+                <Link href="/admin/withdrawals" className="glass-card rounded-xl p-5 border border-green-500/20 block hover:bg-white/[0.04] transition-colors group">
+                  <Banknote className="w-5 h-5 text-green-400 mb-2 group-hover:scale-110 transition-transform" />
                   <p className="text-2xl font-bold text-white">{stats.pendingRedeems ?? 0}</p>
-                  <p className="text-xs text-zinc-500 mt-1">Pending Redeems</p>
+                  <p className="text-xs text-zinc-500 mt-1">Pending Withdrawals &amp; Payouts</p>
                 </Link>
               </div>
             )}
@@ -414,8 +441,8 @@ export default function AdminPage() {
                     <Banknote className="w-5 h-5 text-emerald-400" />
                     Pending Deposit Approvals ({deposits.length})
                   </h2>
-                  <Link href="/admin/deposits" className="text-xs text-fire-400 hover:text-fire-300 flex items-center gap-1">
-                    Manage all <ArrowRight className="w-3 h-3" />
+                  <Link href="/admin/payments" className="text-xs text-fire-400 hover:text-fire-300 flex items-center gap-1">
+                    Manage all in Payments <ArrowRight className="w-3 h-3" />
                   </Link>
                 </div>
                 <div className="space-y-3">
@@ -456,10 +483,10 @@ export default function AdminPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
                     <Gift className="w-5 h-5 text-purple-400" />
-                    Pending Redeem Requests ({redeems.length})
+                    Pending Withdrawals &amp; Redemptions ({redeems.length})
                   </h2>
-                  <Link href="/admin/redeems" className="text-xs text-fire-400 hover:text-fire-300 flex items-center gap-1">
-                    Manage all <ArrowRight className="w-3 h-3" />
+                  <Link href="/admin/withdrawals" className="text-xs text-fire-400 hover:text-fire-300 flex items-center gap-1">
+                    Manage all in Withdrawals <ArrowRight className="w-3 h-3" />
                   </Link>
                 </div>
                 <div className="space-y-3">
