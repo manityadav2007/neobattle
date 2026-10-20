@@ -1089,6 +1089,9 @@ if (!fs.existsSync(TEST_UPLOAD_DIR)) {
 
 const testVideoStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
+    if (!fs.existsSync(TEST_UPLOAD_DIR)) {
+      fs.mkdirSync(TEST_UPLOAD_DIR, { recursive: true });
+    }
     cb(null, TEST_UPLOAD_DIR);
   },
   filename: (_req, file, cb) => {
@@ -1205,9 +1208,15 @@ export async function testAiFeed(req: AuthenticatedRequest, res: Response): Prom
     });
   } catch (err: any) {
     console.error('[TestAIFeed] Error analyzing video:', err.message || err);
+    const rawMsg = String(err.message || '');
+    const isPathLeak = rawMsg.includes('/') || rawMsg.includes('\\') || rawMsg.includes('opt') || rawMsg.includes('src');
+    const safeMsg = isPathLeak || !rawMsg
+      ? 'Failed to analyze video feed. Please ensure the video format is supported and try again.'
+      : rawMsg;
+
     res.status(500).json({
       success: false,
-      message: err.message || 'Failed to analyze video feed',
+      message: safeMsg,
       totalKillsFound: 0,
       kills: [],
     });
