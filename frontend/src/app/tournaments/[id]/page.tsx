@@ -1731,7 +1731,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                       className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer ${
                         isDraggingScreenshots
                           ? 'border-amber-400 bg-amber-500/10'
-                          : 'border-white/15 hover:border-amber-500/50 bg-black/40'
+                          : 'border-white/15 hover:border-amber-500/50 bg-white/[0.02]'
                       }`}
                     >
                       <input
@@ -1767,7 +1767,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                           return (
                             <div
                               key={idx}
-                              className="relative group rounded-xl overflow-hidden border border-white/15 bg-black/60 aspect-[16/10] flex flex-col justify-end p-2"
+                              className="relative group rounded-xl overflow-hidden border border-white/15 glass-card aspect-[16/10] flex flex-col justify-end p-2"
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
@@ -1824,7 +1824,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                       value={hostWinnerUid}
                       onChange={(e) => setHostWinnerUid(e.target.value)}
                       placeholder="Enter registered player Free Fire UID (e.g. 1029384756)"
-                      className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-amber-500 font-mono"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-white text-sm focus:outline-none focus:border-amber-500 font-mono"
                     />
 
                     {/* Quick registered player selector pills */}

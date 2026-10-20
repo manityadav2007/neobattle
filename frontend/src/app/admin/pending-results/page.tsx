@@ -492,7 +492,7 @@ export default function AdminPendingResultsPage() {
                                           return (
                                             <div
                                               key={m.id || idx}
-                                              className="p-2.5 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between text-xs"
+                                              className="p-2.5 rounded-lg bg-white/[0.02] border border-white/5 flex items-center justify-between text-xs"
                                             >
                                               <div className="min-w-0 flex items-center gap-1.5">
                                                 <span className="font-semibold text-white truncate">
@@ -560,7 +560,7 @@ export default function AdminPendingResultsPage() {
 
             {/* Video Proof Section */}
             {selected.videoUrl && (
-              <div className="mt-5 p-4 rounded-xl bg-black/60 border border-amber-500/25 space-y-2.5">
+              <div className="mt-5 p-4 rounded-xl bg-white/[0.03] border border-amber-500/25 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
                     <Video className="w-4 h-4 text-amber-400" /> Host Gameplay Video Recording
