@@ -18,10 +18,15 @@ import {
   ChevronRight,
   CreditCard,
   Info,
+  Receipt,
+  Upload,
+  FileText,
+  Eye,
+  X,
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
-import { dynamicDepositApi, DynamicDepositOrder, formatCurrency, walletApi, WalletLimits } from '@/lib/services';
+import { dynamicDepositApi, DynamicDepositOrder, formatCurrency, walletApi, WalletLimits, depositClaimApi, DepositRequest } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 
 const DEFAULT_LIMITS: WalletLimits = {
@@ -84,6 +89,94 @@ function DepositContent() {
 
   const [checkingActive, setCheckingActive] = useState(true);
   const hasCheckedActiveRef = useRef(false);
+
+  // Deposit Claim Flow State
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [showClaimsListModal, setShowClaimsListModal] = useState(false);
+  const [myClaims, setMyClaims] = useState<DepositRequest[]>([]);
+  const [loadingClaims, setLoadingClaims] = useState(false);
+  const [claimUtr, setClaimUtr] = useState('');
+  const [claimNotes, setClaimNotes] = useState('');
+  const [claimFile, setClaimFile] = useState<File | null>(null);
+  const [claimPreview, setClaimPreview] = useState<string | null>(null);
+  const [submittingClaim, setSubmittingClaim] = useState(false);
+  const [claimError, setClaimError] = useState('');
+  const [submittedClaim, setSubmittedClaim] = useState<DepositRequest | null>(null);
+
+  const fetchMyClaims = async () => {
+    try {
+      setLoadingClaims(true);
+      const res = await depositClaimApi.myClaims();
+      if (res.success && res.data) {
+        setMyClaims(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load deposit claims:', err);
+    } finally {
+      setLoadingClaims(false);
+    }
+  };
+
+  const handleClaimFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type.toLowerCase())) {
+      setClaimError('Only JPG, PNG, and WebP images are allowed.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setClaimError('File size exceeds 5MB limit.');
+      return;
+    }
+
+    setClaimError('');
+    setClaimFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setClaimPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitClaim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order) return;
+
+    const cleanUtr = claimUtr.trim();
+    if (!/^\d{12}$/.test(cleanUtr)) {
+      setClaimError('UTR / reference number must be exactly 12 digits');
+      return;
+    }
+
+    if (!claimFile) {
+      setClaimError('Payment screenshot is required');
+      return;
+    }
+
+    try {
+      setSubmittingClaim(true);
+      setClaimError('');
+
+      const formData = new FormData();
+      formData.append('depositTransactionId', order.transactionId);
+      formData.append('utrNumber', cleanUtr);
+      if (claimNotes.trim()) {
+        formData.append('notes', claimNotes.trim());
+      }
+      formData.append('screenshot', claimFile);
+
+      const res = await depositClaimApi.submit(formData);
+      if (res.success && res.data) {
+        setSubmittedClaim(res.data);
+        setShowClaimModal(false);
+        fetchMyClaims();
+      }
+    } catch (err: any) {
+      setClaimError(getErrorMessage(err));
+    } finally {
+      setSubmittingClaim(false);
+    }
+  };
 
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -459,7 +552,18 @@ function DepositContent() {
     <div className="min-h-[85vh] flex flex-col justify-center items-center py-10 px-4 sm:px-6">
       <div className="w-full max-w-lg mx-auto">
         {/* Header Badge */}
-        <div className="mb-6 flex items-center justify-end">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setShowClaimsListModal(true);
+              fetchMyClaims();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-zinc-300 text-xs font-semibold transition-colors"
+          >
+            <Receipt className="w-3.5 h-3.5 text-blue-400" />
+            My Claims
+          </button>
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
             Instant Verification
@@ -527,22 +631,74 @@ function DepositContent() {
                 Deposit request expired
               </h1>
 
-              <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-200 text-xs sm:text-sm leading-relaxed max-w-md mx-auto mb-8 space-y-2">
-                <p className="font-semibold text-orange-300">
-                  If you already paid, your wallet will be credited automatically within 15 minutes. Do not pay again.
-                </p>
-                <p className="text-[11px] text-zinc-400">
-                  Our system keeps listening for late bank notifications during this grace period so your funds remain safe.
-                </p>
-              </div>
+              {submittedClaim ? (
+                <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs sm:text-sm leading-relaxed max-w-md mx-auto mb-8 text-left space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white flex items-center gap-1.5 text-sm">
+                      <Receipt className="w-4 h-4 text-amber-400" /> Payment Claim Submitted
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse">
+                      Under review
+                    </span>
+                  </div>
+                  <p className="text-zinc-300 text-xs leading-relaxed">
+                    Your claim for <strong className="text-white font-mono">{formatCurrency(submittedClaim.exactAmount || order.actualQrAmount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> (Ref: <span className="font-mono text-white">{submittedClaim.utrNumber}</span>) is under review. Our team will verify your receipt and credit your wallet.
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    You will receive an in-app notification once approved.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-200 text-xs sm:text-sm leading-relaxed max-w-md mx-auto mb-8 space-y-2">
+                  <p className="font-semibold text-orange-300">
+                    If you already paid, your wallet will be credited automatically within 15 minutes. Do not pay again.
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    Did your money deduct from your bank? Tap &quot;I already paid&quot; below to submit your 12-digit UTR and screenshot for immediate review.
+                  </p>
+                </div>
+              )}
 
               <div className="w-full max-w-sm mx-auto space-y-2.5">
+                {!submittedClaim && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClaimUtr('');
+                      setClaimNotes('');
+                      setClaimFile(null);
+                      setClaimPreview(null);
+                      setClaimError('');
+                      setShowClaimModal(true);
+                    }}
+                    className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                  >
+                    <Receipt className="w-4 h-4" />
+                    I already paid
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={handleStartNewDeposit}
-                  className="w-full py-3.5 px-6 rounded-xl btn-fire text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
+                  className={`w-full py-3.5 px-6 rounded-xl font-bold text-sm transition-all active:scale-[0.98] ${
+                    submittedClaim
+                      ? 'btn-fire text-white shadow-lg shadow-blue-500/20'
+                      : 'bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300'
+                  }`}
                 >
                   Start New Deposit
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowClaimsListModal(true);
+                    fetchMyClaims();
+                  }}
+                  className="w-full text-center py-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  View My Deposit Claims &rarr;
                 </button>
               </div>
             </motion.div>
@@ -874,6 +1030,258 @@ function DepositContent() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* "I ALREADY PAID" CLAIM SUBMISSION MODAL */}
+      <AnimatePresence>
+        {showClaimModal && order && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowClaimModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-md w-full bg-zinc-900 border border-white/15 rounded-2xl p-6 shadow-2xl overflow-hidden text-left"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-blue-400" />
+                  <h3 className="text-base font-bold text-white">Deposit Claim</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowClaimModal(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {claimError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs mb-4 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{claimError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitClaim} className="space-y-4">
+                {/* Prefilled, read-only exact amount with paise */}
+                <div>
+                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                    Amount Paid (Prefilled &amp; Exact)
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={formatCurrency(order.actualQrAmount, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                    className="input-field w-full px-4 py-2.5 rounded-xl text-white font-mono font-bold bg-white/5 border border-white/10 cursor-not-allowed select-all"
+                  />
+                  <p className="text-[11px] text-zinc-500 mt-1">
+                    This matches the exact amount with unique paise generated for this deposit.
+                  </p>
+                </div>
+
+                {/* 12-digit UTR input */}
+                <div>
+                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                    12-digit UPI Reference / UTR Number <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={12}
+                    value={claimUtr}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                      setClaimUtr(val);
+                      setClaimError('');
+                    }}
+                    placeholder="e.g. 428901234567"
+                    className="input-field w-full px-4 py-2.5 rounded-xl text-white font-mono text-sm tracking-wider"
+                    required
+                  />
+                  <p className="text-[11px] text-zinc-400 mt-1">
+                    Found on your UPI app transaction receipt (Google Pay, PhonePe, Paytm, BHIM, Cred). Must be exactly 12 digits.
+                  </p>
+                </div>
+
+                {/* File picker */}
+                <div>
+                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                    Payment Screenshot <span className="text-red-400">*</span>
+                  </label>
+                  <div className="border-2 border-dashed border-white/15 rounded-xl p-4 text-center hover:border-blue-500/50 transition-colors bg-white/[0.02]">
+                    <input
+                      type="file"
+                      id="claim-screenshot-input"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleClaimFileChange}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="claim-screenshot-input"
+                      className="cursor-pointer flex flex-col items-center justify-center gap-1.5"
+                    >
+                      <Upload className="w-6 h-6 text-blue-400" />
+                      <span className="text-xs font-semibold text-zinc-200">
+                        {claimFile ? claimFile.name : 'Choose screenshot file'}
+                      </span>
+                      <span className="text-[10px] text-zinc-500">
+                        JPG, PNG, or WebP up to 5MB
+                      </span>
+                    </label>
+                  </div>
+                  {claimPreview && (
+                    <div className="mt-2 relative rounded-lg overflow-hidden border border-white/10 max-h-32 flex items-center justify-center bg-black">
+                      <img src={claimPreview} alt="Preview" className="max-h-32 object-contain" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Optional note */}
+                <div>
+                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                    Optional Note
+                  </label>
+                  <textarea
+                    rows={2}
+                    maxLength={300}
+                    value={claimNotes}
+                    onChange={(e) => setClaimNotes(e.target.value)}
+                    placeholder="e.g. Paid from PNB bank via PhonePe"
+                    className="input-field w-full p-2.5 rounded-xl text-white text-xs"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowClaimModal(false)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingClaim || claimUtr.length !== 12 || !claimFile}
+                    className="btn-fire px-6 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {submittingClaim ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...
+                      </>
+                    ) : (
+                      'Submit Claim'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* "MY DEPOSIT CLAIMS" MODAL */}
+      <AnimatePresence>
+        {showClaimsListModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowClaimsListModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-lg w-full bg-zinc-900 border border-white/15 rounded-2xl p-6 shadow-2xl max-h-[85vh] flex flex-col text-left"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-blue-400" />
+                  <h3 className="text-base font-bold text-white">My Deposit Claims</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowClaimsListModal(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto space-y-3 flex-1 pr-1">
+                {loadingClaims ? (
+                  <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-400 text-xs">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+                    <span>Loading your claims...</span>
+                  </div>
+                ) : myClaims.length === 0 ? (
+                  <div className="py-12 text-center text-zinc-500 text-xs">
+                    No deposit claims submitted yet.
+                  </div>
+                ) : (
+                  myClaims.map((claim) => (
+                    <div
+                      key={claim.id}
+                      className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-white text-base">
+                          {formatCurrency(claim.exactAmount || claim.amount, { minimumFractionDigits: 2 })}
+                        </span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            claim.status === 'APPROVED'
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : claim.status === 'REJECTED'
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                              : claim.status === 'AUTO_RESOLVED'
+                              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse'
+                          }`}
+                        >
+                          {claim.status === 'PENDING'
+                            ? 'Under Review'
+                            : claim.status === 'AUTO_RESOLVED'
+                            ? 'Auto-Resolved'
+                            : claim.status}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-zinc-400 flex-wrap gap-1">
+                        {claim.utrNumber ? (
+                          <span>
+                            Ref: <strong className="font-mono text-zinc-300">{claim.utrNumber}</strong>
+                          </span>
+                        ) : (
+                          <span className="italic text-zinc-500">No UTR</span>
+                        )}
+                        <span>{new Date(claim.createdAt).toLocaleDateString()}</span>
+                      </div>
+
+                      {claim.status === 'REJECTED' && claim.rejectionReason && (
+                        <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-xs">
+                          <strong>Rejection reason:</strong> {claim.rejectionReason}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -394,12 +394,40 @@ export interface DepositRequest {
   id: string;
   userId: string;
   amount: number;
+  exactAmount?: number;
+  baseAmount?: number;
+  utrNumber?: string | null;
+  notes?: string | null;
   screenshotUrl: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'AUTO_RESOLVED';
   rejectionReason?: string;
   user?: { id: string; username: string; email: string };
   createdAt: string;
+  requestCreatedAt?: string | null;
+  requestExpiredAt?: string | null;
+  timeSinceExpiryMs?: number;
+  suggestedMatch?: {
+    id: string;
+    amount: number;
+    sender?: string | null;
+    utrNumber?: string | null;
+    receivedAt: string;
+    rawMessage: string;
+  } | null;
 }
+
+export const depositClaimApi = {
+  submit: async (formData: FormData) => {
+    const res = await api.post<ApiResponse<DepositRequest>>('/deposits/claim', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+  myClaims: async () => {
+    const res = await api.get<ApiResponse<DepositRequest[]>>('/deposits/my-claims');
+    return res.data;
+  },
+};
 
 export interface RedeemRequest {
   id: string;
@@ -461,8 +489,13 @@ export const adminApi = {
     const res = await api.get('/deposits/pending');
     return res.data;
   },
-  reviewDeposit: async (id: string, status: 'APPROVED' | 'REJECTED', rejectionReason?: string) => {
-    const res = await api.patch(`/deposits/${id}/review`, { status, rejectionReason });
+  reviewDeposit: async (
+    id: string,
+    status: 'APPROVED' | 'REJECTED',
+    rejectionReason?: string,
+    unmatchedPaymentId?: string
+  ) => {
+    const res = await api.patch(`/deposits/${id}/review`, { status, rejectionReason, unmatchedPaymentId });
     return res.data;
   },
   pendingRedeems: async () => {

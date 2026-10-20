@@ -537,6 +537,8 @@ export class PaymentMatchingService {
       const match = candidates[0];
       const creditAmount = match.requestedAmount ? Number(match.requestedAmount) : Math.floor(normalizedAmount);
 
+      let hadLinkedClaim = false;
+
       await prisma.$transaction(async (txPrisma) => {
         // 1. Credit requestedAmount (round amount) to user's wallet
         await txPrisma.wallet.update({
@@ -563,12 +565,41 @@ export class PaymentMatchingService {
             },
           },
         });
+
+        // 3. If a manual deposit claim exists for this transaction, mark it AUTO_RESOLVED
+        const linkedClaim = await txPrisma.depositRequest.findFirst({
+          where: {
+            depositTransactionId: match.id,
+            status: 'PENDING',
+          },
+        });
+
+        if (linkedClaim) {
+          hadLinkedClaim = true;
+          await txPrisma.depositRequest.update({
+            where: { id: linkedClaim.id },
+            data: {
+              status: 'AUTO_RESOLVED',
+              reviewedAt: new Date(),
+              reviewedBy: 'SYSTEM_SMS_AUTO_MATCH',
+              notes: linkedClaim.notes
+                ? `${linkedClaim.notes}\n[System: Auto-resolved by incoming SMS match]`
+                : '[System: Auto-resolved by incoming SMS match]',
+            },
+          });
+        }
       });
 
       // Send in-app notification to the user
-      notificationService
-        .notifyDepositApproved(match.userId, creditAmount, utrNumber || undefined)
-        .catch((err) => console.error('[Notification] Failed to notify user of deposit match:', err));
+      if (hadLinkedClaim) {
+        notificationService
+          .notifyDepositAutoResolved(match.userId, creditAmount, utrNumber || undefined)
+          .catch((err) => console.error('[Notification] Failed to notify user of auto-resolved deposit claim:', err));
+      } else {
+        notificationService
+          .notifyDepositApproved(match.userId, creditAmount, utrNumber || undefined)
+          .catch((err) => console.error('[Notification] Failed to notify user of deposit match:', err));
+      }
 
       return {
         matched: true,

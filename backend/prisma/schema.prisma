@@ -329,6 +329,7 @@ model Transaction {
 
   wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  depositRequest DepositRequest? @relation("DepositRequestTransaction")
 
   @@index([walletId])
   @@index([userId])
@@ -416,27 +417,51 @@ model WinnerProof {
 }
 
 model DepositRequest {
-  id              String             @id @default(cuid())
-  userId          String
-  amount          Decimal            @db.Decimal(12, 2)
-  screenshotUrl   String
-  status          DepositStatus      @default(PENDING)
-  rejectionReason String?
-  reviewedBy      String?
-  reviewedAt      DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  id                   String             @id @default(cuid())
+  userId               String
+  amount               Decimal            @db.Decimal(12, 2)
+  exactAmount          Decimal?           @db.Decimal(12, 2)
+  baseAmount           Decimal?           @db.Decimal(12, 2)
+  utrNumber            String?            @unique
+  notes                String?            @db.Text
+  depositTransactionId String?            @unique
+  screenshotUrl        String
+  screenshotStorageKey String?
+  status               DepositStatus      @default(PENDING)
+  rejectionReason      String?
+  reviewedBy           String?
+  reviewedAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  depositTransaction Transaction? @relation("DepositRequestTransaction", fields: [depositTransactionId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([status])
+  @@index([depositTransactionId])
+  @@index([utrNumber])
 }
 
 enum DepositStatus {
   PENDING
   APPROVED
   REJECTED
+  AUTO_RESOLVED
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  targetId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([userId])
+  @@index([targetId])
+  @@index([createdAt])
 }
 
 model RedeemRequest {

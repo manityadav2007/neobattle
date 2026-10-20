@@ -1,7 +1,7 @@
 import { prisma } from '../config/db';
 import { TournamentStatus } from '@prisma/client';
 
-export type NotificationType = 'MATCH_SCHEDULE' | 'DEADLINE' | 'DISQUALIFICATION' | 'TOURNAMENT_STARTING' | 'TOURNAMENT_DELAYED' | 'PAYOUT_APPROVED' | 'DEPOSIT_APPROVED' | 'MATCH_UPDATE' | 'NEW_TOURNAMENT';
+export type NotificationType = 'MATCH_SCHEDULE' | 'DEADLINE' | 'DISQUALIFICATION' | 'TOURNAMENT_STARTING' | 'TOURNAMENT_DELAYED' | 'PAYOUT_APPROVED' | 'DEPOSIT_APPROVED' | 'DEPOSIT_REJECTED' | 'MATCH_UPDATE' | 'NEW_TOURNAMENT';
 
 interface NotificationPayload {
   type: NotificationType;
@@ -141,6 +141,25 @@ class NotificationService {
       type: 'DEPOSIT_APPROVED',
       title: '💳 Wallet Deposit Credited',
       message: `₹${amount} has been successfully added to your wallet${utrText}.`,
+      link: '/wallet',
+    });
+  }
+
+  async notifyDepositRejected(userId: string, amount: number, reason: string): Promise<void> {
+    await this.sendToUser(userId, {
+      type: 'DEPOSIT_REJECTED',
+      title: '❌ Deposit Claim Rejected',
+      message: `Your deposit claim for ₹${amount} was rejected: ${reason}`,
+      link: '/wallet',
+    });
+  }
+
+  async notifyDepositAutoResolved(userId: string, amount: number, utrNumber?: string): Promise<void> {
+    const utrText = utrNumber ? ` (Ref: ${utrNumber})` : '';
+    await this.sendToUser(userId, {
+      type: 'DEPOSIT_APPROVED',
+      title: '⚡ Deposit Automatically Verified',
+      message: `Your deposit of ₹${amount} was verified by the automated payment system and credited to your wallet${utrText}. Your claim has been resolved.`,
       link: '/wallet',
     });
   }
