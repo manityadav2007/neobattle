@@ -33,7 +33,67 @@ const nextConfig = {
       },
     ];
   },
+  async headers() {
+    return [
+      {
+        source: '/downloads/:path*.apk',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/vnd.android.package-archive',
+          },
+          {
+            key: 'Content-Disposition',
+            value: 'attachment',
+          },
+        ],
+      },
+      {
+        source: '/downloads/:path*',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/vnd.android.package-archive',
+          },
+        ],
+      },
+      {
+        source: '/.well-known/assetlinks.json',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/json',
+          },
+        ],
+      },
+      {
+        source: '/manifest.webmanifest',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/manifest+json',
+          },
+        ],
+      },
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript; charset=utf-8',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
-
