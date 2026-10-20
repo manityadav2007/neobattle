@@ -807,7 +807,8 @@ export async function distributeTournamentPrizes(req: AuthenticatedRequest, res:
 export async function listWithdrawals(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     let statusParam = (req.query.status as string | undefined)?.toUpperCase();
-    if (!statusParam && req.path.includes('pending')) {
+    const reqPath = (req as any).path || (req as any).originalUrl || (req as any).url || '';
+    if (!statusParam && typeof reqPath === 'string' && reqPath.includes('pending')) {
       statusParam = 'PENDING';
     }
 

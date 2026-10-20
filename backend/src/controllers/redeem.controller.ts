@@ -59,7 +59,9 @@ export async function createRedeemRequest(req: AuthenticatedRequest, res: Respon
 }
 
 export async function listRedeemRequests(req: AuthenticatedRequest, res: Response): Promise<void> {
-  if (!req.query.status && (req.path.includes('pending') || req.originalUrl?.includes('pending'))) {
+  const reqPath = (req as any).path || (req as any).originalUrl || (req as any).url || '';
+  if (!req.query?.status && typeof reqPath === 'string' && reqPath.includes('pending')) {
+    if (!req.query) req.query = {};
     req.query.status = 'PENDING';
   }
   return adminController.listWithdrawals(req, res);
