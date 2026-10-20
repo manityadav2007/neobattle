@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw,
   MessageSquare, Search, UserCheck, ChevronDown, ChevronUp, X, CreditCard, Eye,
-  Zap, TrendingUp, ShieldCheck, User, Clock, Sparkles, Link as LinkIcon, FileText
+  Zap, TrendingUp, ShieldCheck, User, Clock, Sparkles, Link as LinkIcon, FileText, Banknote
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { api, getErrorMessage } from '@/lib/api';
@@ -1326,6 +1326,124 @@ export default function AdminPaymentsPage() {
                   className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs text-white font-medium"
                 >
                   Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* MODAL: PREVIEW CLAIM SCREENSHOT                          */}
+      {/* ======================================================== */}
+      <AnimatePresence>
+        {previewScreenshotUrl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative max-w-3xl w-full bg-zinc-900 border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-teal-400" /> Payment Screenshot
+                </h3>
+                <button
+                  onClick={() => setPreviewScreenshotUrl(null)}
+                  className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="mt-2 flex items-center justify-center bg-black/60 rounded-xl overflow-hidden max-h-[70vh]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewScreenshotUrl}
+                  alt="Payment Screenshot"
+                  className="max-h-[70vh] w-auto object-contain rounded"
+                />
+              </div>
+              <div className="mt-2 flex justify-between items-center text-xs">
+                <a
+                  href={previewScreenshotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-teal-400 hover:text-teal-300 underline"
+                >
+                  Open original in new tab
+                </a>
+                <button
+                  onClick={() => setPreviewScreenshotUrl(null)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* MODAL: REJECT DEPOSIT CLAIM WITH REASON                 */}
+      {/* ======================================================== */}
+      <AnimatePresence>
+        {rejectModalClaim && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative max-w-md w-full bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <XCircle className="w-5 h-5 text-red-400" /> Reject Deposit Claim
+                </h3>
+                <button
+                  onClick={() => {
+                    setRejectModalClaim(null);
+                    setRejectReasonInput('');
+                  }}
+                  className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-zinc-400">
+                Explain why this claim for{' '}
+                <strong className="text-white">
+                  {formatCurrency(Number(rejectModalClaim.amount))}
+                </strong>{' '}
+                from @{rejectModalClaim.user?.username || 'user'} is being rejected. The user will see this explanation so they can correct it.
+              </p>
+              <textarea
+                value={rejectReasonInput}
+                onChange={(e) => setRejectReasonInput(e.target.value)}
+                placeholder="e.g. UTR does not match our bank statement, or screenshot is illegible"
+                rows={3}
+                className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-red-500/50 resize-none placeholder:text-zinc-500"
+              />
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejectModalClaim(null);
+                    setRejectReasonInput('');
+                  }}
+                  disabled={rejectingClaim}
+                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRejectClaim}
+                  disabled={rejectingClaim || !rejectReasonInput.trim()}
+                  className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  {rejectingClaim ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
               </div>
             </motion.div>
