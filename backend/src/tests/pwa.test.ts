@@ -288,14 +288,12 @@ test('App-only UI - consistent chrome across all pages with dedicated app home c
   const appHomePath = path.join(frontendDir, 'src', 'components', 'app', 'AppHomeScreen.tsx');
   const appMainPath = path.join(frontendDir, 'src', 'components', 'AppMain.tsx');
   const pagePath = path.join(frontendDir, 'src', 'app', 'page.tsx');
-  const sheetPath = path.join(frontendDir, 'src', 'components', 'SettingsAboutSheet.tsx');
   const navbarPath = path.join(frontendDir, 'src', 'components', 'Navbar.tsx');
   const bottomNavPath = path.join(frontendDir, 'src', 'components', 'BottomNav.tsx');
 
   assert.ok(fs.existsSync(hookPath), 'useIsApp.ts must exist');
   assert.ok(fs.existsSync(appHomePath), 'AppHomeScreen.tsx must exist');
   assert.ok(fs.existsSync(appMainPath), 'AppMain.tsx must exist');
-  assert.ok(fs.existsSync(sheetPath), 'SettingsAboutSheet.tsx must exist');
 
   const hook = fs.readFileSync(hookPath, 'utf8');
   assert.ok(
@@ -305,20 +303,24 @@ test('App-only UI - consistent chrome across all pages with dedicated app home c
   assert.ok(hook.includes('standalone'), 'app detection must support navigator.standalone');
   assert.ok(hook.includes('android-app://'), 'app detection must support Android referrer');
 
-  const sheet = fs.readFileSync(sheetPath, 'utf8');
+  const navbar = fs.readFileSync(navbarPath, 'utf8');
   for (const required of [
-    'Settings & About',
+    'About & Policies',
     'Terms & Conditions',
     'Privacy Policy',
     'Refund Policy',
     'Fair Play Policy',
     'Prize Policy',
     'Disclaimer',
-    "'/dashboard'",
-    "'/wallet'",
-    "'/settings'",
+    '/dashboard',
+    '/wallet',
+    '/settings',
+    '/help-feedback',
+    '/?tab=mine',
+    'Logout',
+    'v1.0.0',
   ]) {
-    assert.ok(sheet.includes(required), `SettingsAboutSheet must include ${required}`);
+    assert.ok(navbar.includes(required), `Navbar menu must include ${required}`);
   }
 
   const appHome = fs.readFileSync(appHomePath, 'utf8');
@@ -327,15 +329,22 @@ test('App-only UI - consistent chrome across all pages with dedicated app home c
     'Upcoming',
     '/wallet',
     '/tournaments',
-    '/dashboard',
+    'glass-card',
+    'rounded-2xl',
+    'gradient-text',
+    'btn-fire',
   ]) {
     assert.ok(appHome.includes(required), `AppHomeScreen must include ${required}`);
   }
 
+  // Ensure (i) info button is removed from home screen
+  assert.ok(
+    !appHome.includes('SettingsAboutSheet'),
+    'AppHomeScreen must not import or use SettingsAboutSheet'
+  );
+
   // Consistent Chrome: Navbar and BottomNav are NOT hidden on app-home
-  const navbar = fs.readFileSync(navbarPath, 'utf8');
   assert.ok(!navbar.includes("isApp && pathname === '/'"), 'Navbar must stay visible on app home');
-  assert.ok(navbar.includes('SettingsAboutSheet'), 'Navbar must include SettingsAboutSheet');
 
   const bottomNav = fs.readFileSync(bottomNavPath, 'utf8');
   assert.ok(!bottomNav.includes("isApp && pathname === '/'"), 'BottomNav must stay visible on app home');
