@@ -238,9 +238,22 @@ test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash 
     'standalone styles must contain overscroll to prevent pull-to-refresh'
   );
   assert.ok(
-    standaloneStyles.includes('touch-action: pan-y'),
-    'standalone styles must allow vertical touch panning'
+    !standaloneStyles.includes('touch-action'),
+    'standalone styles must not set touch-action because it breaks Android Chromium scrolling'
   );
+
+  for (const rule of [
+    'height: auto !important',
+    'min-height: 100% !important',
+    'overflow-y: auto !important',
+    'overflow-x: hidden !important',
+    '-webkit-overflow-scrolling: touch !important',
+  ]) {
+    assert.ok(
+      standaloneStyles.includes(rule),
+      `standalone root wrappers must include ${rule}`
+    );
+  }
 
   const globalStyles = cssContent.slice(0, standaloneIndex);
   assert.ok(
