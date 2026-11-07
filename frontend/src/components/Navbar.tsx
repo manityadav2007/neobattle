@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsApp } from '@/hooks/useIsApp';
 import LogoAsset from '@/components/LogoAsset';
 import Avatar from '@/components/Avatar';
 import NotificationBell from '@/components/NotificationBell';
@@ -38,6 +39,7 @@ export default function Navbar() {
   const router = useRouter();
   const { user, loading, logout, isAdmin, isSuperAdmin, isHost } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const isApp = useIsApp();
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
@@ -48,8 +50,11 @@ export default function Navbar() {
     }
   };
 
+  // The installed app has its own native-style home chrome.
+  if (isApp && pathname === '/') return null;
+
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b border-white/5">
+    <nav className="site-navbar fixed top-0 left-0 right-0 z-50 glass-card border-b border-white/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2 group ml-4">

@@ -9,8 +9,10 @@ import TournamentCard from '@/components/TournamentCard';
 import LeaderboardSnapshot from '@/components/LeaderboardSnapshot';
 import LogoAsset from '@/components/LogoAsset';
 import DownloadSection from '@/components/DownloadSection';
+import AppHomeScreen from '@/components/app/AppHomeScreen';
 import { useTournaments } from '@/hooks/useTournaments';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsApp } from '@/hooks/useIsApp';
 import { statsApi, isTournamentEnded } from '@/lib/services';
 
 const features = [
@@ -20,7 +22,7 @@ const features = [
   { icon: Users, title: 'Team Management', desc: 'Create squads, invite members, compete together' },
 ];
 
-export default function HomePage() {
+function WebsiteHome() {
   const { user, loading: authLoading } = useAuth();
   const { tournaments: allTournaments, loading } = useTournaments({ status: 'REGISTRATION' });
 const tournaments = allTournaments.filter((t) => !isTournamentEnded(t));
@@ -35,7 +37,7 @@ const tournaments = allTournaments.filter((t) => !isTournamentEnded(t));
   const isLoggedIn = !!user;
 
   return (
-    <div className="relative">
+    <div className="relative website-home">
       <ParticleCanvas />
 
       <section className="relative z-10 min-h-[90vh] flex items-center">
@@ -176,4 +178,14 @@ const tournaments = allTournaments.filter((t) => !isTournamentEnded(t));
 
     </div>
   );
+}
+
+export default function HomePage() {
+  const isApp = useIsApp();
+
+  if (isApp) {
+    return <AppHomeScreen />;
+  }
+
+  return <WebsiteHome />;
 }

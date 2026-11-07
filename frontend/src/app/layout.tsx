@@ -5,6 +5,7 @@ import GlobalBackButton from '@/components/GlobalBackButton';
 import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
 import ConditionalFooter from '@/components/ConditionalFooter';
+import AppMain from '@/components/AppMain';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import SplashScreen from '@/components/SplashScreen';
 import { AuthProvider } from '@/hooks/useAuth';
@@ -47,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;var r=document.referrer&&document.referrer.indexOf('android-app://')===0;var t=s||r;var d=sessionStorage.getItem('neobattle_splash_shown');if(d){document.documentElement.classList.add('twa-splash-dismissed');}else if(t){document.documentElement.classList.add('twa-splash-active');}}catch(e){}})();`,
+            __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;var i=window.navigator&&window.navigator.standalone===true;var r=document.referrer&&document.referrer.indexOf('android-app://')===0;var t=s||i||r;var e=document.documentElement;if(t){e.classList.add('app-mode');if(window.location.pathname==='/'){e.classList.add('app-home');}var v=document.querySelector('meta[name="viewport"]');if(v){var c=v.getAttribute('content')||'';if(c.indexOf('viewport-fit=cover')===-1){v.setAttribute('content',c+', viewport-fit=cover');}}}var d=sessionStorage.getItem('neobattle_splash_shown');if(d){e.classList.add('twa-splash-dismissed');}else if(t){e.classList.add('twa-splash-active');}}catch(err){}})();`,
           }}
         />
       </head>
@@ -60,10 +61,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ServiceWorkerRegister />
           <Navbar />
           <GlobalSidebar />
-          <main className="min-h-screen pt-16 md:pl-20 pb-16 md:pb-0 max-w-full overflow-x-hidden">
+          <AppMain>
             <GlobalBackButton />
             {children}
-          </main>
+          </AppMain>
           <BottomNav />
           <ConditionalFooter />
         </AuthProvider>

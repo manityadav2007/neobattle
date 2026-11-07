@@ -287,3 +287,76 @@ test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash 
     'globals.css must respect prefers-reduced-motion: reduce'
   );
 });
+
+test('App-only UI - installed app renders a dedicated home while the website stays intact', () => {
+  const hookPath = path.join(frontendDir, 'src', 'hooks', 'useIsApp.ts');
+  const appHomePath = path.join(frontendDir, 'src', 'components', 'app', 'AppHomeScreen.tsx');
+  const appMainPath = path.join(frontendDir, 'src', 'components', 'AppMain.tsx');
+  const pagePath = path.join(frontendDir, 'src', 'app', 'page.tsx');
+
+  assert.ok(fs.existsSync(hookPath), 'useIsApp.ts must exist');
+  assert.ok(fs.existsSync(appHomePath), 'AppHomeScreen.tsx must exist');
+  assert.ok(fs.existsSync(appMainPath), 'AppMain.tsx must exist');
+
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  assert.ok(
+    hook.includes('(display-mode: standalone)'),
+    'app detection must check display-mode standalone'
+  );
+  assert.ok(hook.includes('standalone'), 'app detection must support navigator.standalone');
+  assert.ok(hook.includes('android-app://'), 'app detection must support Android referrer');
+
+  const appHome = fs.readFileSync(appHomePath, 'utf8');
+  for (const required of [
+    'My Matches',
+    'Upcoming',
+    'Settings & About',
+    'Terms & Conditions',
+    'safe-area-inset-top',
+    'safe-area-inset-bottom',
+    "'/wallet'",
+    "'/tournaments'",
+    "'/dashboard'",
+  ]) {
+    assert.ok(appHome.includes(required), `AppHomeScreen must include ${required}`);
+  }
+
+  const layoutPath = path.join(frontendDir, 'src', 'app', 'layout.tsx');
+  const layout = fs.readFileSync(layoutPath, 'utf8');
+  assert.ok(
+    layout.includes("classList.add('app-mode')") && layout.includes("classList.add('app-home')"),
+    'layout bootstrap must tag the document as app mode / app home'
+  );
+  assert.ok(
+    layout.includes("window.location.pathname==='/'"),
+    'layout bootstrap must only apply app-home on the homepage'
+  );
+
+  const page = fs.readFileSync(pagePath, 'utf8');
+  assert.ok(page.includes('website-home'), 'website home must be marked for app-only hiding');
+  assert.ok(page.includes('<WebsiteHome />'), 'normal browsers must still render WebsiteHome');
+  assert.ok(page.includes('<AppHomeScreen />'), 'app mode must render AppHomeScreen');
+
+  const appMain = fs.readFileSync(appMainPath, 'utf8');
+  assert.ok(
+    appMain.includes('min-h-screen pt-16 md:pl-20 pb-16 md:pb-0 max-w-full overflow-x-hidden'),
+    'website main padding must stay unchanged for normal browsers'
+  );
+
+  const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
+  const css = fs.readFileSync(cssPath, 'utf8');
+  assert.ok(
+    css.includes('html.app-mode') && css.includes('-webkit-tap-highlight-color: transparent'),
+    'app mode must remove the blue tap highlight'
+  );
+  for (const selector of [
+    'html.app-home .site-navbar',
+    'html.app-home .site-bottom-nav',
+    'html.app-home .site-sidebar',
+    'html.app-home .site-footer',
+    'html.app-home .website-home',
+  ]) {
+    assert.ok(css.includes(selector), `globals.css must hide ${selector} only in the app home`);
+  }
+});
+

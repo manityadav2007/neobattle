@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsApp } from '@/hooks/useIsApp';
 
 function DiscordIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -54,6 +55,7 @@ export default function GlobalSidebar() {
   const pathname = usePathname();
   const { user, logout, isHost, isAdmin, isSuperAdmin } = useAuth();
   const [open, setOpen] = useState(false);
+  const isApp = useIsApp();
 
   useEffect(() => {
     setOpen(false);
@@ -105,9 +107,12 @@ export default function GlobalSidebar() {
     [user, isHostOrAdmin]
   );
 
+  // The installed app home provides its own quick actions and bottom bar.
+  if (isApp && pathname === '/') return null;
+
   return (
     <>
-      <aside className="fixed left-2 top-20 z-40 max-md:hidden md:flex sm:left-3">
+      <aside className="site-sidebar fixed left-2 top-20 z-40 max-md:hidden md:flex sm:left-3">
         <div className="flex w-14 flex-col items-center rounded-[1.75rem] border border-white/10 bg-black/25 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:w-16 sm:rounded-[2rem] sm:py-4">
           <button
             type="button"

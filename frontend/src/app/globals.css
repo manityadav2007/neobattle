@@ -308,5 +308,45 @@ html.twa-splash-dismissed #twa-splash-screen {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Installed app shell (PWA / Android TWA) — never applies to browsers */
+/* ------------------------------------------------------------------ */
+
+html.app-mode,
+html.app-mode * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.app-mode body {
+  background-color: #0a0a0c;
+}
+
+/* Only the dedicated app home replaces the website chrome. */
+html.app-home .site-navbar,
+html.app-home .site-sidebar,
+html.app-home .site-bottom-nav,
+html.app-home .site-footer,
+html.app-home .website-home {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  html.app-home body {
+    padding-bottom: 0;
+  }
+}
+
+/* Horizontal tournament rails without a visible scrollbar */
+.app-hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.app-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 
 
