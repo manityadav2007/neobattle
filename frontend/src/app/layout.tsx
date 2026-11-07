@@ -14,7 +14,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-body' });
 const orbitron = Orbitron({ subsets: ['latin'], variable: '--font-display' });
 
 export const viewport: Viewport = {
-  themeColor: '#0a0a0f',
+  themeColor: '#0a0a0c',
 };
 
 export const metadata: Metadata = {
@@ -36,10 +36,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" style={{ backgroundColor: '#0a0a0c' }}>
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
-        <meta name="theme-color" content="#0a0a0f" />
+        <meta name="theme-color" content="#0a0a0c" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
@@ -51,7 +51,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className={`${inter.variable} ${orbitron.variable} font-body antialiased`}>
+      <body
+        className={`${inter.variable} ${orbitron.variable} font-body antialiased`}
+        style={{ backgroundColor: '#0a0a0c' }}
+      >
         <SplashScreen />
         <AuthProvider>
           <ServiceWorkerRegister />
