@@ -5,11 +5,18 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 
@@ -52,24 +59,59 @@ public class MainActivity extends BridgeActivity {
     public void onStart() {
         super.onStart();
 
+        // 1. Black status bar and navigation bar with light/white icons
+        Window window = getWindow();
+        window.setStatusBarColor(Color.BLACK);
+        window.setNavigationBarColor(Color.BLACK);
+        WindowInsetsControllerCompat insetsController =
+                WindowCompat.getInsetsController(window, window.getDecorView());
+        if (insetsController != null) {
+            insetsController.setAppearanceLightStatusBars(false); // light icons on black status bar
+            insetsController.setAppearanceLightNavigationBars(false); // light icons on black navigation bar
+        }
+
         if (getBridge() != null && getBridge().getWebView() != null) {
             WebView webView = getBridge().getWebView();
 
-            // 1. Black background on WebView to eliminate white flash
+            // 2. Black background on WebView to eliminate white flash
             webView.setBackgroundColor(Color.BLACK);
 
-            // 2. Disable overscroll / pull-to-refresh bounce
+            // 3. Disable overscroll / pull-to-refresh bounce
             webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
-            // 3. Configure WebSettings: disable text zoom & pinch zoom, keep inputs selectable
+            // 4. Configure WebSettings: disable text zoom & pinch zoom, keep inputs selectable
             WebSettings settings = webView.getSettings();
             settings.setTextZoom(100);
             settings.setSupportZoom(false);
             settings.setBuiltInZoomControls(false);
             settings.setDisplayZoomControls(false);
 
-            // 4. Custom BridgeWebViewClient to intercept external links & network errors
+            // 5. Edge-to-edge system bars insets handling for Android 13, 14, 15+
+            // Offsets WebView margins so content starts strictly below the status bar and bottom nav sits above gesture bar
+            ViewCompat.setOnApplyWindowInsetsListener(webView, (v, windowInsets) -> {
+                Insets insets = windowInsets.getInsets(
+                        WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+                );
+                ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+                mlp.topMargin = insets.top;
+                mlp.bottomMargin = insets.bottom;
+                mlp.leftMargin = insets.left;
+                mlp.rightMargin = insets.right;
+                v.setLayoutParams(mlp);
+                return windowInsets;
+            });
+
+            // 6. Custom BridgeWebViewClient to intercept external links, handle errors & auto-dismiss splash on first paint
             webView.setWebViewClient(new BridgeWebViewClient(getBridge()) {
+                @Override
+                public void onPageCommitVisible(WebView view, String url) {
+                    super.onPageCommitVisible(view, url);
+                    // Dismiss native splash as soon as the first page has painted so web animation takes over
+                    if (getBridge() != null) {
+                        getBridge().eval("window.Capacitor?.Plugins?.SplashScreen?.hide({ fadeOutDuration: 200 });", null);
+                    }
+                }
+
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                     Uri uri = request.getUrl();

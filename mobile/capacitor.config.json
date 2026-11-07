@@ -14,20 +14,22 @@
   "appendUserAgent": "NeoBattleApp/1.0",
   "backgroundColor": "#000000",
   "android": {
+    "adjustMarginsForEdgeToEdge": "force",
     "allowMixedContent": false,
     "captureInput": true,
     "backgroundColor": "#000000"
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 4000,
+      "launchShowDuration": 1200,
       "launchAutoHide": true,
+      "launchFadeOutDuration": 200,
       "backgroundColor": "#000000",
       "androidSplashResourceName": "splash",
       "androidScaleType": "CENTER",
       "showSpinner": false,
-      "splashFullScreen": true,
-      "splashImmersive": true
+      "splashFullScreen": false,
+      "splashImmersive": false
     },
     "StatusBar": {
       "backgroundColor": "#000000",
