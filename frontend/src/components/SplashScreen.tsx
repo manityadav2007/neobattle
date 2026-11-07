@@ -35,8 +35,24 @@ export default function SplashScreen() {
         typeof document.referrer === 'string' &&
         document.referrer.startsWith('android-app://');
 
+      const isCapacitor =
+        (typeof window !== 'undefined' &&
+          typeof window.navigator?.userAgent === 'string' &&
+          window.navigator.userAgent.includes('NeoBattleApp')) ||
+        (typeof window !== 'undefined' && typeof (window as any).Capacitor !== 'undefined');
+
       isTwa = Boolean(isStandalone || isTwaReferrer);
       alreadyShown = Boolean(sessionStorage.getItem(SESSION_STORAGE_KEY));
+
+      // In Capacitor app, native splash plugin already covers launch; skip web splash to avoid double splash
+      if (isCapacitor) {
+        try {
+          document.documentElement.classList.add('twa-splash-dismissed');
+          document.documentElement.classList.remove('twa-splash-active');
+        } catch {}
+        setMounted(false);
+        return;
+      }
     } catch {
       // In case of security sandbox / private mode errors
     }

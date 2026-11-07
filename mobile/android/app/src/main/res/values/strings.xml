@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NeoBattle</string>
+    <string name="title_activity_main">NeoBattle</string>
+    <string name="package_name">live.neobattle.twa</string>
+    <string name="custom_url_scheme">live.neobattle.twa</string>
+</resources>

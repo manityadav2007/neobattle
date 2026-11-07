@@ -1,0 +1,18 @@
+node_modules/
+*.log
+.DS_Store
+
+# Android build outputs & local user properties
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/local.properties
+local.properties
+keystore.properties
+
+# Signing credentials & bundles (CRITICAL: never commit)
+*.keystore
+*.jks
+signing-key-info.txt
+*.aab

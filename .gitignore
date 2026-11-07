@@ -11,3 +11,5 @@ dist/
 *.jks
 signing-key-info.txt
 *.aab
+local.properties
+keystore.properties

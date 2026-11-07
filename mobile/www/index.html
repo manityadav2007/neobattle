@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" style="background:#000000;color-scheme:dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#000000" />
+  <title>NeoBattle — Offline</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      color: #fafafa;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .glow {
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(249, 115, 22, 0.15) 0%, rgba(59, 130, 246, 0.1) 40%, transparent 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .card {
+      position: relative;
+      z-index: 2;
+      width: 90%;
+      max-width: 360px;
+      padding: 32px 24px;
+      text-align: center;
+      background: rgba(18, 18, 26, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+    .logo-wrap {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 20px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .logo-wrap img {
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+    p {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #a1a1aa;
+      margin-bottom: 24px;
+    }
+    .btn-retry {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px 20px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #ffffff;
+      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(249, 115, 22, 0.35);
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .btn-retry:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+    .btn-retry:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 18px;
+      font-size: 11px;
+      color: #71717a;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="card">
+    <div class="logo-wrap">
+      <img src="logo.png" alt="NeoBattle" />
+    </div>
+    <h1>No internet connection</h1>
+    <p>Connect to the internet and try again</p>
+    <button id="retryBtn" class="btn-retry" type="button" onclick="retryConnection()">
+      <span class="spinner" id="btnSpinner"></span>
+      <span id="btnText">Retry</span>
+    </button>
+    <div class="status-badge">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Waiting for connection...</span>
+    </div>
+  </div>
+
+  <script>
+    var TARGET_URL = 'https://neobattle.live';
+    var isChecking = false;
+
+    function setChecking(checking) {
+      isChecking = checking;
+      var btn = document.getElementById('retryBtn');
+      var spinner = document.getElementById('btnSpinner');
+      var text = document.getElementById('btnText');
+      if (checking) {
+        btn.disabled = true;
+        spinner.style.display = 'inline-block';
+        text.textContent = 'Connecting...';
+      } else {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        text.textContent = 'Retry';
+      }
+    }
+
+    function testAndReload() {
+      if (isChecking) return;
+      setChecking(true);
+      fetch(TARGET_URL + '/manifest.webmanifest?t=' + Date.now(), { method: 'HEAD', cache: 'no-store', mode: 'no-cors' })
+        .then(function() {
+          document.getElementById('statusDot').style.background = '#22c55e';
+          document.getElementById('statusText').textContent = 'Connected! Loading...';
+          setTimeout(function() {
+            window.location.href = TARGET_URL;
+          }, 300);
+        })
+        .catch(function() {
+          setChecking(false);
+          document.getElementById('statusDot').style.background = '#ef4444';
+          document.getElementById('statusText').textContent = 'Offline. Retrying automatically...';
+        });
+    }
+
+    function retryConnection() {
+      testAndReload();
+    }
+
+    window.addEventListener('online', function() {
+      testAndReload();
+    });
+
+    // Automatically check connection every 4 seconds
+    setInterval(function() {
+      if (navigator.onLine && !isChecking) {
+        testAndReload();
+      }
+    }, 4000);
+  </script>
+</body>
+</html>

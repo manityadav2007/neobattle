@@ -1,0 +1,38 @@
+{
+  "appId": "live.neobattle.twa",
+  "appName": "NeoBattle",
+  "webDir": "www",
+  "server": {
+    "url": "https://neobattle.live",
+    "cleartext": false,
+    "allowNavigation": [
+      "neobattle.live",
+      "*.neobattle.live"
+    ],
+    "errorPath": "offline.html"
+  },
+  "appendUserAgent": "NeoBattleApp/1.0",
+  "backgroundColor": "#000000",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "backgroundColor": "#000000"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 4000,
+      "launchAutoHide": true,
+      "backgroundColor": "#000000",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "backgroundColor": "#000000",
+      "style": "DARK",
+      "overlaysWebView": false
+    }
+  }
+}

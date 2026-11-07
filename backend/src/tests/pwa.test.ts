@@ -302,6 +302,8 @@ test('App-only UI - consistent chrome across all pages with dedicated app home c
   );
   assert.ok(hook.includes('standalone'), 'app detection must support navigator.standalone');
   assert.ok(hook.includes('android-app://'), 'app detection must support Android referrer');
+  assert.ok(hook.includes('NeoBattleApp'), 'app detection must support NeoBattleApp user agent marker');
+  assert.ok(hook.includes('Capacitor'), 'app detection must support window.Capacitor');
 
   const navbar = fs.readFileSync(navbarPath, 'utf8');
   for (const required of [
@@ -473,5 +475,73 @@ test('Zero White Flash - Server-rendered black background, color-scheme, manifes
     'AppHomeScreen must display skeleton during authLoading'
   );
 });
+
+test('Capacitor Android wrapper - /mobile structure, config, theme, and offline page', () => {
+  const mobileDir = path.resolve(__dirname, '../../../mobile');
+  assert.ok(fs.existsSync(mobileDir), 'mobile directory must exist');
+
+  const configPath = path.join(mobileDir, 'capacitor.config.json');
+  assert.ok(fs.existsSync(configPath), 'capacitor.config.json must exist');
+
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  assert.equal(config.appId, 'live.neobattle.twa');
+  assert.equal(config.appName, 'NeoBattle');
+  assert.equal(config.server?.url, 'https://neobattle.live');
+  assert.equal(config.server?.cleartext, false);
+  assert.deepEqual(config.server?.allowNavigation, ['neobattle.live', '*.neobattle.live']);
+  assert.equal(config.server?.errorPath, 'offline.html');
+  assert.equal(config.appendUserAgent, 'NeoBattleApp/1.0');
+  assert.equal(config.backgroundColor, '#000000');
+  assert.equal(config.plugins?.SplashScreen?.backgroundColor, '#000000');
+  assert.equal(config.plugins?.StatusBar?.backgroundColor, '#000000');
+
+  // Offline screen bundled
+  const offlinePath = path.join(mobileDir, 'www', 'offline.html');
+  assert.ok(fs.existsSync(offlinePath), 'mobile/www/offline.html must exist');
+  const offlineContent = fs.readFileSync(offlinePath, 'utf8');
+  assert.ok(offlineContent.includes('No internet connection'), 'offline page must include heading');
+  assert.ok(offlineContent.includes('Connect to the internet and try again'), 'offline page must include message');
+  assert.ok(offlineContent.includes('Retry'), 'offline page must include retry button');
+  assert.ok(offlineContent.includes('#000000'), 'offline page must have black theme');
+
+  // Android build.gradle
+  const buildGradlePath = path.join(mobileDir, 'android', 'app', 'build.gradle');
+  assert.ok(fs.existsSync(buildGradlePath), 'android/app/build.gradle must exist');
+  const buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
+  assert.ok(buildGradle.includes('versionCode 3'), 'build.gradle must specify versionCode 3');
+  assert.ok(buildGradle.includes('versionName "1.1.0"'), 'build.gradle must specify versionName 1.1.0');
+  assert.ok(buildGradle.includes('applicationId "live.neobattle.twa"'), 'applicationId must be live.neobattle.twa');
+
+  // Android MainActivity & back button / links
+  const mainActivityPath = path.join(
+    mobileDir,
+    'android',
+    'app',
+    'src',
+    'main',
+    'java',
+    'live',
+    'neobattle',
+    'twa',
+    'MainActivity.java'
+  );
+  assert.ok(fs.existsSync(mainActivityPath), 'MainActivity.java must exist');
+  const mainActivity = fs.readFileSync(mainActivityPath, 'utf8');
+  assert.ok(mainActivity.includes('handleOnBackPressed'), 'MainActivity must handle back button');
+  assert.ok(mainActivity.includes('shouldOverrideUrlLoading'), 'MainActivity must intercept external links');
+  assert.ok(mainActivity.includes('Color.BLACK'), 'MainActivity must set WebView background to black');
+
+  // Android colors and styles
+  const colorsPath = path.join(mobileDir, 'android', 'app', 'src', 'main', 'res', 'values', 'colors.xml');
+  assert.ok(fs.existsSync(colorsPath), 'colors.xml must exist');
+  const colors = fs.readFileSync(colorsPath, 'utf8');
+  assert.ok(colors.includes('#000000'), 'colors.xml must define #000000');
+
+  const stylesPath = path.join(mobileDir, 'android', 'app', 'src', 'main', 'res', 'values', 'styles.xml');
+  assert.ok(fs.existsSync(stylesPath), 'styles.xml must exist');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(styles.includes('@color/black'), 'styles.xml must use @color/black for window background');
+});
+
 
 

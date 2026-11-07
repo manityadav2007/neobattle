@@ -3,9 +3,14 @@
 import { useSyncExternalStore } from 'react';
 
 /**
- * Detects whether the app is running inside the installed PWA / Android TWA.
- * The inline bootstrap script in the root layout also tags <html> with
- * `app-mode`, so this stays consistent before React hydration.
+ * Detects whether the app is running inside the installed PWA / Android TWA / Capacitor App.
+ * Evaluates to true if ANY of:
+ * - display-mode standalone
+ * - navigator.standalone === true
+ * - document.referrer starting with android-app://
+ * - navigator.userAgent contains "NeoBattleApp"
+ * - window.Capacitor exists
+ * - bootstrap class `app-mode` on <html>
  */
 export function detectAppMode(): boolean {
   if (typeof window === 'undefined') return false;
@@ -20,11 +25,23 @@ export function detectAppMode(): boolean {
       typeof document !== 'undefined' &&
       typeof document.referrer === 'string' &&
       document.referrer.startsWith('android-app://');
+    const userAgentHasMarker =
+      typeof window.navigator?.userAgent === 'string' &&
+      window.navigator.userAgent.includes('NeoBattleApp');
+    const capacitorExists =
+      typeof (window as any).Capacitor !== 'undefined';
     const bootstrapFlag =
       typeof document !== 'undefined' &&
       document.documentElement.classList.contains('app-mode');
 
-    return Boolean(standaloneMedia || iosStandalone || androidReferrer || bootstrapFlag);
+    return Boolean(
+      standaloneMedia ||
+      iosStandalone ||
+      androidReferrer ||
+      userAgentHasMarker ||
+      capacitorExists ||
+      bootstrapFlag
+    );
   } catch {
     return false;
   }
