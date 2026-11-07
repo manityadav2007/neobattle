@@ -386,3 +386,83 @@ test('App-only UI - consistent chrome across all pages with dedicated app home c
   );
 });
 
+test('Zero White Flash - Server-rendered black background, color-scheme, manifest, and auth loading skeleton', () => {
+  const layoutPath = path.join(frontendDir, 'src', 'app', 'layout.tsx');
+  const layout = fs.readFileSync(layoutPath, 'utf8');
+
+  // Static meta color-scheme
+  assert.ok(
+    layout.includes('<meta name="color-scheme" content="dark" />') ||
+      layout.includes('color-scheme') && layout.includes('dark'),
+    'layout must include static meta color-scheme dark'
+  );
+
+  // Static html style background:#000;color-scheme:dark
+  assert.ok(
+    layout.includes("style={{ background: '#000', colorScheme: 'dark' }}") ||
+      layout.includes("background: '#000'") && layout.includes("colorScheme: 'dark'"),
+    'html tag must have inline style background #000 and colorScheme dark'
+  );
+
+  // Static body style background:#000
+  assert.ok(
+    layout.includes("style={{ background: '#000' }}"),
+    'body tag must have inline style background #000'
+  );
+
+  // Inline <style> in <head> for instant black first paint
+  assert.ok(
+    layout.includes('html,body{background:#000') && layout.includes('color-scheme:dark'),
+    'head must include inline style for html,body black background and color-scheme dark'
+  );
+
+  // Theme color #000000 in meta and viewport
+  assert.ok(
+    layout.includes('content="#000000"') || layout.includes("themeColor: '#000000'"),
+    'layout must set theme-color to #000000'
+  );
+
+  // Manifests must maintain #000000 background and theme color
+  const webmanifest = JSON.parse(
+    fs.readFileSync(path.join(frontendDir, 'public', 'manifest.webmanifest'), 'utf8')
+  );
+  assert.equal(webmanifest.background_color, '#000000');
+  assert.equal(webmanifest.theme_color, '#000000');
+
+  const jsonManifest = JSON.parse(
+    fs.readFileSync(path.join(frontendDir, 'public', 'manifest.json'), 'utf8')
+  );
+  assert.equal(jsonManifest.background_color, '#000000');
+  assert.equal(jsonManifest.theme_color, '#000000');
+
+  // Loading and Global Error boundaries exist and have black background
+  const loadingPath = path.join(frontendDir, 'src', 'app', 'loading.tsx');
+  assert.ok(fs.existsSync(loadingPath), 'loading.tsx must exist');
+  const loadingContent = fs.readFileSync(loadingPath, 'utf8');
+  assert.ok(
+    loadingContent.includes('#000') || loadingContent.includes('bg-black'),
+    'loading.tsx must have black background'
+  );
+
+  const globalErrorPath = path.join(frontendDir, 'src', 'app', 'global-error.tsx');
+  assert.ok(fs.existsSync(globalErrorPath), 'global-error.tsx must exist');
+  const globalErrorContent = fs.readFileSync(globalErrorPath, 'utf8');
+  assert.ok(
+    globalErrorContent.includes('#000') || globalErrorContent.includes('bg-black'),
+    'global-error.tsx must have black background'
+  );
+  assert.ok(
+    globalErrorContent.includes('color-scheme') || globalErrorContent.includes('colorScheme'),
+    'global-error.tsx must have dark color-scheme'
+  );
+
+  // Home page app screen must display skeleton while authLoading
+  const appHomePath = path.join(frontendDir, 'src', 'components', 'app', 'AppHomeScreen.tsx');
+  const appHome = fs.readFileSync(appHomePath, 'utf8');
+  assert.ok(
+    appHome.includes('authLoading ?') && appHome.includes('animate-pulse'),
+    'AppHomeScreen must display skeleton during authLoading'
+  );
+});
+
+

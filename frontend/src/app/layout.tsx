@@ -11,11 +11,12 @@ import SplashScreen from '@/components/SplashScreen';
 import { AuthProvider } from '@/hooks/useAuth';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-body' });
-const orbitron = Orbitron({ subsets: ['latin'], variable: '--font-display' });
+const inter = Inter({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
+const orbitron = Orbitron({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
 
 export const viewport: Viewport = {
   themeColor: '#000000',
+  colorScheme: 'dark',
 };
 
 export const metadata: Metadata = {
@@ -37,15 +38,21 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" style={{ backgroundColor: '#000000' }}>
+    <html lang="en" className="dark" style={{ background: '#000', colorScheme: 'dark' }}>
       <head>
-        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="color-scheme" content="dark" />
         <meta name="theme-color" content="#000000" />
+        <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="NeoBattle" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `html,body{background:#000 !important;color-scheme:dark;}#twa-splash-screen{background:#000;}`,
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;var i=window.navigator&&window.navigator.standalone===true;var r=document.referrer&&document.referrer.indexOf('android-app://')===0;var t=s||i||r;var e=document.documentElement;if(t){e.classList.add('app-mode');if(window.location.pathname==='/'){e.classList.add('app-home');}var v=document.querySelector('meta[name="viewport"]');if(v){var c=v.getAttribute('content')||'';if(c.indexOf('viewport-fit=cover')===-1){v.setAttribute('content',c+', viewport-fit=cover');}}}var d=sessionStorage.getItem('neobattle_splash_shown');if(d){e.classList.add('twa-splash-dismissed');}else if(t){e.classList.add('twa-splash-active');}}catch(err){}})();`,
@@ -54,7 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body
         className={`${inter.variable} ${orbitron.variable} font-body antialiased`}
-        style={{ backgroundColor: '#000000' }}
+        style={{ background: '#000' }}
       >
         <SplashScreen />
         <AuthProvider>

@@ -160,7 +160,21 @@ export default function AppHomeScreen() {
     <div className="relative w-full max-w-lg mx-auto px-4 pb-12 text-white">
       {/* Quick User & Wallet Status Chip inside home content */}
       <div className="pt-3 pb-2">
-        {user ? (
+        {authLoading ? (
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl border border-white/10 bg-white/[0.03] animate-pulse">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-white/10 shrink-0" />
+              <div className="space-y-1.5 min-w-0">
+                <div className="w-16 h-2 bg-white/10 rounded" />
+                <div className="w-24 h-3 bg-white/10 rounded" />
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-20 h-7 rounded-xl bg-white/10" />
+              <div className="w-8 h-8 rounded-xl bg-white/10" />
+            </div>
+          </div>
+        ) : user ? (
           <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md">
             <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0 group">
               <Avatar
@@ -388,6 +402,8 @@ export default function AppHomeScreen() {
                   actionLabel="Browse tournaments"
                 />
               )
+            ) : authLoading ? (
+              <TournamentSkeleton count={2} />
             ) : !user ? (
               <EmptyState
                 icon={<UserRound className="h-7 w-7" />}

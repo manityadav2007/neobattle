@@ -25,6 +25,7 @@ html {
   overflow-y: auto;
   min-height: 100%;
   background-color: #000000;
+  color-scheme: dark;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -32,6 +33,7 @@ body {
   height: auto;
   background-color: #000000;
   color: #fafafa;
+  color-scheme: dark;
   min-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
@@ -162,6 +164,7 @@ body {
   html,
   body {
     background-color: #000000 !important;
+    color-scheme: dark !important;
   }
 
   /* Keep root wrappers smoothly scrollable without locking vertical document scroll */
@@ -179,6 +182,7 @@ body {
 html.twa-splash-active,
 html.twa-splash-active body {
   background-color: #000000 !important;
+  color-scheme: dark !important;
 }
 
 #twa-splash-screen {

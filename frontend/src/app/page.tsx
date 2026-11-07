@@ -64,20 +64,26 @@ const tournaments = allTournaments.filter((t) => !isTournamentEnded(t));
                 Secure payments, verified players, and epic prize pools await.
               </p>
               <div className="flex flex-wrap gap-4">
-                <Link
-                  href={isLoggedIn ? '/dashboard' : '/tournaments'}
-                  className="btn-fire flex items-center gap-2 px-8 py-3.5 rounded-xl text-base font-bold text-white"
-                >
-                  {isLoggedIn ? 'My Dashboard' : 'Browse Tournaments'}
-                  <ChevronRight className="w-5 h-5" />
-                </Link>
-                {!isLoggedIn && (
-                  <Link
-                    href="/register"
-                    className="flex items-center gap-2 px-8 py-3.5 rounded-xl text-base font-bold text-zinc-300 border border-white/10 hover:border-fire-500/50 hover:text-white transition-all"
-                  >
-                    Create Account
-                  </Link>
+                {authLoading ? (
+                  <div className="h-12 w-48 rounded-xl bg-white/5 border border-white/10 animate-pulse" />
+                ) : (
+                  <>
+                    <Link
+                      href={isLoggedIn ? '/dashboard' : '/tournaments'}
+                      className="btn-fire flex items-center gap-2 px-8 py-3.5 rounded-xl text-base font-bold text-white"
+                    >
+                      {isLoggedIn ? 'My Dashboard' : 'Browse Tournaments'}
+                      <ChevronRight className="w-5 h-5" />
+                    </Link>
+                    {!isLoggedIn && (
+                      <Link
+                        href="/register"
+                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl text-base font-bold text-zinc-300 border border-white/10 hover:border-fire-500/50 hover:text-white transition-all"
+                      >
+                        Create Account
+                      </Link>
+                    )}
+                  </>
                 )}
               </div>
             </motion.div>
