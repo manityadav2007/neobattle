@@ -22,13 +22,13 @@ const getFrontendUrl = (): string => {
   return origin.split(',')[0].trim().replace(/\/+$/, '');
 };
 
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+router.get('/google', authLimiter, authController.googleAuth);
 router.get(
   '/google/callback',
+  authController.validateOAuthStateMiddleware,
   (req, res, next) => {
     if (req.query.error) {
-      const errorMsg = encodeURIComponent(String(req.query.error));
-      res.redirect(`${getFrontendUrl()}/login?error=${errorMsg}`);
+      authController.handleGoogleOAuthError(req, res);
       return;
     }
     next();
@@ -42,8 +42,7 @@ router.get(
   authController.googleCallback
 );
 
-
-router.get('/discord', authController.discordAuth);
+router.get('/discord', authLimiter, authController.discordAuth);
 router.get('/discord/callback', authController.discordCallback);
 
 export default router;

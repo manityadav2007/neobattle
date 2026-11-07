@@ -10,6 +10,9 @@ android/.idea/
 android/local.properties
 local.properties
 keystore.properties
+signing.properties
+*signing*.properties
+*keystore*.properties
 
 # Signing credentials & bundles (CRITICAL: never commit)
 *.keystore

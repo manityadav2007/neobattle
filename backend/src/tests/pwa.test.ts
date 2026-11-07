@@ -541,6 +541,29 @@ test('Capacitor Android wrapper - /mobile structure, config, theme, and offline 
   assert.ok(fs.existsSync(stylesPath), 'styles.xml must exist');
   const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(styles.includes('@color/black'), 'styles.xml must use @color/black for window background');
+
+  // AndroidManifest deep link & singleTask
+  const manifestPath = path.join(mobileDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+  assert.ok(fs.existsSync(manifestPath), 'AndroidManifest.xml must exist');
+  const manifest = fs.readFileSync(manifestPath, 'utf8');
+  assert.ok(manifest.includes('android:launchMode="singleTask"'), 'MainActivity must have launchMode singleTask');
+  assert.ok(manifest.includes('android:scheme="neobattle"'), 'Manifest must register neobattle scheme');
+  assert.ok(manifest.includes('android:host="auth"'), 'Manifest must register auth host');
+
+  // Frontend Capacitor packages & PKCE auth module
+  const frontendDir = path.resolve(__dirname, '../../../frontend');
+  const frontendPkg = JSON.parse(fs.readFileSync(path.join(frontendDir, 'package.json'), 'utf8'));
+  assert.ok(frontendPkg.dependencies['@capacitor/core'], '@capacitor/core must be in frontend dependencies');
+  assert.ok(frontendPkg.dependencies['@capacitor/app'], '@capacitor/app must be in frontend dependencies');
+  assert.ok(frontendPkg.dependencies['@capacitor/browser'], '@capacitor/browser must be in frontend dependencies');
+
+  const capAuthPath = path.join(frontendDir, 'src', 'lib', 'capacitorAuth.ts');
+  assert.ok(fs.existsSync(capAuthPath), 'frontend/src/lib/capacitorAuth.ts must exist');
+  const capAuth = fs.readFileSync(capAuthPath, 'utf8');
+  assert.ok(capAuth.includes('@capacitor/browser'), 'capacitorAuth must dynamically import @capacitor/browser');
+  assert.ok(capAuth.includes('@capacitor/app'), 'capacitorAuth must dynamically import @capacitor/app');
+  assert.ok(capAuth.includes('neobattle://auth'), 'capacitorAuth must listen for neobattle://auth');
+  assert.ok(capAuth.includes('generatePKCE'), 'capacitorAuth must implement PKCE generation');
 });
 
 

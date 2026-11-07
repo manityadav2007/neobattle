@@ -1,7 +1,13 @@
 'use client';
 
-import { Chrome, Disc3 } from 'lucide-react';
-import { useState } from 'react';
+import { Chrome, Disc3, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { useIsApp } from '@/hooks/useIsApp';
+import {
+  startCapacitorOAuth,
+  registerCapacitorAuthListener,
+} from '@/lib/capacitorAuth';
 
 type Provider = 'google' | 'discord';
 
@@ -36,12 +42,12 @@ export function getProviderOAuthUrl(provider: Provider): string {
   }
 
   if (provider === 'discord') {
-    // 1. Explicit Discord Auth URL configured in env
-    if (process.env.NEXT_PUBLIC_DISCORD_AUTH_URL && process.env.NEXT_PUBLIC_DISCORD_AUTH_URL.trim() !== '') {
+    if (
+      process.env.NEXT_PUBLIC_DISCORD_AUTH_URL &&
+      process.env.NEXT_PUBLIC_DISCORD_AUTH_URL.trim() !== ''
+    ) {
       return process.env.NEXT_PUBLIC_DISCORD_AUTH_URL.trim();
     }
-
-    // 2. Default cleanly to backend Discord auth route
     return `${apiUrl}/auth/discord`;
   }
 
@@ -49,19 +55,67 @@ export function getProviderOAuthUrl(provider: Provider): string {
 }
 
 export default function AuthSocialButtons() {
+  const router = useRouter();
+  const isApp = useIsApp();
   const [error, setError] = useState('');
+  const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
+  const lastProviderRef = useRef<Provider | null>(null);
 
-  const handleProviderClick = (provider: Provider) => {
+  // In app mode, listen for neobattle://auth deep links
+  useEffect(() => {
+    if (!isApp) return;
+
+    let cleanupFn: (() => void) | undefined;
+    registerCapacitorAuthListener(
+      () => {
+        setLoadingProvider(null);
+        setError('');
+        router.push('/dashboard');
+      },
+      (err) => {
+        setLoadingProvider(null);
+        setError(err || 'Authentication failed. Please try again.');
+      }
+    ).then((cleanup) => {
+      cleanupFn = cleanup;
+    });
+
+    return () => {
+      if (cleanupFn) cleanupFn();
+    };
+  }, [isApp, router]);
+
+  const handleProviderClick = async (provider: Provider) => {
+    setError('');
+    lastProviderRef.current = provider;
+
+    if (isApp) {
+      setLoadingProvider(provider);
+      try {
+        await startCapacitorOAuth(provider);
+      } catch (err: any) {
+        setLoadingProvider(null);
+        setError(err.message || 'Failed to start authorization flow.');
+      }
+      return;
+    }
+
+    // Normal browser flow: unchanged
     const targetUrl = getProviderOAuthUrl(provider);
-
     if (!targetUrl) {
       const meta = providerMeta[provider];
       setError(`${meta.label} is not configured yet.`);
       return;
     }
-
-    setError('');
     window.location.href = targetUrl;
+  };
+
+  const handleRetry = () => {
+    if (lastProviderRef.current) {
+      handleProviderClick(lastProviderRef.current);
+    } else {
+      setError('');
+    }
   };
 
   return (
@@ -70,16 +124,22 @@ export default function AuthSocialButtons() {
         {(['google', 'discord'] as Provider[]).map((provider) => {
           const meta = providerMeta[provider];
           const Icon = meta.icon;
+          const isLoading = loadingProvider === provider;
 
           return (
             <button
               key={provider}
               type="button"
+              disabled={isLoading}
               onClick={() => handleProviderClick(provider)}
               title={meta.label}
-              className={`flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-200 transition-all ${meta.accentClass}`}
+              className={`flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-200 transition-all ${meta.accentClass} ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
             >
-              <Icon className="h-4 w-4" />
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Icon className="h-4 w-4" />
+              )}
               {meta.label}
             </button>
           );
@@ -87,9 +147,18 @@ export default function AuthSocialButtons() {
       </div>
 
       {error && (
-        <p className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300">
-          {error}
-        </p>
+        <div className="flex flex-col gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+          <span>{error}</span>
+          {isApp && (
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="self-start rounded bg-red-500/20 px-2 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/30 transition-colors"
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

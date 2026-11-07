@@ -13,3 +13,6 @@ signing-key-info.txt
 *.aab
 local.properties
 keystore.properties
+signing.properties
+*signing*.properties
+*keystore*.properties

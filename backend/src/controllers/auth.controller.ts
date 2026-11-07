@@ -1,5 +1,7 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
+import passport from 'passport';
 import { prisma } from '../config/db';
 import {
   hashPassword,
@@ -14,27 +16,122 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 
 const SUPER_ADMIN_EMAIL = process.env.OWNER_EMAIL || process.env.SUPER_ADMIN_EMAIL || 'ymanit330@gmail.com';
 
-const oauthCodeMap = new Map<string, { tokens: TokenPair; expiresAt: number; usedAt?: number }>();
+export interface OAuthStateData {
+  nonce: string;
+  platform: 'app' | 'web';
+  codeChallenge?: string;
+  expiresAt: number;
+}
 
-// Periodic cleanup of expired codes
-setInterval(() => {
+export interface OAuthCodeEntry {
+  tokens: TokenPair;
+  platform: 'app' | 'web';
+  codeChallenge?: string;
+  expiresAt: number;
+}
+
+const oauthStateMap = new Map<string, OAuthStateData>();
+const oauthCodeMap = new Map<string, OAuthCodeEntry>();
+
+// Periodic cleanup of expired states and codes
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [code, entry] of oauthCodeMap.entries()) {
-    if (now > entry.expiresAt || (entry.usedAt && now - entry.usedAt > 15_000)) {
+    if (now > entry.expiresAt) {
       oauthCodeMap.delete(code);
     }
   }
+  for (const [nonce, state] of oauthStateMap.entries()) {
+    if (now > state.expiresAt) {
+      oauthStateMap.delete(nonce);
+    }
+  }
 }, 30_000);
+if (typeof cleanupTimer?.unref === 'function') {
+  cleanupTimer.unref();
+}
 
-function createOAuthCode(tokens: TokenPair): string {
+export function timingSafeEqualStr(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+export function parsePlatform(platformInput: any): 'app' | 'web' {
+  if (typeof platformInput === 'string' && platformInput.trim().toLowerCase() === 'app') {
+    return 'app';
+  }
+  return 'web';
+}
+
+export function createOAuthState(platformInput: any, codeChallengeInput: any): string {
+  let platform = parsePlatform(platformInput);
+  let codeChallenge: string | undefined;
+
+  if (platform === 'app') {
+    if (
+      typeof codeChallengeInput === 'string' &&
+      /^[A-Za-z0-9\-_]{43,128}$/.test(codeChallengeInput.trim())
+    ) {
+      codeChallenge = codeChallengeInput.trim();
+    } else {
+      // Invalid or missing code_challenge falls back to web
+      platform = 'web';
+    }
+  }
+
+  const nonce = crypto.randomBytes(32).toString('hex');
+  oauthStateMap.set(nonce, {
+    nonce,
+    platform,
+    codeChallenge,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  });
+  return nonce;
+}
+
+export function consumeOAuthState(nonce: string): OAuthStateData | null {
+  if (!nonce || typeof nonce !== 'string') return null;
+  const state = oauthStateMap.get(nonce);
+  if (!state) return null;
+  oauthStateMap.delete(nonce);
+  if (Date.now() > state.expiresAt) {
+    return null;
+  }
+  return state;
+}
+
+export function createOAuthCode(
+  tokens: TokenPair,
+  platform: 'app' | 'web' = 'web',
+  codeChallenge?: string
+): string {
   const code = uuidv4();
   // Valid for 60 seconds
-  oauthCodeMap.set(code, { tokens, expiresAt: Date.now() + 60_000 });
+  oauthCodeMap.set(code, {
+    tokens,
+    platform,
+    codeChallenge,
+    expiresAt: Date.now() + 60_000,
+  });
   return code;
 }
 
+export function __setOAuthStateForTest(nonce: string, data: OAuthStateData): void {
+  oauthStateMap.set(nonce, data);
+}
+
+export function __setOAuthCodeForTest(code: string, entry: OAuthCodeEntry): void {
+  oauthCodeMap.set(code, entry);
+}
+
+export function __getOAuthCodeForTest(code: string): OAuthCodeEntry | undefined {
+  return oauthCodeMap.get(code);
+}
+
 export async function exchangeOAuthCode(req: Request, res: Response): Promise<void> {
-  const { code } = req.body;
+  const { code, code_verifier, codeVerifier } = req.body;
   if (!code || typeof code !== 'string') {
     res.status(400).json({ success: false, message: 'Exchange code is required' });
     return;
@@ -46,26 +143,41 @@ export async function exchangeOAuthCode(req: Request, res: Response): Promise<vo
     return;
   }
 
+  // Codes stay single-use with a 60 second TTL and are deleted on the first attempt, successful or not.
+  oauthCodeMap.delete(code);
+
   if (Date.now() > entry.expiresAt) {
-    oauthCodeMap.delete(code);
     res.status(400).json({ success: false, message: 'Exchange code has expired' });
     return;
   }
 
-  // Grace window: if the code was already exchanged in the last 15 seconds, return the same tokens
-  // to safely absorb rapid concurrent/double-mount React requests without failing.
-  if (entry.usedAt) {
-    if (Date.now() - entry.usedAt > 15_000) {
-      oauthCodeMap.delete(code);
-      res.status(400).json({ success: false, message: 'Exchange code has already been used' });
+  if (entry.platform === 'app') {
+    const verifier =
+      typeof code_verifier === 'string'
+        ? code_verifier
+        : typeof codeVerifier === 'string'
+          ? codeVerifier
+          : null;
+
+    if (!verifier || verifier.length < 43 || verifier.length > 128) {
+      res.status(400).json({ success: false, message: 'code_verifier is required for app authorization code' });
       return;
     }
-  } else {
-    entry.usedAt = Date.now();
-    // Schedule permanent removal after 15 seconds grace window
-    setTimeout(() => {
-      oauthCodeMap.delete(code);
-    }, 15_000);
+
+    if (!entry.codeChallenge) {
+      res.status(400).json({ success: false, message: 'Corrupted authorization session' });
+      return;
+    }
+
+    const calculatedChallenge = crypto
+      .createHash('sha256')
+      .update(verifier)
+      .digest('base64url');
+
+    if (!timingSafeEqualStr(calculatedChallenge, entry.codeChallenge)) {
+      res.status(400).json({ success: false, message: 'Invalid code_verifier' });
+      return;
+    }
   }
 
   res.json({
@@ -254,12 +366,50 @@ function getFrontendBaseUrl(): string {
   return origin.split(',')[0].trim().replace(/\/+$/, '');
 }
 
+export function googleAuth(req: Request, res: Response, next: NextFunction): void {
+  const nonce = createOAuthState(req.query.platform, req.query.code_challenge);
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    session: false,
+    state: nonce,
+  })(req, res, next);
+}
+
+export function validateOAuthStateMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const stateParam = typeof req.query.state === 'string' ? req.query.state : null;
+  const stateData = stateParam ? consumeOAuthState(stateParam) : null;
+  if (!stateData) {
+    res.redirect(`${getFrontendBaseUrl()}/login?error=invalid_state`);
+    return;
+  }
+  (req as any).oauthState = stateData;
+  next();
+}
+
+export function handleGoogleOAuthError(req: Request, res: Response): void {
+  const oauthState = (req as any).oauthState as OAuthStateData | undefined;
+  const isApp = oauthState?.platform === 'app';
+  const errorMsg = encodeURIComponent(String(req.query.error || 'google_auth_failed'));
+  if (isApp) {
+    res.redirect(`neobattle://auth?error=${errorMsg}`);
+  } else {
+    res.redirect(`${getFrontendBaseUrl()}/login?error=${errorMsg}`);
+  }
+}
+
 export async function googleCallback(req: AuthenticatedRequest, res: Response): Promise<void> {
   const frontendUrl = getFrontendBaseUrl();
+  const oauthState = (req as any).oauthState as OAuthStateData | undefined;
+  const isApp = oauthState?.platform === 'app';
+
   try {
     let user = req.user as any;
     if (!user) {
-      res.redirect(`${frontendUrl}/login?error=auth_failed`);
+      if (isApp) {
+        res.redirect('neobattle://auth?error=auth_failed');
+      } else {
+        res.redirect(`${frontendUrl}/login?error=auth_failed`);
+      }
       return;
     }
 
@@ -267,38 +417,63 @@ export async function googleCallback(req: AuthenticatedRequest, res: Response): 
     if (updatedRole !== user.role) {
       user = await prisma.user.findUnique({ where: { id: user.id } });
       if (!user) {
-        res.redirect(`${frontendUrl}/login?error=server_error`);
+        if (isApp) {
+          res.redirect('neobattle://auth?error=server_error');
+        } else {
+          res.redirect(`${frontendUrl}/login?error=server_error`);
+        }
         return;
       }
     }
 
     const tokens = await generateTokenPair(user);
-    const oauthCode = createOAuthCode(tokens);
-    res.redirect(`${frontendUrl}/auth/callback?code=${oauthCode}`);
+    const oauthCode = createOAuthCode(tokens, oauthState?.platform || 'web', oauthState?.codeChallenge);
+    if (isApp) {
+      res.redirect(`neobattle://auth?code=${oauthCode}`);
+    } else {
+      res.redirect(`${frontendUrl}/auth/callback?code=${oauthCode}`);
+    }
   } catch (error) {
-    console.error('[GoogleCallback Error]', error);
-    res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
+    if (isApp) {
+      res.redirect('neobattle://auth?error=google_auth_failed');
+    } else {
+      res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
+    }
   }
 }
 
 
 export function discordAuth(req: Request, res: Response): void {
+  const nonce = createOAuthState(req.query.platform, req.query.code_challenge);
   const clientId =
     process.env.DISCORD_CLIENT_ID ||
     process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID ||
     '1344586908581728347';
   const baseUrl = process.env.BASE_URL || 'http://localhost:4000';
   const redirectUri = `${baseUrl}/api/auth/discord/callback`;
-  const discordUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&scope=identify%20email&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  const discordUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&scope=identify%20email&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(nonce)}`;
   res.redirect(discordUrl);
 }
 
 export async function discordCallback(req: Request, res: Response): Promise<void> {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
   const frontendUrl = getFrontendBaseUrl();
 
+  const stateParam = typeof state === 'string' ? state : null;
+  const stateData = stateParam ? consumeOAuthState(stateParam) : null;
+  if (!stateData) {
+    res.redirect(`${frontendUrl}/login?error=invalid_state`);
+    return;
+  }
+
+  const isApp = stateData.platform === 'app';
+
   if (error || !code || typeof code !== 'string') {
-    res.redirect(`${frontendUrl}/login?error=discord_auth_failed`);
+    if (isApp) {
+      res.redirect(`neobattle://auth?error=${encodeURIComponent(String(error || 'discord_auth_failed'))}`);
+    } else {
+      res.redirect(`${frontendUrl}/login?error=discord_auth_failed`);
+    }
     return;
   }
 
@@ -312,7 +487,11 @@ export async function discordCallback(req: Request, res: Response): Promise<void
 
   try {
     if (!clientSecret) {
-      res.redirect(`${frontendUrl}/login?error=discord_client_secret_missing`);
+      if (isApp) {
+        res.redirect('neobattle://auth?error=discord_client_secret_missing');
+      } else {
+        res.redirect(`${frontendUrl}/login?error=discord_client_secret_missing`);
+      }
       return;
     }
 
@@ -331,13 +510,21 @@ export async function discordCallback(req: Request, res: Response): Promise<void
     });
 
     if (!tokenResponse.ok) {
-      res.redirect(`${frontendUrl}/login?error=discord_token_failed`);
+      if (isApp) {
+        res.redirect('neobattle://auth?error=discord_token_failed');
+      } else {
+        res.redirect(`${frontendUrl}/login?error=discord_token_failed`);
+      }
       return;
     }
 
     const tokenData = (await tokenResponse.json()) as { access_token?: string };
     if (!tokenData.access_token) {
-      res.redirect(`${frontendUrl}/login?error=discord_token_failed`);
+      if (isApp) {
+        res.redirect('neobattle://auth?error=discord_token_failed');
+      } else {
+        res.redirect(`${frontendUrl}/login?error=discord_token_failed`);
+      }
       return;
     }
 
@@ -348,7 +535,11 @@ export async function discordCallback(req: Request, res: Response): Promise<void
     });
 
     if (!userResponse.ok) {
-      res.redirect(`${frontendUrl}/login?error=discord_user_failed`);
+      if (isApp) {
+        res.redirect('neobattle://auth?error=discord_user_failed');
+      } else {
+        res.redirect(`${frontendUrl}/login?error=discord_user_failed`);
+      }
       return;
     }
 
@@ -400,15 +591,27 @@ export async function discordCallback(req: Request, res: Response): Promise<void
     if (updatedRole !== user.role) {
       user = await prisma.user.findUnique({ where: { id: user.id } });
       if (!user) {
-        res.redirect(`${frontendUrl}/login?error=server_error`);
+        if (isApp) {
+          res.redirect('neobattle://auth?error=server_error');
+        } else {
+          res.redirect(`${frontendUrl}/login?error=server_error`);
+        }
         return;
       }
     }
 
     const tokens = await generateTokenPair(user);
-    const oauthCode = createOAuthCode(tokens);
-    res.redirect(`${frontendUrl}/auth/callback?code=${oauthCode}`);
+    const oauthCode = createOAuthCode(tokens, stateData.platform, stateData.codeChallenge);
+    if (isApp) {
+      res.redirect(`neobattle://auth?code=${oauthCode}`);
+    } else {
+      res.redirect(`${frontendUrl}/auth/callback?code=${oauthCode}`);
+    }
   } catch (err) {
-    res.redirect(`${frontendUrl}/login?error=discord_auth_error`);
+    if (isApp) {
+      res.redirect('neobattle://auth?error=discord_auth_error');
+    } else {
+      res.redirect(`${frontendUrl}/login?error=discord_auth_error`);
+    }
   }
 }

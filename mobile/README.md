@@ -55,20 +55,28 @@ Allow Gradle to finish indexing and syncing automatically.
 
 To build a release APK without hardcoding sensitive passwords or committing your keystore into Git:
 
-### Step 4.1: Configure `gradle.properties` (Gitignored)
+### Step 4.1: Configure Global `gradle.properties` (Outside Repository)
 
-Create or edit `mobile/android/gradle.properties` (or your user-level `~/.gradle/gradle.properties`).
-Add your keystore credentials:
+To keep sensitive passwords and keystore credentials completely outside the repository, configure the **GLOBAL** `gradle.properties` file on your Windows machine:
+
+**Global path**:
+`C:\Users\hp\.gradle\gradle.properties` (or `%USERPROFILE%\.gradle\gradle.properties`)
+
+> [!IMPORTANT]
+> **NEVER store passwords or signing credentials inside the repository's `gradle.properties` file!** Always use the global file located in your user profile (`C:\Users\hp\.gradle\gradle.properties`). This ensures credentials can never be accidentally staged, tracked, or pushed to Git.
+
+Add the following block to `C:\Users\hp\.gradle\gradle.properties`:
 
 ```properties
-# Path to your existing signing keystore (use forward slashes or double backslashes)
+# Global Android signing credentials for NeoBattle release builds
+# (Located at C:\Users\hp\.gradle\gradle.properties - outside Git repo)
 MYAPP_RELEASE_STORE_FILE=C:/Users/hp/Desktop/NeoBattle - Google Play package/signing.keystore
 MYAPP_RELEASE_STORE_PASSWORD=YourStorePassword
 MYAPP_RELEASE_KEY_ALIAS=YourKeyAlias
 MYAPP_RELEASE_KEY_PASSWORD=YourKeyPassword
 ```
 
-> **Security**: `*.keystore`, `*.jks`, `local.properties`, and `keystore.properties` are strictly in `.gitignore`. Never commit credentials or keystore files to the repository.
+> **Security Note**: All `*.keystore`, `*.jks`, `local.properties`, `keystore.properties`, and `*signing*.properties` files are strictly blocked in `.gitignore`. Gradle will automatically read the global properties during `assembleRelease`.
 
 ### Step 4.2: Build the Signed Release APK via Command Line or Android Studio
 
