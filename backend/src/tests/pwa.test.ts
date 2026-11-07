@@ -18,8 +18,8 @@ test('PWA Manifest - /manifest.webmanifest is valid and meets all specs', () => 
   assert.equal(manifest.start_url, '/');
   assert.equal(manifest.scope, '/');
   assert.equal(manifest.display, 'standalone');
-  assert.equal(manifest.background_color, '#0a0a0f');
-  assert.equal(manifest.theme_color, '#0a0a0f');
+  assert.equal(manifest.background_color, '#0a0a0c');
+  assert.equal(manifest.theme_color, '#0a0a0c');
 
   assert.ok(Array.isArray(manifest.icons), 'manifest must have icons array');
   assert.ok(manifest.icons.length >= 3, 'manifest must have at least 3 icons');
@@ -212,10 +212,44 @@ test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash 
   const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
   const cssContent = fs.readFileSync(cssPath, 'utf8');
 
-  // html/body background #000 in standalone
+  // html/body background #0a0a0c in standalone
   assert.ok(
-    cssContent.includes('@media (display-mode: standalone)') && cssContent.includes('#000000 !important'),
-    'globals.css must set html/body background to #000000 !important for standalone mode'
+    cssContent.includes('@media (display-mode: standalone)') && cssContent.includes('#0a0a0c !important'),
+    'globals.css must set html/body background to #0a0a0c !important for standalone mode'
+  );
+
+  // Vertical scrolling must stay enabled in normal browsers
+  assert.ok(
+    cssContent.includes('overflow-y: auto'),
+    'globals.css must keep vertical scrolling enabled'
+  );
+  assert.ok(
+    cssContent.includes('min-height: 100%'),
+    'globals.css must use min-height instead of fixed heights'
+  );
+
+  // Pull-to-refresh restrictions must be scoped to standalone/TWA only
+  const standaloneIndex = cssContent.indexOf('@media (display-mode: standalone)');
+  assert.ok(standaloneIndex !== -1, 'globals.css must contain a standalone media query');
+
+  const standaloneStyles = cssContent.slice(standaloneIndex);
+  assert.ok(
+    standaloneStyles.includes('overscroll-behavior-y: contain'),
+    'standalone styles must contain overscroll to prevent pull-to-refresh'
+  );
+  assert.ok(
+    standaloneStyles.includes('touch-action: pan-y'),
+    'standalone styles must allow vertical touch panning'
+  );
+
+  const globalStyles = cssContent.slice(0, standaloneIndex);
+  assert.ok(
+    !globalStyles.includes('overscroll-behavior-y'),
+    'overscroll-behavior-y must not apply to normal browsers'
+  );
+  assert.ok(
+    !globalStyles.includes('touch-action'),
+    'touch-action must not apply to normal browsers'
   );
 
   // Shine sweep animation

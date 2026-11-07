@@ -20,17 +20,30 @@
 
 html {
   scroll-behavior: smooth;
+  height: auto;
   overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 100%;
   background-color: #0a0a0c;
-  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
+  height: auto;
   background-color: #0a0a0c;
   color: #fafafa;
-  min-height: 100vh;
+  min-height: 100%;
   overflow-x: hidden;
-  overscroll-behavior-y: contain;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure framework root wrappers never lock vertical page scroll */
+#root,
+#__next {
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
 }
 
 @media (max-width: 768px) {
@@ -149,6 +162,8 @@ body {
   html,
   body {
     background-color: #0a0a0c !important;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
   }
 }
 
