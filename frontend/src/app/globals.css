@@ -293,6 +293,20 @@ html.twa-splash-dismissed #twa-splash-screen {
   animation: splash-particle-float 2.8s ease-in-out infinite;
 }
 
+/* Splash progress line animation */
+@keyframes splash-progress-slide {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.splash-progress-bar {
+  animation: splash-progress-slide 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .splash-glow {
     animation: none !important;
@@ -307,6 +321,11 @@ html.twa-splash-dismissed #twa-splash-screen {
     animation: none !important;
     display: none !important;
   }
+  .splash-progress-bar {
+    animation: none !important;
+    left: 0 !important;
+    width: 100% !important;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -320,6 +339,28 @@ html.app-mode * {
 
 html.app-mode body {
   background-color: #000000;
+}
+
+/* App mode header: solid #000, no separate box, no border, no shadow, no backdrop blur */
+html.app-mode .site-navbar {
+  background: #000000 !important;
+  background-color: #000000 !important;
+  border: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+}
+
+html.app-mode main {
+  padding-top: calc(4rem + env(safe-area-inset-top, 0px)) !important;
+}
+
+/* App mode shared helper: hide page descriptions and eyebrow labels */
+html.app-mode .app-desc,
+html.app-mode .app-eyebrow {
+  display: none !important;
 }
 
 /* Only the marketing website home is hidden in app mode when on homepage */

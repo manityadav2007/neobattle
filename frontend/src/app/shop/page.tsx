@@ -94,7 +94,7 @@ export default function ShopPage() {
             <Landmark className="w-8 h-8 text-fire-400" />
             Redeem Shop
           </h1>
-          <p className="text-zinc-400 mt-2">Spend your winnings on gift card redeem codes</p>
+          <p className="text-zinc-400 mt-2 app-desc">Spend your winnings on gift card redeem codes</p>
         </div>
 
         {msg && (

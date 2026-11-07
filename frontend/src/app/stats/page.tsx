@@ -28,11 +28,11 @@ export default function StatsPage() {
   return (
     <div className="relative px-4 py-16 sm:px-6 lg:px-8 max-w-6xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
-        <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fire-300">Performance Insights</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fire-300 app-eyebrow">Performance Insights</p>
         <h1 className="mt-5 text-4xl font-display font-black text-white sm:text-6xl">
           <span className="gradient-text">Stats</span>
         </h1>
-        <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400">
+        <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400 app-desc">
           Platform-wide statistics and performance metrics across NEOBATTLE.
         </p>
         <div className="mt-8 flex flex-wrap gap-4">

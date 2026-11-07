@@ -46,11 +46,11 @@ export default function HelpFeedbackPage() {
             animate={{ opacity: 1, y: 0 }}
             className="max-w-3xl"
           >
-            <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fire-300">Support Center</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fire-300 app-eyebrow">Support Center</p>
             <h1 className="mt-5 text-4xl font-display font-black text-white sm:text-6xl">
               <span className="gradient-text">Help & Feedback</span>
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400">
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400 app-desc">
               Give players a calm, focused place to get support, report issues, and share feedback without breaking the competitive mood of the product.
             </p>
 

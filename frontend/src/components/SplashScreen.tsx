@@ -21,7 +21,7 @@ export default function SplashScreen() {
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
-    let isTwa = false;
+    let isApp = false;
     let alreadyShown = false;
 
     try {
@@ -29,6 +29,10 @@ export default function SplashScreen() {
         typeof window !== 'undefined' &&
         window.matchMedia &&
         window.matchMedia('(display-mode: standalone)').matches;
+
+      const isIosStandalone =
+        typeof window !== 'undefined' &&
+        (window.navigator as Navigator & { standalone?: boolean })?.standalone === true;
 
       const isTwaReferrer =
         typeof document !== 'undefined' &&
@@ -41,24 +45,18 @@ export default function SplashScreen() {
           window.navigator.userAgent.includes('NeoBattleApp')) ||
         (typeof window !== 'undefined' && typeof (window as any).Capacitor !== 'undefined');
 
-      isTwa = Boolean(isStandalone || isTwaReferrer);
-      alreadyShown = Boolean(sessionStorage.getItem(SESSION_STORAGE_KEY));
+      const hasBootstrapFlag =
+        typeof document !== 'undefined' &&
+        document.documentElement.classList.contains('app-mode');
 
-      // In Capacitor app, native splash plugin already covers launch; skip web splash to avoid double splash
-      if (isCapacitor) {
-        try {
-          document.documentElement.classList.add('twa-splash-dismissed');
-          document.documentElement.classList.remove('twa-splash-active');
-        } catch {}
-        setMounted(false);
-        return;
-      }
+      isApp = Boolean(isStandalone || isIosStandalone || isTwaReferrer || isCapacitor || hasBootstrapFlag);
+      alreadyShown = Boolean(sessionStorage.getItem(SESSION_STORAGE_KEY));
     } catch {
       // In case of security sandbox / private mode errors
     }
 
-    // Dismiss immediately if not running in TWA or already shown during this session
-    if (!isTwa || alreadyShown) {
+    // Dismiss immediately if not running in installed-app mode or already shown during this session
+    if (!isApp || alreadyShown) {
       try {
         document.documentElement.classList.add('twa-splash-dismissed');
         document.documentElement.classList.remove('twa-splash-active');
@@ -73,33 +71,40 @@ export default function SplashScreen() {
       document.documentElement.classList.add('twa-splash-active');
     } catch {}
 
-    // Begin 300ms fade out after ~1.8s (reveals app around 2.1s)
-    const fadeTimer = setTimeout(() => {
+    let dismissed = false;
+    const triggerDismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
       setFadeOut(true);
+      setTimeout(() => {
+        setMounted(false);
+        try {
+          document.documentElement.classList.add('twa-splash-dismissed');
+          document.documentElement.classList.remove('twa-splash-active');
+        } catch {}
+      }, 300);
+    };
+
+    // Fade out after ~1.8s once initial data/layout is ready
+    const fadeTimer = setTimeout(() => {
+      triggerDismiss();
     }, 1800);
 
-    // Unmount after fade transition completes
-    const unmountTimer = setTimeout(() => {
-      setMounted(false);
-      try {
-        document.documentElement.classList.add('twa-splash-dismissed');
-        document.documentElement.classList.remove('twa-splash-active');
-      } catch {}
-    }, 2150);
-
-    // Hard safety timeout: never block the app for longer than 3 seconds
+    // Hard safety timeout: never block the app for longer than 2.8s - 3.0s
     const safetyTimer = setTimeout(() => {
-      setMounted(false);
-      try {
-        document.documentElement.classList.add('twa-splash-dismissed');
-        document.documentElement.classList.remove('twa-splash-active');
-      } catch {}
+      triggerDismiss();
     }, 2800);
+
+    const onDataReady = () => {
+      // Give at least 1.4s of splash brand presence before dismissing on early data ready
+      setTimeout(triggerDismiss, 1400);
+    };
+    window.addEventListener('app:data-ready', onDataReady, { once: true });
 
     return () => {
       clearTimeout(fadeTimer);
-      clearTimeout(unmountTimer);
       clearTimeout(safetyTimer);
+      window.removeEventListener('app:data-ready', onDataReady);
     };
   }, []);
 
@@ -143,13 +148,13 @@ export default function SplashScreen() {
         ))}
       </div>
 
-      {/* Centered content */}
+      {/* Centered content: logo matches native splash (144px x 144px) */}
       <div className="relative flex flex-col items-center justify-center z-10 px-4">
         {/* Gentle pulsing glow behind the logo */}
         <div className="splash-glow" />
 
-        {/* Logo container with continuous diagonal shine sweep */}
-        <div className="splash-logo-container w-28 h-28 sm:w-36 sm:h-36">
+        {/* Logo container with continuous diagonal shine sweep - exactly 144px to match native splash */}
+        <div className="splash-logo-container w-[144px] h-[144px]">
           <img
             src="/logo/image_21332e.jpg"
             alt="NEOBATTLE"
@@ -162,10 +167,15 @@ export default function SplashScreen() {
         </div>
 
         {/* Brand name */}
-        <div className="mt-5 text-center">
+        <div className="mt-4 text-center">
           <span className="font-display font-black text-2xl sm:text-3xl tracking-widest gradient-text">
             NEOBATTLE
           </span>
+        </div>
+
+        {/* Thin gradient progress line */}
+        <div className="splash-progress-track mt-6 w-44 h-[2px] rounded-full overflow-hidden bg-white/10 relative">
+          <div className="splash-progress-bar absolute inset-y-0 w-2/5 rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-orange-500" />
         </div>
       </div>
     </div>

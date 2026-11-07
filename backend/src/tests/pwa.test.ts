@@ -566,5 +566,73 @@ test('Capacitor Android wrapper - /mobile structure, config, theme, and offline 
   assert.ok(capAuth.includes('generatePKCE'), 'capacitorAuth must implement PKCE generation');
 });
 
+test('App Mode Enhancements - Loading, Header, Scroll Reset, Leaderboard Top 3, Description Hiding, Login Gate', () => {
+  // 1. Loading animation in Capacitor and web splash
+  const splashPath = path.join(frontendDir, 'src', 'components', 'SplashScreen.tsx');
+  const splash = fs.readFileSync(splashPath, 'utf8');
+  assert.ok(splash.includes('w-[144px] h-[144px]'), 'Splash logo must be 144px by 144px matching native splash');
+  assert.ok(splash.includes('splash-progress-bar'), 'Splash must include gradient progress line');
+  assert.ok(!splash.includes('setMounted(false);\n        return;\n      }\n    } catch'), 'Splash must not skip Capacitor');
+
+  const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
+  const css = fs.readFileSync(cssPath, 'utf8');
+  assert.ok(css.includes('splash-progress-slide'), 'globals.css must define splash progress slide animation');
+  assert.ok(css.includes('.splash-progress-bar'), 'globals.css must style splash progress bar');
+
+  // 2. Header: solid black, no separate box, no border/shadow/blur, safe area
+  const navbarPath = path.join(frontendDir, 'src', 'components', 'Navbar.tsx');
+  const navbar = fs.readFileSync(navbarPath, 'utf8');
+  assert.ok(navbar.includes('bg-black border-none shadow-none backdrop-blur-none'), 'Navbar in app mode must be solid black with no border/shadow/blur');
+  assert.ok(navbar.includes('safe-area-inset-top'), 'Navbar must respect safe-area-inset-top');
+  assert.ok(css.includes('html.app-mode .site-navbar'), 'globals.css must style site-navbar in app-mode');
+
+  // 3. Scroll reset on route change and tab switch
+  const scrollResetPath = path.join(frontendDir, 'src', 'components', 'AppScrollReset.tsx');
+  assert.ok(fs.existsSync(scrollResetPath), 'AppScrollReset.tsx must exist');
+  const scrollReset = fs.readFileSync(scrollResetPath, 'utf8');
+  assert.ok(scrollReset.includes("behavior: 'instant'"), 'Scroll reset must use instant behavior');
+  assert.ok(scrollReset.includes('scrollRestoration = \'manual\''), 'Scroll reset must disable browser scroll restoration');
+
+  const appHomePath = path.join(frontendDir, 'src', 'components', 'app', 'AppHomeScreen.tsx');
+  const appHome = fs.readFileSync(appHomePath, 'utf8');
+  assert.ok(appHome.includes("behavior: 'instant'"), 'AppHomeScreen tab switches must scroll to top instantly');
+
+  // 4. Leaderboard Top 3 directly below Upcoming / My Matches
+  const leaderboardCardPath = path.join(frontendDir, 'src', 'components', 'app', 'HomeLeaderboardTop3.tsx');
+  assert.ok(fs.existsSync(leaderboardCardPath), 'HomeLeaderboardTop3.tsx must exist');
+  const leaderboardCard = fs.readFileSync(leaderboardCardPath, 'utf8');
+  assert.ok(leaderboardCard.includes('Leaderboard Top 3'), 'Card must have title Leaderboard Top 3');
+  assert.ok(leaderboardCard.includes('/leaderboards'), 'Card must link to /leaderboards');
+  assert.ok(leaderboardCard.includes('Avatar'), 'Card must render player avatars');
+  assert.ok(leaderboardCard.includes('LeagueBadge'), 'Card must render league tier badge');
+  assert.ok(appHome.includes('<HomeLeaderboardTop3 />'), 'AppHomeScreen must embed HomeLeaderboardTop3');
+
+  // 5. Hide descriptions using single shared helper class
+  assert.ok(css.includes('html.app-mode .app-desc'), 'globals.css must hide .app-desc in app-mode');
+  assert.ok(css.includes('html.app-mode .app-eyebrow'), 'globals.css must hide .app-eyebrow in app-mode');
+
+  const tournamentsPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'tournaments', 'page.tsx'), 'utf8');
+  assert.ok(tournamentsPage.includes('app-desc'), 'Tournaments page description must have app-desc');
+
+  const statsPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'stats', 'page.tsx'), 'utf8');
+  assert.ok(statsPage.includes('app-eyebrow'), 'Stats eyebrow must have app-eyebrow');
+  assert.ok(statsPage.includes('app-desc'), 'Stats description must have app-desc');
+
+  const shopPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'shop', 'page.tsx'), 'utf8');
+  assert.ok(shopPage.includes('app-desc'), 'Shop description must have app-desc');
+
+  // 6. Login first in app mode
+  const loginGatePath = path.join(frontendDir, 'src', 'components', 'AppLoginGate.tsx');
+  assert.ok(fs.existsSync(loginGatePath), 'AppLoginGate.tsx must exist');
+  const loginGate = fs.readFileSync(loginGatePath, 'utf8');
+  assert.ok(loginGate.includes('Welcome to NEOBATTLE') || loginGate.includes('Welcome to'), 'Login gate must greet user');
+  assert.ok(loginGate.includes('Continue with Google'), 'Login gate must have Google button');
+  assert.ok(loginGate.includes('Continue with Discord'), 'Login gate must have Discord button');
+  assert.ok(loginGate.includes('accessToken'), 'Login gate must check cached token hint');
+  assert.ok(loginGate.includes('/register'), 'Login gate must include link to create account');
+  assert.ok(navbar.includes('!isApp ? ('), 'Navbar must remove Login / Join Arena box in app mode');
+});
+
+
 
 

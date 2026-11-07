@@ -195,7 +195,7 @@ export default function DashboardPage() {
               Welcome, <span className="gradient-text">{displayUsername || user.displayName || user.username}</span>
               {userStats && <LeagueBadge wins={userStats.totalWins} size="md" />}
             </h1>
-            <p className="text-zinc-400 mt-1">Your command center for NEOBATTLE</p>
+            <p className="text-zinc-400 mt-1 app-desc">Your command center for NEOBATTLE</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <Link

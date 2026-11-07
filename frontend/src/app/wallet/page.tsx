@@ -182,7 +182,7 @@ export default function WalletPage() {
         <div className="text-center mb-10">
           <Wallet className="w-10 h-10 text-fire-400 mx-auto mb-4" />
           <h1 className="text-3xl font-display font-bold text-white">Wallet</h1>
-          <p className="text-zinc-400 mt-2">Manage your tournament funds</p>
+          <p className="text-zinc-400 mt-2 app-desc">Manage your tournament funds</p>
         </div>
 
         <div className="glass-card rounded-2xl p-8 mb-6 fire-glow text-center">

@@ -331,11 +331,11 @@ export default function SettingsPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fire-300">Player Controls</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fire-300 app-eyebrow">Player Controls</p>
         <h1 className="mt-3 text-3xl font-display font-bold text-white sm:text-4xl">
           <span className="gradient-text">Settings</span>
         </h1>
-        <p className="mt-2 text-zinc-400">Manage account preferences, notifications, and security.</p>
+        <p className="mt-2 text-zinc-400 app-desc">Manage account preferences, notifications, and security.</p>
       </motion.div>
 
       {message && (

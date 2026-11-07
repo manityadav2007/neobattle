@@ -30,6 +30,11 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => {
+                window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                if (document.documentElement) document.documentElement.scrollTop = 0;
+                if (document.body) document.body.scrollTop = 0;
+              }}
               className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${
                 active ? 'text-fire-400' : 'text-zinc-500 hover:text-zinc-300'
               }`}

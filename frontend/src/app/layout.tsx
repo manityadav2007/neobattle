@@ -8,6 +8,8 @@ import ConditionalFooter from '@/components/ConditionalFooter';
 import AppMain from '@/components/AppMain';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import SplashScreen from '@/components/SplashScreen';
+import AppScrollReset from '@/components/AppScrollReset';
+import AppLoginGate from '@/components/AppLoginGate';
 import { AuthProvider } from '@/hooks/useAuth';
 import './globals.css';
 
@@ -55,7 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;var i=window.navigator&&window.navigator.standalone===true;var r=document.referrer&&document.referrer.indexOf('android-app://')===0;var u=window.navigator&&window.navigator.userAgent&&window.navigator.userAgent.indexOf('NeoBattleApp')!==-1;var k=typeof window.Capacitor!=='undefined';var t=s||i||r||u||k;var e=document.documentElement;if(t){e.classList.add('app-mode');if(window.location.pathname==='/'){e.classList.add('app-home');}var v=document.querySelector('meta[name="viewport"]');if(v){var c=v.getAttribute('content')||'';if(c.indexOf('viewport-fit=cover')===-1){v.setAttribute('content',c+', viewport-fit=cover');}}}var isCapacitor=u||k;var d=sessionStorage.getItem('neobattle_splash_shown');if(isCapacitor||d){e.classList.add('twa-splash-dismissed');}else if(t){e.classList.add('twa-splash-active');}}catch(err){}})();`,
+            __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;var i=window.navigator&&window.navigator.standalone===true;var r=document.referrer&&document.referrer.indexOf('android-app://')===0;var u=window.navigator&&window.navigator.userAgent&&window.navigator.userAgent.indexOf('NeoBattleApp')!==-1;var k=typeof window.Capacitor!=='undefined';var t=s||i||r||u||k;var e=document.documentElement;if(t){e.classList.add('app-mode');if(window.location.pathname==='/'){e.classList.add('app-home');}var v=document.querySelector('meta[name="viewport"]');if(v){var c=v.getAttribute('content')||'';if(c.indexOf('viewport-fit=cover')===-1){v.setAttribute('content',c+', viewport-fit=cover');}}}var d=sessionStorage.getItem('neobattle_splash_shown');if(d){e.classList.add('twa-splash-dismissed');}else if(t){e.classList.add('twa-splash-active');}}catch(err){}})();`,
           }}
         />
       </head>
@@ -65,15 +67,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <SplashScreen />
         <AuthProvider>
+          <AppScrollReset />
           <ServiceWorkerRegister />
-          <Navbar />
-          <GlobalSidebar />
-          <AppMain>
-            <GlobalBackButton />
-            {children}
-          </AppMain>
-          <BottomNav />
-          <ConditionalFooter />
+          <AppLoginGate>
+            <Navbar />
+            <GlobalSidebar />
+            <AppMain>
+              <GlobalBackButton />
+              {children}
+            </AppMain>
+            <BottomNav />
+            <ConditionalFooter />
+          </AppLoginGate>
         </AuthProvider>
       </body>
     </html>

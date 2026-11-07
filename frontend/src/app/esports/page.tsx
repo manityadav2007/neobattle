@@ -99,7 +99,7 @@ function ComingSoonCard({ nextSeasonDate }: { nextSeasonDate?: string | null }) 
       <div className="absolute -bottom-32 -left-24 w-96 h-96 bg-fire-500/10 rounded-full blur-3xl" />
 
       <div className="relative z-10 px-6 sm:px-12 py-14 text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.25em] text-yellow-400 bg-yellow-500/10 border border-yellow-500/25 mb-8">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.25em] text-yellow-400 bg-yellow-500/10 border border-yellow-500/25 mb-8 app-eyebrow">
           <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
           Coming Soon
         </div>
@@ -113,7 +113,7 @@ function ComingSoonCard({ nextSeasonDate }: { nextSeasonDate?: string | null }) 
           <span className="block mt-2 gradient-text">Coming Soon</span>
         </h1>
 
-        <p className="text-zinc-400 max-w-xl mx-auto mb-8">
+        <p className="text-zinc-400 max-w-xl mx-auto mb-8 app-desc">
           We&apos;re building the ultimate competitive arena — bigger prize pools, pro squads,
           and live leaderboards. Stay tuned, champions are made here.
         </p>
@@ -371,12 +371,12 @@ export default function EsportsPage() {
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-2">
                 <Shield className="w-5 h-5 text-yellow-400" />
-                <span className="text-xs font-bold uppercase tracking-widest text-yellow-400">Pro Esports</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-yellow-400 app-eyebrow">Pro Esports</span>
               </div>
               <h1 className="text-4xl font-display font-bold text-white mb-2">
                 {season ? `Season ${season.seasonNumber}` : 'Esports Arena'}
               </h1>
-              <p className="text-zinc-400 mb-4">Powered by <span className="text-fire-400 font-bold">NEOBATTLE</span></p>
+              <p className="text-zinc-400 mb-4 app-desc">Powered by <span className="text-fire-400 font-bold">NEOBATTLE</span></p>
 
               {season && seasonEnded && season.winner && (
                 <div className="inline-flex items-center gap-3 px-5 py-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 mb-4">

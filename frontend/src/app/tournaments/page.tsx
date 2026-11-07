@@ -64,7 +64,7 @@ export default function TournamentsPage() {
                 <Trophy className="w-8 h-8 text-blue-400" />
                 Tournaments
               </h1>
-              <p className="text-zinc-400 mt-2">Find and join competitive Free Fire tournaments</p>
+              <p className="text-zinc-400 mt-2 app-desc">Find and join competitive Free Fire tournaments</p>
             </div>
             {canCreate && (
               <Link

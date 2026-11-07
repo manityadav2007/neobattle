@@ -70,7 +70,7 @@ export default function AuthSocialButtons() {
       () => {
         setLoadingProvider(null);
         setError('');
-        router.push('/dashboard');
+        router.push('/');
       },
       (err) => {
         setLoadingProvider(null);

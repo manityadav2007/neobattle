@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournaments } from '@/hooks/useTournaments';
+import HomeLeaderboardTop3 from './HomeLeaderboardTop3';
 import {
   Tournament,
   formatCurrency,
@@ -264,7 +265,12 @@ export default function AppHomeScreen() {
         <div className="flex border-b border-white/10 gap-4">
           <button
             type="button"
-            onClick={() => setTab('upcoming')}
+            onClick={() => {
+              setTab('upcoming');
+              window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+              if (document.documentElement) document.documentElement.scrollTop = 0;
+              if (document.body) document.body.scrollTop = 0;
+            }}
             className={`relative pb-3 text-sm font-semibold transition-colors ${
               tab === 'upcoming' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
             }`}
@@ -281,7 +287,12 @@ export default function AppHomeScreen() {
           </button>
           <button
             type="button"
-            onClick={() => setTab('mine')}
+            onClick={() => {
+              setTab('mine');
+              window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+              if (document.documentElement) document.documentElement.scrollTop = 0;
+              if (document.body) document.body.scrollTop = 0;
+            }}
             className={`relative pb-3 text-sm font-semibold transition-colors ${
               tab === 'mine' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
             }`}
@@ -354,6 +365,9 @@ export default function AppHomeScreen() {
             )}
           </motion.div>
         </AnimatePresence>
+
+        {/* Directly below Upcoming / My Matches: Leaderboard Top 3 Card */}
+        <HomeLeaderboardTop3 />
 
         <p className="mt-8 flex items-center justify-center gap-1.5 pb-2 text-center text-xs text-zinc-500">
           <ShieldCheck className="h-4 w-4 text-emerald-400" />

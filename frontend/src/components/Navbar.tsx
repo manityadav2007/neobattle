@@ -72,11 +72,22 @@ export default function Navbar() {
   const walletBalance = user?.wallet?.balance ?? 0;
 
   return (
-    <nav className="site-navbar fixed top-0 left-0 right-0 z-50 glass-card border-b border-white/5">
+    <nav
+      className={`site-navbar fixed top-0 left-0 right-0 z-50 ${
+        isApp
+          ? 'bg-black border-none shadow-none backdrop-blur-none'
+          : 'glass-card border-b border-white/5'
+      }`}
+      style={isApp ? { paddingTop: 'env(safe-area-inset-top, 0px)', background: '#000000' } : undefined}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo on the left */}
-          <Link href="/" className="flex items-center gap-2 group ml-4" onClick={closeMenu}>
+          <Link
+            href="/"
+            className={`flex items-center gap-2 group ${isApp ? 'ml-0' : 'ml-4'}`}
+            onClick={closeMenu}
+          >
             <div className="flex items-center justify-center w-12 h-12">
               <LogoAsset className="w-full h-full object-contain" />
             </div>
@@ -189,8 +200,8 @@ export default function Navbar() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.18 }}
-            className={`glass-card border-t border-white/5 px-4 py-4 space-y-2 max-h-[calc(100vh-4rem)] overflow-y-auto ${
-              isApp ? 'block' : 'md:hidden'
+            className={`border-t border-white/5 px-4 py-4 space-y-2 max-h-[calc(100vh-4rem)] overflow-y-auto ${
+              isApp ? 'block bg-black shadow-none border-t border-zinc-900' : 'glass-card md:hidden'
             }`}
           >
             {menuView === 'about' ? (
@@ -272,7 +283,7 @@ export default function Navbar() {
                       </span>
                     </div>
                   </Link>
-                ) : (
+                ) : !isApp ? (
                   <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 mb-2">
                     <p className="text-sm font-bold text-white mb-1">Welcome to NEOBATTLE</p>
                     <p className="text-xs text-zinc-400 mb-3">
@@ -295,7 +306,7 @@ export default function Navbar() {
                       </Link>
                     </div>
                   </div>
-                )}
+                ) : null}
 
                 {/* 2. My Profile */}
                 <Link
