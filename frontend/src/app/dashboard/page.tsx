@@ -142,8 +142,23 @@ export default function DashboardPage() {
       );
     }
     return (
-      <div className="max-w-7xl mx-auto px-4 py-20">
-        <div className="glass-card rounded-2xl h-64 animate-pulse" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white/10 animate-pulse" />
+            <div className="h-8 w-48 rounded-lg bg-white/10 animate-pulse" />
+          </div>
+          <div className="flex gap-2">
+            <div className="h-10 w-28 rounded-xl bg-white/10 animate-pulse" />
+            <div className="h-10 w-28 rounded-xl bg-white/10 animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="glass-card rounded-2xl p-5 h-28 animate-pulse bg-white/5" />
+          ))}
+        </div>
+        <div className="glass-card rounded-2xl p-6 h-64 animate-pulse bg-white/5" />
       </div>
     );
   }

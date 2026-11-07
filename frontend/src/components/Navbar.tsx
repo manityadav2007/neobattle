@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import {
   BarChart3,
   CircleHelp,
+  Info,
   LogOut,
   Medal,
   Menu,
@@ -20,10 +21,10 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useIsApp } from '@/hooks/useIsApp';
 import LogoAsset from '@/components/LogoAsset';
 import Avatar from '@/components/Avatar';
 import NotificationBell from '@/components/NotificationBell';
+import SettingsAboutSheet from '@/components/SettingsAboutSheet';
 import { resolveAssetUrl } from '@/lib/services';
 
 const navLinks = [
@@ -39,7 +40,7 @@ export default function Navbar() {
   const router = useRouter();
   const { user, loading, logout, isAdmin, isSuperAdmin, isHost } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isApp = useIsApp();
+  const [aboutSheetOpen, setAboutSheetOpen] = useState(false);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
@@ -50,10 +51,8 @@ export default function Navbar() {
     }
   };
 
-  // The installed app has its own native-style home chrome.
-  if (isApp && pathname === '/') return null;
-
   return (
+    <>
     <nav className="site-navbar fixed top-0 left-0 right-0 z-50 glass-card border-b border-white/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -226,6 +225,15 @@ export default function Navbar() {
 
               <button
                 type="button"
+                onClick={() => { setMobileOpen(false); setAboutSheetOpen(true); }}
+                className="flex w-full items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5 text-left"
+              >
+                <Info className="w-5 h-5 text-fire-400" />
+                Settings &amp; About
+              </button>
+
+              <button
+                type="button"
                 onClick={() => { setMobileOpen(false); logout(); }}
                 className="flex w-full items-center gap-3 px-4 py-3 rounded-lg text-red-400 hover:bg-red-500/10"
               >
@@ -234,8 +242,21 @@ export default function Navbar() {
               </button>
             </div>
           )}
+
+          {!user && (
+            <button
+              type="button"
+              onClick={() => { setMobileOpen(false); setAboutSheetOpen(true); }}
+              className="flex w-full items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-white/5 text-left text-sm"
+            >
+              <Info className="w-4 h-4 text-fire-400" />
+              Settings &amp; About
+            </button>
+          )}
         </motion.div>
       )}
     </nav>
+    <SettingsAboutSheet open={aboutSheetOpen} onClose={() => setAboutSheetOpen(false)} />
+    </>
   );
 }

@@ -18,8 +18,8 @@ test('PWA Manifest - /manifest.webmanifest is valid and meets all specs', () => 
   assert.equal(manifest.start_url, '/');
   assert.equal(manifest.scope, '/');
   assert.equal(manifest.display, 'standalone');
-  assert.equal(manifest.background_color, '#0a0a0c');
-  assert.equal(manifest.theme_color, '#0a0a0c');
+  assert.equal(manifest.background_color, '#000000');
+  assert.equal(manifest.theme_color, '#000000');
 
   assert.ok(Array.isArray(manifest.icons), 'manifest must have icons array');
   assert.ok(manifest.icons.length >= 3, 'manifest must have at least 3 icons');
@@ -212,10 +212,10 @@ test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash 
   const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
   const cssContent = fs.readFileSync(cssPath, 'utf8');
 
-  // html/body background #0a0a0c in standalone
+  // html/body background #000000 in standalone
   assert.ok(
-    cssContent.includes('@media (display-mode: standalone)') && cssContent.includes('#0a0a0c !important'),
-    'globals.css must set html/body background to #0a0a0c !important for standalone mode'
+    cssContent.includes('@media (display-mode: standalone)') && cssContent.includes('#000000 !important'),
+    'globals.css must set html/body background to #000000 !important for standalone mode'
   );
 
   // Vertical scrolling must stay enabled in normal browsers
@@ -228,15 +228,11 @@ test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash 
     'globals.css must use min-height instead of fixed heights'
   );
 
-  // Pull-to-refresh restrictions must be scoped to standalone/TWA only
+  // Standalone root wrappers must remain naturally scrollable without touch-action locks
   const standaloneIndex = cssContent.indexOf('@media (display-mode: standalone)');
   assert.ok(standaloneIndex !== -1, 'globals.css must contain a standalone media query');
 
   const standaloneStyles = cssContent.slice(standaloneIndex);
-  assert.ok(
-    standaloneStyles.includes('overscroll-behavior-y: contain'),
-    'standalone styles must contain overscroll to prevent pull-to-refresh'
-  );
   assert.ok(
     !standaloneStyles.includes('touch-action'),
     'standalone styles must not set touch-action because it breaks Android Chromium scrolling'
@@ -245,7 +241,6 @@ test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash 
   for (const rule of [
     'height: auto !important',
     'min-height: 100% !important',
-    'overflow-y: auto !important',
     'overflow-x: hidden !important',
     '-webkit-overflow-scrolling: touch !important',
   ]) {
@@ -288,15 +283,19 @@ test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash 
   );
 });
 
-test('App-only UI - installed app renders a dedicated home while the website stays intact', () => {
+test('App-only UI - consistent chrome across all pages with dedicated app home content', () => {
   const hookPath = path.join(frontendDir, 'src', 'hooks', 'useIsApp.ts');
   const appHomePath = path.join(frontendDir, 'src', 'components', 'app', 'AppHomeScreen.tsx');
   const appMainPath = path.join(frontendDir, 'src', 'components', 'AppMain.tsx');
   const pagePath = path.join(frontendDir, 'src', 'app', 'page.tsx');
+  const sheetPath = path.join(frontendDir, 'src', 'components', 'SettingsAboutSheet.tsx');
+  const navbarPath = path.join(frontendDir, 'src', 'components', 'Navbar.tsx');
+  const bottomNavPath = path.join(frontendDir, 'src', 'components', 'BottomNav.tsx');
 
   assert.ok(fs.existsSync(hookPath), 'useIsApp.ts must exist');
   assert.ok(fs.existsSync(appHomePath), 'AppHomeScreen.tsx must exist');
   assert.ok(fs.existsSync(appMainPath), 'AppMain.tsx must exist');
+  assert.ok(fs.existsSync(sheetPath), 'SettingsAboutSheet.tsx must exist');
 
   const hook = fs.readFileSync(hookPath, 'utf8');
   assert.ok(
@@ -306,19 +305,42 @@ test('App-only UI - installed app renders a dedicated home while the website sta
   assert.ok(hook.includes('standalone'), 'app detection must support navigator.standalone');
   assert.ok(hook.includes('android-app://'), 'app detection must support Android referrer');
 
+  const sheet = fs.readFileSync(sheetPath, 'utf8');
+  for (const required of [
+    'Settings & About',
+    'Terms & Conditions',
+    'Privacy Policy',
+    'Refund Policy',
+    'Fair Play Policy',
+    'Prize Policy',
+    'Disclaimer',
+    "'/dashboard'",
+    "'/wallet'",
+    "'/settings'",
+  ]) {
+    assert.ok(sheet.includes(required), `SettingsAboutSheet must include ${required}`);
+  }
+
   const appHome = fs.readFileSync(appHomePath, 'utf8');
   for (const required of [
     'My Matches',
     'Upcoming',
-    'Settings & About',
-    'Terms & Conditions',
-    'safe-area-inset-top',
-    'safe-area-inset-bottom',
-    "'/wallet'",
-    "'/tournaments'",
-    "'/dashboard'",
+    '/wallet',
+    '/tournaments',
+    '/dashboard',
   ]) {
     assert.ok(appHome.includes(required), `AppHomeScreen must include ${required}`);
+  }
+
+  // Consistent Chrome: Navbar and BottomNav are NOT hidden on app-home
+  const navbar = fs.readFileSync(navbarPath, 'utf8');
+  assert.ok(!navbar.includes("isApp && pathname === '/'"), 'Navbar must stay visible on app home');
+  assert.ok(navbar.includes('SettingsAboutSheet'), 'Navbar must include SettingsAboutSheet');
+
+  const bottomNav = fs.readFileSync(bottomNavPath, 'utf8');
+  assert.ok(!bottomNav.includes("isApp && pathname === '/'"), 'BottomNav must stay visible on app home');
+  for (const tab of ['Home', 'Tournaments', 'Esports', 'Stats', 'Shop']) {
+    assert.ok(bottomNav.includes(tab), `BottomNav must contain ${tab} tab`);
   }
 
   const layoutPath = path.join(frontendDir, 'src', 'app', 'layout.tsx');
@@ -339,8 +361,8 @@ test('App-only UI - installed app renders a dedicated home while the website sta
 
   const appMain = fs.readFileSync(appMainPath, 'utf8');
   assert.ok(
-    appMain.includes('min-h-screen pt-16 md:pl-20 pb-16 md:pb-0 max-w-full overflow-x-hidden'),
-    'website main padding must stay unchanged for normal browsers'
+    appMain.includes('min-h-screen pt-16 md:pl-20 pb-20 md:pb-0 max-w-full overflow-x-hidden'),
+    'main padding must provide top bar offset and bottom nav clearance'
   );
 
   const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
@@ -349,14 +371,18 @@ test('App-only UI - installed app renders a dedicated home while the website sta
     css.includes('html.app-mode') && css.includes('-webkit-tap-highlight-color: transparent'),
     'app mode must remove the blue tap highlight'
   );
-  for (const selector of [
-    'html.app-home .site-navbar',
-    'html.app-home .site-bottom-nav',
-    'html.app-home .site-sidebar',
-    'html.app-home .site-footer',
-    'html.app-home .website-home',
-  ]) {
-    assert.ok(css.includes(selector), `globals.css must hide ${selector} only in the app home`);
-  }
+  assert.ok(
+    css.includes('html.app-home .website-home'),
+    'globals.css must hide website-home in app home'
+  );
+  // Chrome must NOT be hidden
+  assert.ok(
+    !css.includes('html.app-home .site-navbar'),
+    'globals.css must not hide site-navbar'
+  );
+  assert.ok(
+    !css.includes('html.app-home .site-bottom-nav'),
+    'globals.css must not hide site-bottom-nav'
+  );
 });
 

@@ -2,25 +2,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ChevronRight,
   Clock,
   Crosshair,
   Gamepad2,
-  Home,
   Info,
   MapPin,
-  Settings,
   ShieldCheck,
   Trophy,
   UserRound,
   Wallet,
-  X,
   Zap,
 } from 'lucide-react';
 import Avatar from '@/components/Avatar';
+import SettingsAboutSheet from '@/components/SettingsAboutSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournaments } from '@/hooks/useTournaments';
 import {
@@ -41,29 +37,6 @@ interface MyEntry {
 }
 
 type AppTab = 'upcoming' | 'mine';
-
-const appNavItems = [
-  { href: '/', label: 'Home', icon: Home },
-  { href: '/tournaments', label: 'Tournaments', icon: Trophy },
-  { href: '/wallet', label: 'Wallet', icon: Wallet },
-  { href: '/dashboard', label: 'Profile', icon: UserRound },
-];
-
-const legalLinks = [
-  { label: 'Terms & Conditions', href: '/terms' },
-  { label: 'Privacy Policy', href: '/privacy' },
-  { label: 'Refund Policy', href: '/refund' },
-  { label: 'Fair Play Policy', href: '/fair-play' },
-  { label: 'Prize Policy', href: '/prize-policy' },
-  { label: 'Disclaimer', href: '/disclaimer' },
-];
-
-const sheetLinks = [
-  { label: 'My Profile', href: '/dashboard', icon: UserRound },
-  { label: 'Wallet', href: '/wallet', icon: Wallet },
-  { label: 'Settings', href: '/settings', icon: Settings },
-  { label: 'Help & Feedback', href: '/help-feedback', icon: Info },
-];
 
 function getStatusLabel(status: string): string {
   switch (status) {
@@ -122,7 +95,6 @@ function toNumber(value: number | string | null | undefined): number {
 }
 
 export default function AppHomeScreen() {
-  const pathname = usePathname();
   const { user, loading: authLoading } = useAuth();
   const { tournaments, loading: tournamentsLoading } = useTournaments();
   const [tab, setTab] = useState<AppTab>('upcoming');
@@ -185,376 +157,275 @@ export default function AppHomeScreen() {
   const openMatches = myEntries.filter(({ tournament }) => !isTournamentEnded(tournament)).length;
 
   return (
-    <div className="relative min-h-screen bg-[#0a0a0c] text-white">
-      <div className="mx-auto w-full max-w-lg pb-[calc(108px+env(safe-area-inset-bottom,0px))]">
-        {/* App header */}
-        <header
-          className="relative z-30 border-b border-white/5 bg-[#0a0a0c]/90 backdrop-blur-xl"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)' }}
-        >
-          <div className="flex items-center justify-between gap-2 px-4 pb-3">
-            <Link href="/dashboard" className="flex min-h-[44px] min-w-0 items-center gap-3">
+    <div className="relative w-full max-w-lg mx-auto px-4 pb-12 text-white">
+      {/* Quick User & Wallet Status Chip inside home content */}
+      <div className="pt-3 pb-2">
+        {user ? (
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md">
+            <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0 group">
               <Avatar
-                src={resolveAssetUrl(user?.avatarUrl)}
+                src={resolveAssetUrl(user.avatarUrl)}
                 alt={displayName}
-                size={42}
-                className="ring-2 ring-fire-500/30"
+                size={36}
+                className="ring-1 ring-fire-500/30 group-hover:ring-fire-400 transition-all"
               />
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                <p className="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider truncate">
                   {greeting}
                 </p>
-                <p className="truncate text-sm font-bold text-white">{displayName}</p>
+                <p className="text-xs font-bold text-white truncate group-hover:text-fire-300 transition-colors">
+                  {displayName}
+                </p>
               </div>
             </Link>
-
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <Link
-                href={user ? '/wallet' : '/login'}
-                className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 text-sm font-semibold text-white transition-colors active:bg-white/[0.1]"
+                href="/wallet"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.05] text-xs font-semibold text-white hover:bg-white/[0.1] transition-colors"
               >
-                <Wallet className="h-4 w-4 text-fire-400" />
+                <Wallet className="h-3.5 w-3.5 text-fire-400" />
                 <span className="tabular-nums">
-                  {authLoading ? '—' : user ? formatCurrency(walletBalance) : 'Sign in'}
+                  {authLoading ? '—' : formatCurrency(walletBalance)}
                 </span>
               </Link>
               <button
                 type="button"
                 onClick={() => setSheetOpen(true)}
                 aria-label="Open settings and about"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-zinc-300 transition-colors active:bg-white/[0.1]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-zinc-400 hover:text-white transition-colors"
               >
-                <Settings className="h-5 w-5" />
+                <Info className="h-4 w-4" />
               </button>
             </div>
           </div>
-        </header>
-
-        <div className="px-4">
-          {/* Active tournament carousel */}
-          {featured.length > 0 && (
-            <section className="pt-5">
-              <div className="mb-3 flex items-end justify-between">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-fire-400">
-                    Jump in now
-                  </p>
-                  <h2 className="text-lg font-display font-bold">
-                    {live.length > 0 ? 'Live & Active' : 'Featured Tournaments'}
-                  </h2>
-                </div>
-                <Link
-                  href="/tournaments"
-                  className="flex min-h-[44px] items-center gap-0.5 text-xs font-semibold text-zinc-400 transition-colors active:text-white"
-                >
-                  See all <ChevronRight className="h-4 w-4" />
-                </Link>
-              </div>
-
-              <div className="app-hide-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1">
-                {featured.map((tournament) => {
-                  const theme = getMapTheme(tournament.mapName);
-                  const status = getEffectiveStatus(tournament);
-                  const entryFee = toNumber(tournament.entryFee);
-                  return (
-                    <Link
-                      key={tournament.id}
-                      href={`/tournaments/${tournament.id}`}
-                      className="relative flex min-h-[168px] w-[86%] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-3xl border border-white/10 p-4 transition-transform active:scale-[0.985]"
-                      style={{ backgroundImage: `linear-gradient(${theme.gradient})` }}
-                    >
-                      <div
-                        className="pointer-events-none absolute inset-0"
-                        style={{ backgroundImage: theme.overlay }}
-                        aria-hidden="true"
-                      />
-                      <div className="relative flex items-start justify-between gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusPillClass(status)}`}
-                        >
-                          <Zap className="h-3 w-3" />
-                          {getStatusLabel(status)}
-                        </span>
-                        <span className="rounded-full border border-white/15 bg-black/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90">
-                          {tournament.format}
-                        </span>
-                      </div>
-
-                      <div className="relative">
-                        <h3 className="line-clamp-1 text-xl font-display font-black uppercase tracking-wide drop-shadow">
-                          {tournament.title}
-                        </h3>
-                        <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-white/75">
-                          <ModeIcon gameMode={tournament.gameMode} className="h-3.5 w-3.5" />
-                          {modeLabel(tournament.gameMode)}
-                          <span className="text-white/40">•</span>
-                          {theme.label}
-                        </p>
-                        <div className="mt-3 flex items-end justify-between gap-2">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wider text-white/60">Prize pool</p>
-                            <p className="text-lg font-bold text-white">{formatCurrency(tournament.prizePool)}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[10px] uppercase tracking-wider text-white/60">
-                              {entryFee === 0 ? 'Free entry' : 'Entry'}
-                            </p>
-                            <p className="text-sm font-bold text-white">
-                              {entryFee === 0 ? 'FREE' : formatCurrency(entryFee)}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-white/75">
-                          <Clock className="h-3.5 w-3.5" />
-                          {getCountdown(tournament.startTime)}
-                        </p>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* Quick stats */}
-          <section className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-[#111116] p-3.5">
-              <div className="flex items-center gap-2 text-emerald-400">
-                <Trophy className="h-4 w-4" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Open now</span>
-              </div>
-              <p className="mt-1 text-xl font-bold tabular-nums">{upcoming.length}</p>
-              <p className="text-[11px] text-zinc-500">Tournaments taking entries</p>
+        ) : (
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl border border-white/10 bg-white/[0.03]">
+            <div className="flex items-center gap-2 text-xs text-zinc-400 min-w-0">
+              <Zap className="h-4 w-4 text-fire-400 shrink-0" />
+              <span className="truncate">Compete in Free Fire Tournaments</span>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-[#111116] p-3.5">
-              <div className="flex items-center gap-2 text-fire-400">
-                <Gamepad2 className="h-4 w-4" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">My matches</span>
-              </div>
-              <p className="mt-1 text-xl font-bold tabular-nums">{user ? openMatches : '—'}</p>
-              <p className="text-[11px] text-zinc-500">Upcoming registrations</p>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Link
+                href="/login"
+                className="px-3 py-1.5 rounded-xl btn-fire text-xs font-bold text-white"
+              >
+                Sign In
+              </Link>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(true)}
+                aria-label="Open settings and about"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-zinc-400 hover:text-white transition-colors"
+              >
+                <Info className="h-4 w-4" />
+              </button>
             </div>
-          </section>
-
-          {/* Tabs */}
-          <div className="mt-6 flex rounded-2xl border border-white/10 bg-white/[0.03] p-1">
-            <button
-              type="button"
-              onClick={() => setTab('upcoming')}
-              className={`relative min-h-[44px] flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                tab === 'upcoming' ? 'bg-white/[0.08] text-white' : 'text-zinc-500'
-              }`}
-            >
-              Upcoming
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('mine')}
-              className={`relative min-h-[44px] flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                tab === 'mine' ? 'bg-white/[0.08] text-white' : 'text-zinc-500'
-              }`}
-            >
-              My Matches
-              {user && myEntries.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-fire-500/20 px-1.5 py-0.5 text-[10px] font-bold text-fire-300">
-                  {myEntries.length}
-                </span>
-              )}
-            </button>
           </div>
-
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={tab}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}
-              className="mt-4 space-y-2.5"
-            >
-              {tab === 'upcoming' ? (
-                tournamentsLoading ? (
-                  <TournamentSkeleton count={3} />
-                ) : upcoming.length > 0 ? (
-                  upcoming.map((tournament) => (
-                    <CompactTournamentCard key={tournament.id} tournament={tournament} />
-                  ))
-                ) : (
-                  <EmptyState
-                    icon={<Trophy className="h-7 w-7" />}
-                    title="No open tournaments"
-                    body="New Free Fire tournaments drop soon. Pull down to refresh or check the tournaments tab."
-                    actionHref="/tournaments"
-                    actionLabel="Browse tournaments"
-                  />
-                )
-              ) : !user ? (
-                <EmptyState
-                  icon={<UserRound className="h-7 w-7" />}
-                  title="Sign in to see your matches"
-                  body="Your registrations, room details, and match history appear here."
-                  actionHref="/login"
-                  actionLabel="Sign in"
-                />
-              ) : myLoading ? (
-                <TournamentSkeleton count={2} />
-              ) : myEntries.length > 0 ? (
-                myEntries.map((entry) => (
-                  <CompactTournamentCard
-                    key={entry.id}
-                    tournament={entry.tournament}
-                    registeredAt={entry.registeredAt}
-                  />
-                ))
-              ) : (
-                <EmptyState
-                  icon={<Gamepad2 className="h-7 w-7" />}
-                  title="No registrations yet"
-                  body="Join an open tournament and it will show up here with room details."
-                  actionHref="/tournaments"
-                  actionLabel="Find a match"
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
-
-          <p className="mt-8 flex items-center justify-center gap-1.5 pb-2 text-center text-[11px] text-zinc-600">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Skill-based esports · Secure wallet
-          </p>
-        </div>
+        )}
       </div>
 
-      {/* Bottom navigation */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-      >
-        <div className="mx-auto max-w-lg px-3 pb-2">
-          <div className="flex items-center justify-around rounded-3xl border border-white/10 bg-[#101014]/95 p-1.5 shadow-[0_-8px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-            {appNavItems.map((item) => {
-              const Icon = item.icon;
-              const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+      {/* Active tournament carousel */}
+      {featured.length > 0 && (
+        <section className="pt-3">
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-fire-400">
+                Jump in now
+              </p>
+              <h2 className="text-lg font-display font-bold">
+                {live.length > 0 ? 'Live & Active' : 'Featured Tournaments'}
+              </h2>
+            </div>
+            <Link
+              href="/tournaments"
+              className="text-xs font-semibold text-zinc-400 active:text-white transition-colors"
+            >
+              See all
+            </Link>
+          </div>
+
+          <div className="app-hide-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 pt-1 -mx-4 px-4">
+            {featured.map((tournament) => {
+              const theme = getMapTheme(tournament.mapName);
+              const status = getEffectiveStatus(tournament);
+              const entryFee = toNumber(tournament.entryFee);
+
               return (
                 <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? 'page' : undefined}
-                  className={`relative flex min-h-[48px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-1.5 text-[10px] font-semibold transition-colors ${
-                    active ? 'text-fire-300' : 'text-zinc-500 active:text-zinc-200'
-                  }`}
+                  key={tournament.id}
+                  href={`/tournaments/${tournament.id}`}
+                  className="relative flex min-h-[168px] w-[86%] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-3xl border border-white/10 p-4 transition-transform active:scale-[0.985]"
+                  style={{ backgroundImage: `linear-gradient(${theme.gradient})` }}
                 >
-                  {active && (
-                    <motion.span
-                      layoutId="app-bottom-nav-active"
-                      className="absolute inset-0 rounded-2xl bg-fire-500/12"
-                      transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-                    />
-                  )}
-                  <Icon
-                    className={`relative h-5 w-5 ${
-                      active ? 'drop-shadow-[0_0_6px_rgba(249,115,22,0.45)]' : ''
-                    }`}
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{ backgroundImage: theme.overlay }}
+                    aria-hidden="true"
                   />
-                  <span className="relative">{item.label}</span>
+                  <div className="relative flex items-start justify-between gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusPillClass(status)}`}
+                    >
+                      <Zap className="h-3 w-3" />
+                      {getStatusLabel(status)}
+                    </span>
+                    <span className="rounded-full border border-white/15 bg-black/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90">
+                      {tournament.format}
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <h3 className="line-clamp-1 text-xl font-display font-black uppercase tracking-wide drop-shadow">
+                      {tournament.title}
+                    </h3>
+                    <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-white/75">
+                      <ModeIcon gameMode={tournament.gameMode} className="h-3.5 w-3.5" />
+                      {modeLabel(tournament.gameMode)}
+                      <span className="text-white/40">•</span>
+                      {theme.label}
+                    </p>
+                    <div className="mt-3 flex items-end justify-between gap-2">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/60">Prize pool</p>
+                        <p className="text-lg font-bold text-white">{formatCurrency(tournament.prizePool)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-wider text-white/60">
+                          {entryFee === 0 ? 'Free entry' : 'Entry'}
+                        </p>
+                        <p className="text-sm font-bold text-white">
+                          {entryFee === 0 ? 'FREE' : formatCurrency(entryFee)}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-white/75">
+                      <Clock className="h-3.5 w-3.5" />
+                      {getCountdown(tournament.startTime)}
+                    </p>
+                  </div>
                 </Link>
               );
             })}
           </div>
+        </section>
+      )}
+
+      {/* Quick stats */}
+      <section className="mt-5 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+            Open Tournaments
+          </p>
+          <p className="mt-1 text-2xl font-display font-black text-fire-400">
+            {upcoming.length}
+          </p>
         </div>
-      </nav>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+            My Registered Matches
+          </p>
+          <p className="mt-1 text-2xl font-display font-black text-white">
+            {user ? openMatches : '—'}
+          </p>
+        </div>
+      </section>
+
+      {/* Tab switch — Upcoming vs My Matches */}
+      <div className="mt-6">
+        <div className="flex rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+          <button
+            type="button"
+            onClick={() => setTab('upcoming')}
+            className={`relative min-h-[44px] flex-1 rounded-xl text-sm font-semibold transition-colors ${
+              tab === 'upcoming' ? 'bg-white/[0.08] text-white' : 'text-zinc-500'
+            }`}
+          >
+            Upcoming
+            {upcoming.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-zinc-300">
+                {upcoming.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('mine')}
+            className={`relative min-h-[44px] flex-1 rounded-xl text-sm font-semibold transition-colors ${
+              tab === 'mine' ? 'bg-white/[0.08] text-white' : 'text-zinc-500'
+            }`}
+          >
+            My Matches
+            {user && myEntries.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-fire-500/20 px-1.5 py-0.5 text-[10px] font-bold text-fire-300">
+                {myEntries.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="mt-4 space-y-2.5"
+          >
+            {tab === 'upcoming' ? (
+              tournamentsLoading ? (
+                <TournamentSkeleton count={3} />
+              ) : upcoming.length > 0 ? (
+                upcoming.map((tournament) => (
+                  <CompactTournamentCard key={tournament.id} tournament={tournament} />
+                ))
+              ) : (
+                <EmptyState
+                  icon={<Trophy className="h-7 w-7" />}
+                  title="No open tournaments"
+                  body="New Free Fire tournaments drop soon. Check back shortly."
+                  actionHref="/tournaments"
+                  actionLabel="Browse tournaments"
+                />
+              )
+            ) : !user ? (
+              <EmptyState
+                icon={<UserRound className="h-7 w-7" />}
+                title="Sign in to see your matches"
+                body="Your registrations, room details, and match history appear here."
+                actionHref="/login"
+                actionLabel="Sign in"
+              />
+            ) : myLoading ? (
+              <TournamentSkeleton count={2} />
+            ) : myEntries.length > 0 ? (
+              myEntries.map((entry) => (
+                <CompactTournamentCard
+                  key={entry.id}
+                  tournament={entry.tournament}
+                  registeredAt={entry.registeredAt}
+                />
+              ))
+            ) : (
+              <EmptyState
+                icon={<Gamepad2 className="h-7 w-7" />}
+                title="No registrations yet"
+                body="Join an open tournament and it will show up here with room details."
+                actionHref="/tournaments"
+                actionLabel="Find a match"
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        <p className="mt-8 flex items-center justify-center gap-1.5 pb-2 text-center text-[11px] text-zinc-600">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Skill-based esports · Secure wallet
+        </p>
+      </div>
 
       {/* Settings & About sheet */}
-      <AnimatePresence>
-        {sheetOpen && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <button
-              type="button"
-              aria-label="Close settings"
-              onClick={() => setSheetOpen(false)}
-              className="absolute inset-0 h-full w-full bg-black/70 backdrop-blur-sm"
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Settings and About"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', stiffness: 380, damping: 34 }}
-              className="relative max-h-[86vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-3xl border-t border-white/10 bg-[#111116] px-4 pt-3 shadow-[0_-20px_60px_rgba(0,0,0,0.6)]"
-              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}
-            >
-              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15" />
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-fire-400">NeoBattle App</p>
-                  <h2 className="text-lg font-bold">Settings &amp; About</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSheetOpen(false)}
-                  aria-label="Close settings"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-zinc-300"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {sheetLinks.map(({ label, href, icon: Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setSheetOpen(false)}
-                    className="flex min-h-[52px] items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 text-sm font-medium text-zinc-200 transition-colors active:bg-white/[0.08]"
-                  >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-fire-500/10 text-fire-300">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    {label}
-                  </Link>
-                ))}
-              </div>
-
-              <div className="mt-5">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
-                  Legal &amp; Policies
-                </p>
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
-                  {legalLinks.map((link, index) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setSheetOpen(false)}
-                      className={`flex min-h-[48px] items-center justify-between px-4 text-sm text-zinc-300 transition-colors active:bg-white/[0.06] ${
-                        index > 0 ? 'border-t border-white/5' : ''
-                      }`}
-                    >
-                      {link.label}
-                      <ChevronRight className="h-4 w-4 text-zinc-600" />
-                    </Link>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-5 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-                <span>NeoBattle for Android</span>
-                <span className="font-semibold text-zinc-400">v1.0.0</span>
-              </div>
-
-              <p className="mt-4 text-center text-[11px] leading-relaxed text-zinc-600">
-                NeoBattle is a skill-based esports platform. Play responsibly and follow the fair play policy.
-              </p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <SettingsAboutSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>
   );
 }

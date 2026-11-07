@@ -70,8 +70,13 @@ export default function ShopPage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-20 flex justify-center">
-        <Loader2 className="w-8 h-8 text-fire-400 animate-spin" />
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
+        <div className="glass-card rounded-2xl p-6 h-32 animate-pulse bg-white/5" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="glass-card rounded-2xl p-5 h-44 animate-pulse bg-white/5" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -125,7 +130,11 @@ export default function ShopPage() {
             <p className="text-zinc-400">Please <a href="/login" className="text-fire-400 hover:underline">login</a> to purchase redeem codes</p>
           </div>
         ) : loadingData ? (
-          <div className="py-12 flex justify-center mb-10"><Loader2 className="w-7 h-7 text-fire-400 animate-spin" /></div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="glass-card rounded-2xl p-5 h-44 animate-pulse bg-white/5" />
+            ))}
+          </div>
         ) : cards.length === 0 ? (
           <div className="glass-card rounded-2xl p-10 text-center mb-10">
             <SiGoogleplay className="w-10 h-10 text-zinc-600 mx-auto mb-3" />

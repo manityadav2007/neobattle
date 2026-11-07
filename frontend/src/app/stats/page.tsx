@@ -47,8 +47,10 @@ export default function StatsPage() {
 
       <div className="mt-14">
         {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="w-8 h-8 text-fire-400 animate-spin" />
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-10">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="glass-card rounded-2xl p-6 h-36 animate-pulse bg-white/5" />
+            ))}
           </div>
         ) : error ? (
           <div className="glass-card rounded-2xl p-10 text-center">

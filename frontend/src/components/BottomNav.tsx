@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BarChart3, Home, Radio, ShoppingBag, Trophy } from 'lucide-react';
-import { useIsApp } from '@/hooks/useIsApp';
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
@@ -15,15 +14,11 @@ const navItems = [
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const isApp = useIsApp();
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
     return pathname === href || pathname.startsWith(href + '/');
   };
-
-  // The installed app uses its own docked tab bar.
-  if (isApp && pathname === '/') return null;
 
   return (
     <nav className="site-bottom-nav fixed bottom-0 left-0 right-0 z-50 md:hidden border-t border-white/10 bg-[#0d0d13]/95 backdrop-blur-xl safe-bottom">

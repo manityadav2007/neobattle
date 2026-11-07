@@ -166,8 +166,12 @@ export default function WalletPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-20">
-        <div className="glass-card rounded-2xl h-64 animate-pulse" />
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+        <div className="glass-card rounded-2xl h-52 animate-pulse bg-white/5" />
+        <div className="grid grid-cols-2 gap-4">
+          <div className="glass-card rounded-2xl h-24 animate-pulse bg-white/5" />
+          <div className="glass-card rounded-2xl h-24 animate-pulse bg-white/5" />
+        </div>
       </div>
     );
   }

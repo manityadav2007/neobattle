@@ -330,7 +330,17 @@ export default function EsportsPage() {
   const showSchedule = season && (seasonEnded || (deadlinePassed && season.matchDate && season.matchMap));
   const canRegister = !!season && season.registrationOpen && !deadlinePassed;
 
-  if (authLoading) return null;
+  if (authLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
+        <div className="glass-card rounded-2xl p-8 h-48 animate-pulse bg-white/5" />
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="glass-card rounded-2xl p-6 h-64 animate-pulse bg-white/5" />
+          <div className="glass-card rounded-2xl p-6 h-64 animate-pulse bg-white/5" />
+        </div>
+      </div>
+    );
+  }
 
   const hasWinner = !!season?.winner;
   const showComingSoon = !season || (seasonEnded && !hasWinner);
