@@ -327,6 +327,7 @@ model Transaction {
   description     String?
   reference       String?           @unique
   metadata        Json?
+  notified        Boolean           @default(false)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -478,6 +479,7 @@ model RedeemRequest {
   rejectionReason String?
   reviewedBy      String?
   reviewedAt      DateTime?
+  notified        Boolean            @default(false)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 

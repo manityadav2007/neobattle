@@ -219,6 +219,82 @@ class NotificationService {
       link: '/wallet',
     });
   }
+
+  /**
+   * Sends push notification for withdrawal status changes (COMPLETED / REJECTED)
+   * Guaranteed to execute outside transaction, exactly once per withdrawal (deduplicated via `notified` flag).
+   * Strictly avoids including amount, balance, UPI ID, bank details, transaction IDs or email.
+   * Catches errors gracefully without failing, delaying, or affecting the withdrawal.
+   */
+  async notifyWithdrawalStatus(params: {
+    withdrawalId: string;
+    userId: string;
+    status: 'COMPLETED' | 'REJECTED';
+    type: 'TRANSACTION' | 'REDEEM_REQUEST';
+    linkedRedeemId?: string;
+    linkedTransactionId?: string;
+  }): Promise<void> {
+    const { withdrawalId, userId, status, type, linkedRedeemId, linkedTransactionId } = params;
+
+    try {
+      // 1. Atomic deduplication: claim notification on the withdrawal record
+      let claimed = false;
+
+      if (type === 'TRANSACTION') {
+        const updateRes = await prisma.transaction.updateMany({
+          where: { id: withdrawalId, notified: false },
+          data: { notified: true },
+        });
+        claimed = updateRes.count > 0;
+
+        if (linkedRedeemId) {
+          await prisma.redeemRequest.updateMany({
+            where: { id: linkedRedeemId, notified: false },
+            data: { notified: true },
+          }).catch(() => {});
+        }
+      } else {
+        const updateRes = await prisma.redeemRequest.updateMany({
+          where: { id: withdrawalId, notified: false },
+          data: { notified: true },
+        });
+        claimed = updateRes.count > 0;
+
+        if (linkedTransactionId) {
+          await prisma.transaction.updateMany({
+            where: { id: linkedTransactionId, notified: false },
+            data: { notified: true },
+          }).catch(() => {});
+        }
+      }
+
+      // If already claimed/notified, do not send again
+      if (!claimed) {
+        return;
+      }
+
+      // 2. Prepare payload without amount, balance, UPI ID, bank details, transaction IDs or email
+      const payload =
+        status === 'COMPLETED'
+          ? {
+              title: 'Withdrawal successful',
+              body: 'Your withdrawal has been processed. Tap to view your wallet.',
+              path: '/wallet',
+            }
+          : {
+              title: 'Withdrawal not processed',
+              body: 'Withdrawal not processed: tap to view details',
+              path: '/wallet',
+            };
+
+      // 3. Dispatch push notification respecting user preferences and skipping users without registered tokens
+      await fcmService.sendToUser(userId, payload, 'notifyAlerts');
+    } catch (err: any) {
+      // Catch error, log only withdrawal id and error type, never fail or delay withdrawal
+      const errorType = err?.name || err?.code || 'UnknownError';
+      console.error(`[Push] Failed to send withdrawal push notification for withdrawalId=${withdrawalId}, errorType=${errorType}`);
+    }
+  }
 }
 
 export const notificationService = new NotificationService();

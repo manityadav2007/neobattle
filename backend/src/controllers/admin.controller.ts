@@ -1157,6 +1157,7 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
           return {
             type: 'REDEEM_REQUEST',
             action: 'COMPLETED',
+            withdrawalId: lockedRedeem.id,
             userId: lockedRedeem.userId,
             amount: Number(lockedRedeem.amount),
           };
@@ -1216,6 +1217,7 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
           return {
             type: 'REDEEM_REQUEST',
             action: 'REJECTED',
+            withdrawalId: lockedRedeem.id,
             userId: lockedRedeem.userId,
             amount: Number(lockedRedeem.amount),
             reason,
@@ -1238,6 +1240,17 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
           link: '/wallet/history',
         }).catch((err) => console.error('[Notification] Failed to notify withdrawal approval:', err));
 
+        // Push notification strictly outside and after database commit
+        notificationService.notifyWithdrawalStatus({
+          withdrawalId: result.tx.id,
+          userId: result.userId,
+          status: 'COMPLETED',
+          type: 'TRANSACTION',
+          linkedRedeemId: (result.tx.metadata as any)?.redeemRequestId,
+        }).catch((err) => {
+          console.error(`[Push] Failed to notify withdrawalId: ${result.tx.id}, errorType: ${err?.name || 'Error'}`);
+        });
+
         res.json({
           success: true,
           message: `Withdrawal of ₹${result.amount} approved and completed!`,
@@ -1252,6 +1265,17 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
           link: '/wallet',
         }).catch((err) => console.error('[Notification] Failed to notify withdrawal rejection:', err));
 
+        // Push notification strictly outside and after database commit
+        notificationService.notifyWithdrawalStatus({
+          withdrawalId: result.tx.id,
+          userId: result.userId,
+          status: 'REJECTED',
+          type: 'TRANSACTION',
+          linkedRedeemId: (result.tx.metadata as any)?.redeemRequestId,
+        }).catch((err) => {
+          console.error(`[Push] Failed to notify withdrawalId: ${result.tx.id}, errorType: ${err?.name || 'Error'}`);
+        });
+
         res.json({
           success: true,
           message: `Withdrawal rejected and ₹${result.amount} refunded to user's wallet.`,
@@ -1260,9 +1284,29 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
       }
     } else if (result.type === 'REDEEM_REQUEST') {
       if (result.action === 'COMPLETED') {
+        // Push notification strictly outside and after database commit
+        notificationService.notifyWithdrawalStatus({
+          withdrawalId: result.withdrawalId,
+          userId: result.userId,
+          status: 'COMPLETED',
+          type: 'REDEEM_REQUEST',
+        }).catch((err) => {
+          console.error(`[Push] Failed to notify withdrawalId: ${result.withdrawalId}, errorType: ${err?.name || 'Error'}`);
+        });
+
         res.json({ success: true, message: `Redeem request marked as ${status.toLowerCase()}` });
         return;
       } else {
+        // Push notification strictly outside and after database commit
+        notificationService.notifyWithdrawalStatus({
+          withdrawalId: result.withdrawalId,
+          userId: result.userId,
+          status: 'REJECTED',
+          type: 'REDEEM_REQUEST',
+        }).catch((err) => {
+          console.error(`[Push] Failed to notify withdrawalId: ${result.withdrawalId}, errorType: ${err?.name || 'Error'}`);
+        });
+
         res.json({ success: true, message: 'Redeem request rejected and refunded' });
         return;
       }
