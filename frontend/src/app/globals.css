@@ -398,9 +398,12 @@ html.app-mode .app-page-shell > .app-page-header + div {
   margin-top: 0 !important;
 }
 
-/* App mode shared helper: hide page descriptions and eyebrow labels completely */
-html.app-mode .app-desc,
-html.app-mode .app-eyebrow {
+/* App mode shared helper: hide ONLY the single subtitle line directly under a page's main title in the page header.
+   Never apply to text inside cards, hero blocks, empty states or coming-soon panels. */
+html.app-mode .app-page-header:not(.glass-card):not([class*="card"]) .app-desc,
+html.app-mode .app-page-header:not(.glass-card):not([class*="card"]) .app-eyebrow,
+html.app-mode .app-desc:not(.glass-card *):not([class*="card"] *),
+html.app-mode .app-eyebrow:not(.glass-card *):not([class*="card"] *) {
   display: none !important;
   margin: 0 !important;
   padding: 0 !important;
@@ -408,6 +411,24 @@ html.app-mode .app-eyebrow {
   max-height: 0 !important;
   overflow: hidden !important;
   line-height: 0 !important;
+}
+
+/* Guard: text and padding inside cards, hero blocks, empty states, and coming-soon panels are ALWAYS preserved */
+html.app-mode .glass-card .app-desc,
+html.app-mode .glass-card .app-eyebrow,
+html.app-mode [class*="card"] .app-desc,
+html.app-mode [class*="card"] .app-eyebrow,
+html.app-mode .hero-block .app-desc,
+html.app-mode .empty-state .app-desc,
+html.app-mode [class*="coming-soon"] .app-desc,
+html.app-mode [class*="coming-soon"] .app-eyebrow {
+  display: block !important;
+  margin: inherit !important;
+  padding: inherit !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  line-height: inherit !important;
 }
 
 /* Only the marketing website home is hidden in app mode when on homepage */

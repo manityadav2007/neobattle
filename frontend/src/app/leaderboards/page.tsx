@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronRight, Crown, Medal, ShieldCheck, Loader2, Trophy, Target } from 'lucide-react';
 import Link from 'next/link';
-import { userApi, formatCurrency } from '@/lib/services';
+import { userApi, formatCurrency, resolveAssetUrl } from '@/lib/services';
 import { getErrorMessage } from '@/lib/api';
 import LeagueBadge from '@/components/LeagueBadge';
+import Avatar from '@/components/Avatar';
 
 interface LeaderboardEntry {
   rank: number;
@@ -89,44 +90,51 @@ export default function LeaderboardsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((entry, i) => (
-                    <motion.tr
-                      key={entry.user?.id || i}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.03 }}
-                      className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">{rankIcon(entry.rank)}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-fire-500/20 flex items-center justify-center text-fire-400 text-xs font-bold">
-                            {entry.user?.displayName?.[0] || entry.user?.username?.[0] || '?'}
+                  {entries.map((entry, i) => {
+                    const displayName = entry.user?.displayName || entry.user?.username || 'Unknown';
+                    return (
+                      <motion.tr
+                        key={entry.user?.id || i}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.03 }}
+                        className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">{rankIcon(entry.rank)}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar
+                              src={resolveAssetUrl(entry.user?.avatarUrl)}
+                              alt={displayName}
+                              size={32}
+                              fallbackText={displayName}
+                              className="shrink-0 ring-1 ring-white/10"
+                            />
+                            <div>
+                              <p className="font-semibold text-white flex items-center gap-1.5">
+                                {displayName}
+                                {entry.user?.isVerified && <ShieldCheck className="w-3.5 h-3.5 text-green-400" />}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-white flex items-center gap-1.5">
-                              {entry.user?.displayName || entry.user?.username || 'Unknown'}
-                              {entry.user?.isVerified && <ShieldCheck className="w-3.5 h-3.5 text-green-400" />}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <LeagueBadge wins={entry.totalWins} size="sm" />
-                      </td>
-                      <td className="px-6 py-4 text-center font-bold text-fire-400">{entry.totalPoints}</td>
-                      <td className="px-6 py-4 text-center text-zinc-300">{entry.totalKills}</td>
-                      <td className="px-6 py-4 text-center text-green-400 font-semibold">{entry.totalWins}</td>
-                      <td className="px-6 py-4 text-center text-zinc-400">{entry.tournamentsPlayed}</td>
-                      <td className="px-6 py-4 text-center text-zinc-300">
-                        {entry.tournamentsPlayed > 0
-                          ? `${Math.round((entry.totalWins / entry.tournamentsPlayed) * 100)}%`
-                          : '0%'}
-                      </td>
-                    </motion.tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4">
+                          <LeagueBadge wins={entry.totalWins} size="sm" />
+                        </td>
+                        <td className="px-6 py-4 text-center font-bold text-fire-400">{entry.totalPoints}</td>
+                        <td className="px-6 py-4 text-center text-zinc-300">{entry.totalKills}</td>
+                        <td className="px-6 py-4 text-center text-green-400 font-semibold">{entry.totalWins}</td>
+                        <td className="px-6 py-4 text-center text-zinc-400">{entry.tournamentsPlayed}</td>
+                        <td className="px-6 py-4 text-center text-zinc-300">
+                          {entry.tournamentsPlayed > 0
+                            ? `${Math.round((entry.totalWins / entry.tournamentsPlayed) * 100)}%`
+                            : '0%'}
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

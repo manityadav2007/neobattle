@@ -124,6 +124,7 @@ export default function HomeLeaderboardTop3() {
                   src={resolveAssetUrl(entry.user?.avatarUrl)}
                   alt={displayName}
                   size={32}
+                  fallbackText={displayName}
                   className="shrink-0 ring-1 ring-white/10"
                 />
                 <div className="flex-1 min-w-0">

@@ -659,7 +659,14 @@ test('App Mode Cleanups - Single menu without My Matches, 12-16px spacing, wrap 
   assert.ok(tournamentsPage.includes('app-page-shell') && tournamentsPage.includes('app-page-header'), 'Tournaments page must use app-page-shell and app-page-header');
 
   const esportsPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'esports', 'page.tsx'), 'utf8');
-  assert.ok(esportsPage.includes('app-page-shell') && esportsPage.includes('app-page-header'), 'Esports page must use app-page-shell and app-page-header');
+  assert.ok(esportsPage.includes('app-page-shell'), 'Esports page must use app-page-shell');
+  assert.ok(
+    !esportsPage.includes('ComingSoonCard') || (
+      esportsPage.includes("We're building the ultimate competitive arena") ||
+      esportsPage.includes("We&apos;re building the ultimate competitive arena")
+    ),
+    'ComingSoonCard must keep full paragraph text'
+  );
 
   const shopPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'shop', 'page.tsx'), 'utf8');
   assert.ok(shopPage.includes('app-page-shell') && shopPage.includes('app-page-header'), 'Shop page must use app-page-shell and app-page-header');
@@ -677,6 +684,33 @@ test('App Mode Cleanups - Single menu without My Matches, 12-16px spacing, wrap 
   assert.ok(appHome.includes('statusLabel'), 'CompactTournamentCard must show statusLabel (ENDED / LIVE / UPCOMING)');
   assert.ok(appHome.includes('{theme.label}'), 'CompactTournamentCard must render full theme.label');
   assert.ok(!appHome.includes('slice(0, 5)'), 'CompactTournamentCard must not slice map name');
+});
+
+test('App Mode Fixes - Esports ComingSoonCard restored and Leaderboard Avatars matched', () => {
+  // 1. Esports ComingSoonCard restored
+  const esportsPath = path.join(frontendDir, 'src', 'app', 'esports', 'page.tsx');
+  const esports = fs.readFileSync(esportsPath, 'utf8');
+  assert.ok(esports.includes('py-14 text-center') && !esports.includes('py-14 text-center app-page-header'), 'ComingSoonCard must keep original py-14 padding and no app-page-header');
+  assert.ok(esports.includes('px-6 sm:px-12 py-14'), 'ComingSoonCard must preserve original padding');
+  assert.ok(esports.includes('Join Live Tournaments') && esports.includes('Back to Home'), 'ComingSoonCard must keep actions');
+  assert.ok(esports.includes('Pro Prize Pools') && esports.includes('Level 60+ Verified Squads') && esports.includes('4v4 Team Battles'), 'ComingSoonCard must keep feature lines');
+
+  // Shared CSS helper must not hide cards
+  const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
+  const css = fs.readFileSync(cssPath, 'utf8');
+  assert.ok(css.includes('html.app-mode .glass-card .app-desc'), 'globals.css must protect glass-card from app-desc hiding');
+
+  // 2. Leaderboards page avatars
+  const leaderboardsPath = path.join(frontendDir, 'src', 'app', 'leaderboards', 'page.tsx');
+  const leaderboards = fs.readFileSync(leaderboardsPath, 'utf8');
+  assert.ok(leaderboards.includes('Avatar'), 'Leaderboards page must import and use Avatar');
+  assert.ok(leaderboards.includes('resolveAssetUrl(entry.user?.avatarUrl)'), 'Leaderboards page must use resolveAssetUrl for avatarUrl');
+  assert.ok(leaderboards.includes('overflow-x-auto') && leaderboards.includes('<table'), 'Leaderboards table layout and horizontal scrolling must be preserved');
+
+  // Backend leaderboard response includes avatarUrl and no private data
+  const userControllerPath = path.resolve(__dirname, '../controllers/user.controller.ts');
+  const userController = fs.readFileSync(userControllerPath, 'utf8');
+  assert.ok(userController.includes('avatarUrl: true'), 'getLeaderboard must select avatarUrl');
 });
 
 
