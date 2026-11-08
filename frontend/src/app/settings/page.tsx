@@ -329,8 +329,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+    <div className="max-w-4xl mx-auto px-4 py-10 sm:px-6 lg:px-8 app-page-shell">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="app-page-header">
         <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fire-300 app-eyebrow">Player Controls</p>
         <h1 className="mt-3 text-3xl font-display font-bold text-white sm:text-4xl">
           <span className="gradient-text">Settings</span>

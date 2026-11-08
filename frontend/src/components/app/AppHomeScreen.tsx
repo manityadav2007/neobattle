@@ -386,16 +386,31 @@ function CompactTournamentCard({
   registeredAt?: string;
 }) {
   const theme = getMapTheme(tournament.mapName);
-  const status = getEffectiveStatus(tournament);
+  const effectiveStatus = getEffectiveStatus(tournament);
+  const ended = isTournamentEnded(tournament);
   const entryFee = toNumber(tournament.entryFee);
   const entryCount = tournament._count?.entries ?? 0;
   const spotsLeft = Math.max(tournament.maxParticipants - entryCount, 0);
 
+  // Status label: ENDED / LIVE / UPCOMING matching spec
+  const statusLabel = ended
+    ? 'ENDED'
+    : effectiveStatus === 'ACTIVE' || effectiveStatus === 'Live' || effectiveStatus === 'Playing'
+    ? 'LIVE'
+    : 'UPCOMING';
+
+  const startState = ended
+    ? 'Ended'
+    : effectiveStatus === 'Playing' || effectiveStatus === 'Live'
+    ? 'Playing now'
+    : getCountdown(tournament.startTime);
+
   return (
     <Link
       href={`/tournaments/${tournament.id}`}
-      className="glass-card flex min-h-[96px] items-center gap-3 rounded-2xl border border-white/5 p-3.5 transition-all hover:fire-glow hover:border-fire-500/30"
+      className="glass-card flex min-h-[100px] items-center gap-3 rounded-2xl border border-white/5 p-3 sm:p-3.5 transition-all hover:fire-glow hover:border-fire-500/30"
     >
+      {/* Map Thumbnail */}
       <div
         className="relative flex h-[68px] w-[68px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-white/10"
         style={{ backgroundImage: `linear-gradient(${theme.gradient})` }}
@@ -406,42 +421,61 @@ function CompactTournamentCard({
           aria-hidden="true"
         />
         <ModeIcon gameMode={tournament.gameMode} className="relative h-5 w-5 text-white/90" />
-        <span className="relative mt-1 text-[9px] font-bold uppercase tracking-wide text-white/80">
+        <span className="relative mt-1 text-[9px] font-bold uppercase tracking-wide text-white/80 whitespace-nowrap">
           {tournament.format}
         </span>
       </div>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
+      {/* Middle column: Line 1 (status + mode), Line 2 (full map name + start state), Title */}
+      <div className="min-w-0 flex-1 space-y-1">
+        {/* Line 1: Status badge (ENDED / LIVE / UPCOMING) + Mode badge (Full Map / Clash Squad) */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${getStatusColor(status)}`}
+            className={`whitespace-nowrap inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${getStatusColor(
+              effectiveStatus
+            )}`}
           >
-            {status}
+            {statusLabel}
           </span>
-          <span className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-semibold text-zinc-300">
-            <ModeIcon gameMode={tournament.gameMode} className="h-2.5 w-2.5" />
+          <span className="whitespace-nowrap inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-green-500/10 text-green-400 border border-green-500/20">
+            <ModeIcon gameMode={tournament.gameMode} className="h-3 w-3 shrink-0" />
             {modeLabel(tournament.gameMode)}
           </span>
-          <span className="truncate text-[9px] font-medium uppercase tracking-wider text-zinc-500">
+        </div>
+
+        {/* Line 2: Full map name (not truncated) and the start state */}
+        <div className="flex items-center gap-1.5 flex-wrap text-zinc-400">
+          <span className="whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-zinc-300">
             {theme.label}
           </span>
-        </div>
-        <p className="mt-1 truncate text-sm font-bold text-white">{tournament.title}</p>
-        <p className="mt-0.5 flex items-center gap-1 text-xs text-zinc-400">
-          <Clock className="h-3 w-3" />
-          {getCountdown(tournament.startTime)}
           <span className="text-zinc-600">•</span>
-          <span>{spotsLeft > 0 ? `${spotsLeft} spots left` : 'Slots full'}</span>
+          <span className="whitespace-nowrap flex items-center gap-1 text-[11px] text-zinc-400">
+            <Clock className="h-3 w-3 text-zinc-500 shrink-0" />
+            {startState}
+          </span>
+          {registeredAt && (
+            <>
+              <span className="text-zinc-600">•</span>
+              <span className="whitespace-nowrap text-[10px] font-semibold text-emerald-400">
+                Registered
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Tournament Title */}
+        <p className="line-clamp-1 text-sm font-bold text-white drop-shadow-sm">
+          {tournament.title}
         </p>
-        {registeredAt && (
-          <p className="mt-0.5 truncate text-[10px] text-emerald-400 font-medium">Registered</p>
-        )}
       </div>
 
-      <div className="shrink-0 text-right">
-        <p className="text-xs text-zinc-500 uppercase tracking-wider">Prize</p>
-        <p className="text-sm font-bold text-fire-400">{formatCurrency(tournament.prizePool)}</p>
-        <p className="mt-0.5 text-xs text-zinc-400">
+      {/* Right column: Prize & Entry Fee */}
+      <div className="shrink-0 text-right pl-1 sm:pl-2 self-center">
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Prize</p>
+        <p className="text-sm font-bold text-fire-400 tabular-nums whitespace-nowrap">
+          {formatCurrency(tournament.prizePool)}
+        </p>
+        <p className="mt-0.5 text-[11px] text-zinc-400 whitespace-nowrap">
           {entryFee === 0 ? 'Free entry' : `${formatCurrency(entryFee)} entry`}
         </p>
       </div>

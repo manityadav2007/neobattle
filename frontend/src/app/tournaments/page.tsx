@@ -55,9 +55,9 @@ export default function TournamentsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 app-page-shell">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="mb-10">
+        <div className="mb-10 app-page-header">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">

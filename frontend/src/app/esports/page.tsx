@@ -98,13 +98,13 @@ function ComingSoonCard({ nextSeasonDate }: { nextSeasonDate?: string | null }) 
       <div className="absolute -top-24 -right-24 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl animate-pulse" />
       <div className="absolute -bottom-32 -left-24 w-96 h-96 bg-fire-500/10 rounded-full blur-3xl" />
 
-      <div className="relative z-10 px-6 sm:px-12 py-14 text-center">
+      <div className="relative z-10 px-6 sm:px-12 py-14 text-center app-page-header">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.25em] text-yellow-400 bg-yellow-500/10 border border-yellow-500/25 mb-8 app-eyebrow">
           <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
           Coming Soon
         </div>
 
-        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-yellow-500/25 to-orange-600/15 border border-yellow-500/30 flex items-center justify-center shadow-lg shadow-yellow-500/10">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-yellow-500/25 to-orange-600/15 border border-yellow-500/30 flex items-center justify-center shadow-lg shadow-yellow-500/10 app-eyebrow">
           <Trophy className="w-10 h-10 text-yellow-400" />
         </div>
 
@@ -348,7 +348,7 @@ export default function EsportsPage() {
   if (showComingSoon) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 app-page-shell">
           {error && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm mb-6">
               <AlertCircle className="w-4 h-4" /> {error}
@@ -363,10 +363,10 @@ export default function EsportsPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 app-page-shell">
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="glass-card rounded-2xl p-8 mb-8 border border-yellow-500/20 relative overflow-hidden">
+          <div className="glass-card rounded-2xl p-8 mb-8 border border-yellow-500/20 relative overflow-hidden app-page-header">
             <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-yellow-500/5 to-transparent rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-2">

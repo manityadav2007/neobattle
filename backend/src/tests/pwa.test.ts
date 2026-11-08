@@ -633,6 +633,52 @@ test('App Mode Enhancements - Loading, Header, Scroll Reset, Leaderboard Top 3, 
   assert.ok(navbar.includes('!isApp ? ('), 'Navbar must remove Login / Join Arena box in app mode');
 });
 
+test('App Mode Cleanups - Single menu without My Matches, 12-16px spacing, wrap badges', () => {
+  const navbarPath = path.join(frontendDir, 'src', 'components', 'Navbar.tsx');
+  const navbar = fs.readFileSync(navbarPath, 'utf8');
+  
+  // 1. MENU: remove "My Matches" in app mode (!isApp)
+  assert.ok(
+    navbar.includes('!isApp &&') && navbar.includes('href="/?tab=mine"'),
+    'Navbar menu must hide My Matches when isApp is true'
+  );
+
+  // 2. GAPS AFTER HIDDEN TEXT: shared helper classes in globals.css
+  const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
+  const css = fs.readFileSync(cssPath, 'utf8');
+  assert.ok(css.includes('html.app-mode .global-back-wrapper'), 'globals.css must style global-back-wrapper');
+  assert.ok(css.includes('html.app-mode .app-page-shell'), 'globals.css must style app-page-shell');
+  assert.ok(css.includes('html.app-mode .app-page-header'), 'globals.css must style app-page-header');
+  assert.ok(css.includes('14px'), 'app-page-header must define 12-16px spacing (14px)');
+
+  // Verify pages use the shared helper classes
+  const statsPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'stats', 'page.tsx'), 'utf8');
+  assert.ok(statsPage.includes('app-page-shell') && statsPage.includes('app-page-header'), 'Stats page must use app-page-shell and app-page-header');
+
+  const tournamentsPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'tournaments', 'page.tsx'), 'utf8');
+  assert.ok(tournamentsPage.includes('app-page-shell') && tournamentsPage.includes('app-page-header'), 'Tournaments page must use app-page-shell and app-page-header');
+
+  const esportsPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'esports', 'page.tsx'), 'utf8');
+  assert.ok(esportsPage.includes('app-page-shell') && esportsPage.includes('app-page-header'), 'Esports page must use app-page-shell and app-page-header');
+
+  const shopPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'shop', 'page.tsx'), 'utf8');
+  assert.ok(shopPage.includes('app-page-shell') && shopPage.includes('app-page-header'), 'Shop page must use app-page-shell and app-page-header');
+
+  const dashboardPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'dashboard', 'page.tsx'), 'utf8');
+  assert.ok(dashboardPage.includes('app-page-shell') && dashboardPage.includes('app-page-header'), 'Dashboard page must use app-page-shell and app-page-header');
+
+  const walletPage = fs.readFileSync(path.join(frontendDir, 'src', 'app', 'wallet', 'page.tsx'), 'utf8');
+  assert.ok(walletPage.includes('app-page-shell') && walletPage.includes('app-page-header'), 'Wallet page must use app-page-shell and app-page-header');
+
+  // 3. MY MATCHES CARDS: CompactTournamentCard badge row
+  const appHomePath = path.join(frontendDir, 'src', 'components', 'app', 'AppHomeScreen.tsx');
+  const appHome = fs.readFileSync(appHomePath, 'utf8');
+  assert.ok(appHome.includes('whitespace-nowrap'), 'CompactTournamentCard badges must be whitespace-nowrap');
+  assert.ok(appHome.includes('statusLabel'), 'CompactTournamentCard must show statusLabel (ENDED / LIVE / UPCOMING)');
+  assert.ok(appHome.includes('{theme.label}'), 'CompactTournamentCard must render full theme.label');
+  assert.ok(!appHome.includes('slice(0, 5)'), 'CompactTournamentCard must not slice map name');
+});
+
 
 
 

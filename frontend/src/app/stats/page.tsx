@@ -26,8 +26,8 @@ export default function StatsPage() {
   }, [user]);
 
   return (
-    <div className="relative px-4 py-16 sm:px-6 lg:px-8 max-w-6xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
+    <div className="relative px-4 py-16 sm:px-6 lg:px-8 max-w-6xl mx-auto app-page-shell">
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="app-page-header">
         <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fire-300 app-eyebrow">Performance Insights</p>
         <h1 className="mt-5 text-4xl font-display font-black text-white sm:text-6xl">
           <span className="gradient-text">Stats</span>
@@ -35,7 +35,7 @@ export default function StatsPage() {
         <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400 app-desc">
           Platform-wide statistics and performance metrics across NEOBATTLE.
         </p>
-        <div className="mt-8 flex flex-wrap gap-4">
+        <div className="mt-8 flex flex-wrap gap-4 app-desc">
           <Link href="/leaderboards" className="btn-fire inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white">
             See Top Players <ChevronRight className="h-4 w-4" />
           </Link>

@@ -318,15 +318,17 @@ export default function Navbar() {
                   My Profile
                 </Link>
 
-                {/* 3. My Matches */}
-                <Link
-                  href="/?tab=mine"
-                  onClick={closeMenu}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5 text-sm font-medium transition-colors"
-                >
-                  <Trophy className="w-5 h-5 text-fire-400" />
-                  My Matches
-                </Link>
+                {/* 3. My Matches (browser only — in app mode it is already a primary tab on the home page) */}
+                {!isApp && (
+                  <Link
+                    href="/?tab=mine"
+                    onClick={closeMenu}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-300 hover:bg-white/5 text-sm font-medium transition-colors"
+                  >
+                    <Trophy className="w-5 h-5 text-fire-400" />
+                    My Matches
+                  </Link>
+                )}
 
                 {/* 4. Wallet */}
                 <Link

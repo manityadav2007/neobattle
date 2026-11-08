@@ -177,10 +177,10 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 app-page-shell">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="text-center mb-10">
-          <Wallet className="w-10 h-10 text-fire-400 mx-auto mb-4" />
+        <div className="text-center mb-10 app-page-header">
+          <Wallet className="w-10 h-10 text-fire-400 mx-auto mb-4 app-desc" />
           <h1 className="text-3xl font-display font-bold text-white">Wallet</h1>
           <p className="text-zinc-400 mt-2 app-desc">Manage your tournament funds</p>
         </div>

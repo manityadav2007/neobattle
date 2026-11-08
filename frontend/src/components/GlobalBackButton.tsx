@@ -32,7 +32,7 @@ export default function GlobalBackButton() {
   if (!parent) return null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+    <div className="global-back-wrapper max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
       <BackButton href={parent.href} label={parent.label} />
     </div>
   );

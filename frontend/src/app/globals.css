@@ -357,10 +357,57 @@ html.app-mode main {
   padding-top: calc(4rem + env(safe-area-inset-top, 0px)) !important;
 }
 
-/* App mode shared helper: hide page descriptions and eyebrow labels */
+/* App mode: Back button positioning */
+html.app-mode .global-back-wrapper {
+  padding-top: 14px !important;
+  padding-bottom: 0 !important;
+}
+
+html.app-mode .global-back-wrapper a {
+  margin-bottom: 0 !important;
+}
+
+/* App mode: Page containers */
+html.app-mode .app-page-shell {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* App mode: Consistent page header spacing (12-16px from back button, 12-16px to first content block) */
+html.app-mode .app-page-header {
+  margin-top: 14px !important;
+  margin-bottom: 14px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+html.app-mode .app-page-header h1,
+html.app-mode .app-page-header .app-page-title {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Zero out desktop top margin on the first content block after header in app mode */
+html.app-mode .app-page-header + * {
+  margin-top: 0 !important;
+}
+
+html.app-mode .app-page-shell > .app-page-header + div {
+  margin-top: 0 !important;
+}
+
+/* App mode shared helper: hide page descriptions and eyebrow labels completely */
 html.app-mode .app-desc,
 html.app-mode .app-eyebrow {
   display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  line-height: 0 !important;
 }
 
 /* Only the marketing website home is hidden in app mode when on homepage */
