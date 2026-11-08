@@ -839,6 +839,10 @@ export async function distributePerKillPrizes(req: AuthenticatedRequest, res: Re
       });
     }
 
+    notificationService.notifyResultApproved(tournament.id, tournament.title).catch((err) => {
+      console.error('[Notification] Failed to send result notification for tournament:', err);
+    });
+
     res.json({
       success: true,
       message: `Prizes successfully distributed: ₹${totalPrizeAwarded} to players, ₹${hostAmount} to host, ₹${platformAmount} to platform revenue.`,

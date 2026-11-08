@@ -27,6 +27,8 @@ router.get('/transactions', adminController.getTransactions);
 router.get('/withdrawals', adminController.listWithdrawals);
 router.patch('/withdrawals/:id/review', adminController.reviewWithdrawal);
 router.post('/tournaments/:id/distribute-prizes', adminController.distributeTournamentPrizes);
+router.post('/notifications/send', adminController.sendPushNotification);
+router.get('/notifications/history', adminController.getPushNotificationHistory);
 
 // Owner / Super Admin only critical actions
 router.patch('/users/:id/role', ownerOnly, adminController.updateUserRole);

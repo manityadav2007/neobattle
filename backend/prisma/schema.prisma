@@ -110,6 +110,7 @@ model User {
   notifyTournaments Boolean @default(true)
   notifyResults     Boolean @default(true)
   notifyAlerts      Boolean @default(true)
+  pushNotificationsEnabled Boolean @default(true)
   freeFireUid       String?
   freeFireRegion    String?  @default("IND")
   inGameNickname    String?
@@ -140,6 +141,7 @@ model User {
   giftCardRedemptions GiftCardRedemption[]
   upiPayments        UpiPayment[]
   resultSubmissions  ResultSubmission[]  @relation("ResultSubmissions")
+  pushTokens         PushToken[]
   unmatchedPayments  UnmatchedPayment[]  @relation("ResolvedPayments")
 
   @@index([email])
@@ -273,6 +275,7 @@ model Tournament {
 
   delayedCount  Int      @default(0)
   delayedAt     DateTime?
+  startReminderSent Boolean @default(false)
 
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -709,4 +712,19 @@ model GiftCardRedemption {
 
   @@index([userId])
   @@index([status])
+}
+
+model PushToken {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  token      String   @unique
+  platform   String   @default("android")
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("push_tokens")
 }

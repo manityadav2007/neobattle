@@ -8,7 +8,7 @@ import axios from 'axios';
 import {
   Shield, Users, Trophy, AlertCircle, CheckCircle, XCircle,
   Activity, RefreshCw, DollarSign, Banknote, Gift, Ban, ShoppingBag,
-  MessageSquareMore, Wallet, Loader2, Crosshair, Sparkles, ArrowRight,
+  MessageSquareMore, Wallet, Loader2, Crosshair, Sparkles, ArrowRight, Bell,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -259,6 +259,7 @@ export default function AdminPage() {
       title: 'Users & Safety',
       items: [
         { href: '/admin/users', label: 'User Management', desc: 'Roles, levels & bans', icon: Users, tone: 'bg-fire-500/15 text-fire-400' },
+        { href: '/admin/notifications', label: 'Push Notifications', desc: 'Broadcast FCM alerts to players', icon: Bell, tone: 'bg-orange-500/15 text-orange-400' },
         { href: '/admin/verify', label: 'Player Verification', desc: 'Free Fire UID & level checks', icon: Shield, tone: 'bg-lime-500/15 text-lime-400' },
         { href: '/admin/esports-bans', label: 'Ban List', desc: 'Banned accounts & anti-cheat', icon: Ban, tone: 'bg-red-500/15 text-red-400' },
         { href: '/admin/support', label: 'Support Tickets', desc: 'Player queries & reports', icon: MessageSquareMore, tone: 'bg-blue-500/15 text-blue-400' },

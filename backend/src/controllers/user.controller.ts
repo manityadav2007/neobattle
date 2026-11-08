@@ -38,7 +38,7 @@ export async function getProfile(req: AuthenticatedRequest, res: Response): Prom
 
 export async function updateProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const { displayName, avatarUrl, freeFireId, username, notifyTournaments, notifyResults, notifyAlerts } = req.body;
+    const { displayName, avatarUrl, freeFireId, username, notifyTournaments, notifyResults, notifyAlerts, pushNotificationsEnabled } = req.body;
 
     if (req.body.gameLevel !== undefined || req.body.isVerified !== undefined) {
       console.log('[User] Blocked attempt to update protected fields (gameLevel/isVerified) by user:', req.user!.id);
@@ -76,6 +76,7 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response): P
         ...(notifyTournaments !== undefined && { notifyTournaments }),
         ...(notifyResults !== undefined && { notifyResults }),
         ...(notifyAlerts !== undefined && { notifyAlerts }),
+        ...(pushNotificationsEnabled !== undefined && { pushNotificationsEnabled: Boolean(pushNotificationsEnabled) }),
       },
     });
 

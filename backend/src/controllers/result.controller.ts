@@ -863,6 +863,10 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
         });
       }
 
+      notificationService.notifyResultApproved(t.id, t.title).catch((err) => {
+        console.error(`[Notification] Failed to send result notification for tournament ${t.id}:`, err);
+      });
+
       const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
       res.json({
         success: true,
@@ -1066,6 +1070,10 @@ export async function reviewResult(req: AuthenticatedRequest, res: Response): Pr
         console.error(`[Notification] Failed to notify host ${t.creatorId}:`, err);
       });
     }
+
+    notificationService.notifyResultApproved(t.id, t.title).catch((err) => {
+      console.error(`[Notification] Failed to send result notification for tournament ${t.id}:`, err);
+    });
 
     const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
     res.json({

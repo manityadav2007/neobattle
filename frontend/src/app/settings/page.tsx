@@ -6,7 +6,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SlidersHorizontal, Bell, Lock, Save, Loader2, AlertCircle, CheckCircle, LogOut, Eye, EyeOff, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { userApi, uploadApi, resolveAssetUrl } from '@/lib/services';
-import { getErrorMessage } from '@/lib/api';
+import { getErrorMessage, api } from '@/lib/api';
+import {
+  requestPushPermission,
+  registerPushNotifications,
+  unregisterPushNotifications,
+} from '@/lib/pushNotifications';
 
 type Tab = 'profile' | 'notifications' | 'security';
 
@@ -30,6 +35,7 @@ export default function SettingsPage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   // Notifications
+  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(true);
   const [notifyTournaments, setNotifyTournaments] = useState(true);
   const [notifyResults, setNotifyResults] = useState(true);
   const [notifyAlerts, setNotifyAlerts] = useState(true);
@@ -51,6 +57,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || '');
+      setPushNotificationsEnabled((user as any).pushNotificationsEnabled ?? true);
       setNotifyTournaments(user.notifyTournaments ?? true);
       setNotifyResults(user.notifyResults ?? true);
       setNotifyAlerts(user.notifyAlerts ?? true);
@@ -100,11 +107,35 @@ export default function SettingsPage() {
     }
   };
 
+  const handleToggleMasterPush = async (nextVal: boolean) => {
+    setPushNotificationsEnabled(nextVal);
+    try {
+      if (!nextVal) {
+        await unregisterPushNotifications();
+        await api.post('/push/toggle', { enabled: false }).catch(() => {});
+      } else {
+        const perm = await requestPushPermission();
+        if (perm === 'granted') {
+          await registerPushNotifications();
+        }
+        await api.post('/push/toggle', { enabled: true }).catch(() => {});
+      }
+      refreshUser();
+    } catch (err) {
+      console.error('[Settings] Toggle push error:', err);
+    }
+  };
+
   const handleSaveNotifications = async () => {
     setSaving(true);
     setMessage(null);
     try {
-      await userApi.updateProfile({ notifyTournaments, notifyResults, notifyAlerts });
+      await userApi.updateProfile({
+        notifyTournaments,
+        notifyResults,
+        notifyAlerts,
+        pushNotificationsEnabled,
+      });
       refreshUser();
       showMsg('success', 'Notification preferences saved');
     } catch (err) {
@@ -213,6 +244,28 @@ export default function SettingsPage() {
     ),
     notifications: (
       <div className="space-y-6">
+        <div className="flex items-center justify-between rounded-xl border border-orange-500/30 bg-gradient-to-r from-orange-950/20 to-amber-950/20 p-4">
+          <div>
+            <p className="text-sm font-semibold text-white">Push Notifications</p>
+            <p className="text-xs text-orange-200/80 mt-0.5">Master switch for match alerts, results, and critical updates.</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={pushNotificationsEnabled}
+            onClick={() => handleToggleMasterPush(!pushNotificationsEnabled)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+              pushNotificationsEnabled ? 'bg-orange-500' : 'bg-zinc-700'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                pushNotificationsEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
         {[
           { key: 'tournaments' as const, label: 'Tournament Reminders', desc: 'Get notified when a tournament you joined is about to start.', val: notifyTournaments, set: setNotifyTournaments },
           { key: 'results' as const, label: 'Result Updates', desc: 'Receive match results, scores, and leaderboard changes.', val: notifyResults, set: setNotifyResults },

@@ -1,5 +1,6 @@
 import { prisma } from '../config/db';
 import { TournamentStatus } from '@prisma/client';
+import { fcmService } from './fcm.service';
 
 export type NotificationType = 'MATCH_SCHEDULE' | 'DEADLINE' | 'DISQUALIFICATION' | 'TOURNAMENT_STARTING' | 'TOURNAMENT_DELAYED' | 'PAYOUT_APPROVED' | 'DEPOSIT_APPROVED' | 'DEPOSIT_REJECTED' | 'MATCH_UPDATE' | 'NEW_TOURNAMENT';
 
@@ -60,24 +61,79 @@ class NotificationService {
   }
 
   async notifyUpcomingTournaments(): Promise<void> {
-    const in30Min = new Date(Date.now() + 30 * 60 * 1000);
     const now = new Date();
+    // 16-minute window captures tournaments starting in 15 minutes or less
+    const in16Min = new Date(Date.now() + 16 * 60 * 1000);
 
     const tournaments = await prisma.tournament.findMany({
       where: {
-        status: TournamentStatus.REGISTRATION,
-        startTime: { gte: now, lte: in30Min },
+        startReminderSent: false,
+        status: { in: [TournamentStatus.REGISTRATION, TournamentStatus.ACTIVE] },
+        startTime: { gte: now, lte: in16Min },
       },
       select: { id: true, title: true, startTime: true },
     });
 
     for (const t of tournaments) {
-      await this.sendToTournamentParticipants(t.id, {
-        type: 'TOURNAMENT_STARTING',
-        title: 'Tournament Starting Soon',
-        message: `"${t.title}" starts at ${t.startTime.toISOString()}. Get ready!`,
-        link: `/tournaments/${t.id}`,
+      // Atomic deduplication: ensure reminder is sent exactly once per tournament
+      const updateResult = await prisma.tournament.updateMany({
+        where: { id: t.id, startReminderSent: false },
+        data: { startReminderSent: true },
       });
+
+      if (updateResult.count === 0) continue;
+
+      const entries = await prisma.tournamentEntry.findMany({
+        where: { tournamentId: t.id, userId: { not: null } },
+        select: { userId: true },
+      });
+      const userIds = [...new Set(entries.map((e) => e.userId).filter(Boolean))] as string[];
+
+      for (const userId of userIds) {
+        await this.sendToUser(userId, {
+          type: 'TOURNAMENT_STARTING',
+          title: 'Tournament Starting Soon',
+          message: `"${t.title}" starts in 15 minutes. Get ready!`,
+          link: `/tournaments/${t.id}`,
+        }).catch((err) => console.error(`[Notification] In-app notify error for user ${userId}:`, err));
+
+        await fcmService.sendToUser(
+          userId,
+          {
+            title: 'Tournament Starting in 15 Minutes!',
+            body: `"${t.title}" starts soon. Get ready to play!`,
+            path: `/tournaments/${t.id}`,
+          },
+          'notifyTournaments'
+        ).catch((err) => console.error(`[FCM] Push notify error for user ${userId}:`, err));
+      }
+    }
+  }
+
+  async notifyResultApproved(tournamentId: string, tournamentTitle: string): Promise<void> {
+    const entries = await prisma.tournamentEntry.findMany({
+      where: { tournamentId, userId: { not: null } },
+      select: { userId: true },
+    });
+    const userIds = [...new Set(entries.map((e) => e.userId).filter(Boolean))] as string[];
+
+    for (const userId of userIds) {
+      await this.sendToUser(userId, {
+        type: 'MATCH_UPDATE',
+        title: 'Results Published',
+        message: `Results for tournament "${tournamentTitle}" are out! Check the winners and standings.`,
+        link: `/tournaments/${tournamentId}`,
+      }).catch((err) => console.error(`[Notification] Result notify error for user ${userId}:`, err));
+
+      await fcmService.sendToUser(
+        userId,
+        {
+          title: 'Tournament Results Are Out!',
+          body: `Results for "${tournamentTitle}" have been verified. Check the winners and standings!`,
+          path: `/tournaments/${tournamentId}`,
+        },
+        'notifyResults'
+      ).catch((err) => console.error(`[FCM] Result push notify error for user ${userId}:`, err));
     }
   }
 

@@ -10,6 +10,8 @@ import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import SplashScreen from '@/components/SplashScreen';
 import AppScrollReset from '@/components/AppScrollReset';
 import AppLoginGate from '@/components/AppLoginGate';
+import NotificationPermissionPrompt from '@/components/NotificationPermissionPrompt';
+import ForegroundNotificationToast from '@/components/ForegroundNotificationToast';
 import { AuthProvider } from '@/hooks/useAuth';
 import './globals.css';
 
@@ -72,6 +74,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AppLoginGate>
             <Navbar />
             <GlobalSidebar />
+            <NotificationPermissionPrompt />
+            <ForegroundNotificationToast />
             <AppMain>
               <GlobalBackButton />
               {children}

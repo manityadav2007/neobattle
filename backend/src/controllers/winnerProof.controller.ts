@@ -241,6 +241,12 @@ export async function reviewWinnerProof(req: AuthenticatedRequest, res: Response
     data: { status: status === WinnerProofStatus.APPROVED ? TournamentStatus.PAID : TournamentStatus.COMPLETED },
   });
 
+  if (status === WinnerProofStatus.APPROVED) {
+    notificationService.notifyResultApproved(proof.tournamentId, proof.tournament.title).catch((err) => {
+      console.error('[Notification] Failed to send result notification:', err);
+    });
+  }
+
   const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 
   const prizeDisplay = Math.round(Number(proof.tournament.prizePool));

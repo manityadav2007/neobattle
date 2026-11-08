@@ -6,7 +6,12 @@ dist/
 .next/
 .DS_Store
 
-# Android signing keys and App Bundle artifacts (sensitive)
+# Firebase & Google Services credentials (sensitive)
+google-services.json
+*google-services*.json
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceAccount*.json
 *.keystore
 *.jks
 signing-key-info.txt

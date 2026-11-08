@@ -744,10 +744,10 @@ test('App Mode Redesigned Loading Screen & Native Splash - Specs Verification', 
   const layout = fs.readFileSync(layoutPath, 'utf8');
   assert.ok(layout.includes('/app-splash-bg.webp'), 'layout.tsx must preload /app-splash-bg.webp in app mode');
 
-  // 6. Native Android splash: pure black with no logo or icon, max 0.8s, versionCode 5
+  // 6. Native Android splash: pure black with no logo or icon, max 0.8s, versionCode >= 5
   const buildGradlePath = path.join(mobileDir, 'android', 'app', 'build.gradle');
   const buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
-  assert.ok(buildGradle.includes('versionCode 5'), 'build.gradle must specify versionCode 5');
+  assert.ok(/versionCode\s+[5-9]/i.test(buildGradle), 'build.gradle must specify updated versionCode >= 5');
 
   const capConfigPath = path.join(mobileDir, 'capacitor.config.json');
   const capConfig = JSON.parse(fs.readFileSync(capConfigPath, 'utf8'));

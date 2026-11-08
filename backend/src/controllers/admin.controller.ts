@@ -9,6 +9,7 @@ import { UserRole, TournamentStatus, TransactionType, TransactionStatus, Prisma,
 import { Decimal } from '@prisma/client/runtime/library';
 import { escrowService } from '../services/escrow.service';
 import { notificationService } from '../services/notification.service';
+import { fcmService, sanitizeInAppPath } from '../services/fcm.service';
 import { detectKillsForTestFeed, CropRegion } from '../services/killDetectionService';
 
 function formatCurrency(n: number): string {
@@ -1427,6 +1428,135 @@ export async function testAiFeed(req: AuthenticatedRequest, res: Response): Prom
     } catch (cleanErr: any) {
       console.warn('[TestAIFeed] Failed to delete uploaded video:', safeFileName, cleanErr?.message || cleanErr);
     }
+  }
+}
+
+/**
+ * POST /api/admin/notifications/send
+ * Sends broadcast or direct push notification (admin only, audit logged)
+ */
+export async function sendPushNotification(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const adminId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+    if (!adminId || (userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN')) {
+      res.status(403).json({ success: false, message: 'Admin access required' });
+      return;
+    }
+
+    const { title, body, message, path: inAppPath, audience, target, targetUserId, targetUser } = req.body || {};
+    const content = body || message;
+
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      res.status(400).json({ success: false, message: 'Notification title is required' });
+      return;
+    }
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      res.status(400).json({ success: false, message: 'Notification message is required' });
+      return;
+    }
+
+    const cleanTitle = title.trim().slice(0, 100);
+    const cleanBody = content.trim().slice(0, 300);
+    const cleanPath = sanitizeInAppPath(inAppPath);
+
+    let result = { successCount: 0, failureCount: 0 };
+    const isSingle = audience === 'USER' || audience === 'single' || target === 'single';
+    const recipient = targetUserId || targetUser;
+
+    if (isSingle) {
+      if (!recipient || typeof recipient !== 'string') {
+        res.status(400).json({ success: false, message: 'Target user is required for direct notification' });
+        return;
+      }
+
+      // Check if recipient is a username or user ID
+      let targetId = recipient.trim();
+      const userFound = await prisma.user.findFirst({
+        where: {
+          OR: [{ id: targetId }, { username: targetId }],
+        },
+        select: { id: true },
+      });
+
+      if (!userFound) {
+        res.status(404).json({ success: false, message: `User "${recipient}" not found` });
+        return;
+      }
+      targetId = userFound.id;
+
+      result = await fcmService.sendToUser(targetId, {
+        title: cleanTitle,
+        body: cleanBody,
+        path: cleanPath,
+      });
+
+      // Also create an in-app notification record
+      try {
+        await notificationService.sendToUser(targetId, {
+          type: 'MATCH_UPDATE',
+          title: cleanTitle,
+          message: cleanBody,
+          link: cleanPath,
+        });
+      } catch {}
+    } else {
+      // Default: ALL users
+      result = await fcmService.sendToAll({
+        title: cleanTitle,
+        body: cleanBody,
+        path: cleanPath,
+      });
+    }
+
+    // Write to AuditLog
+    await prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'ADMIN_PUSH_NOTIFICATION',
+        targetId: audience === 'USER' ? targetUserId : null,
+        details: {
+          title: cleanTitle,
+          body: cleanBody,
+          path: cleanPath,
+          audience: audience || 'ALL',
+          targetUserId: audience === 'USER' ? targetUserId : undefined,
+          successCount: result.successCount,
+          failureCount: result.failureCount,
+        },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Notification sent successfully',
+      result,
+    });
+  } catch (err: any) {
+    console.error('[Admin] Error sending push notification:', err?.message || err);
+    res.status(500).json({ success: false, message: 'Failed to send notification' });
+  }
+}
+
+/**
+ * GET /api/admin/notifications/history
+ * Returns recent notification broadcasts from audit log
+ */
+export async function getPushNotificationHistory(_req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ADMIN_PUSH_NOTIFICATION' },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: logs,
+    });
+  } catch (err: any) {
+    console.error('[Admin] Error fetching notification history:', err?.message || err);
+    res.status(500).json({ success: false, message: 'Failed to fetch notification history' });
   }
 }
 

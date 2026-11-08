@@ -14,6 +14,13 @@ signing.properties
 *signing*.properties
 *keystore*.properties
 
+# Firebase & Google Services credentials (sensitive)
+google-services.json
+*google-services*.json
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceAccount*.json
+
 # Signing credentials & bundles (CRITICAL: never commit)
 *.keystore
 *.jks
