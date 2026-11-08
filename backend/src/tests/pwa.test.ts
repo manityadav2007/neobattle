@@ -260,20 +260,14 @@ test('Startup Splash Screen - Root layout & CSS styles guarantee no white flash 
     'touch-action must not apply to normal browsers'
   );
 
-  // Shine sweep animation
+  // Splash subtle zoom and circular spinner animation
   assert.ok(
-    cssContent.includes('splash-shine-sweep'),
-    'globals.css must define splash-shine-sweep keyframes'
+    cssContent.includes('splash-subtle-zoom'),
+    'globals.css must define splash-subtle-zoom keyframes'
   );
   assert.ok(
-    cssContent.includes('splash-logo-container::after') || cssContent.includes('.splash-logo-container::after'),
-    'globals.css must have splash-logo-container::after shine sweep'
-  );
-
-  // Pulsing glow
-  assert.ok(
-    cssContent.includes('splash-pulse-glow'),
-    'globals.css must define splash-pulse-glow keyframes'
+    cssContent.includes('splash-spinner-spin'),
+    'globals.css must define splash-spinner-spin keyframes'
   );
 
   // Prefers-reduced-motion
@@ -570,14 +564,16 @@ test('App Mode Enhancements - Loading, Header, Scroll Reset, Leaderboard Top 3, 
   // 1. Loading animation in Capacitor and web splash
   const splashPath = path.join(frontendDir, 'src', 'components', 'SplashScreen.tsx');
   const splash = fs.readFileSync(splashPath, 'utf8');
-  assert.ok(splash.includes('w-[144px] h-[144px]'), 'Splash logo must be 144px by 144px matching native splash');
-  assert.ok(splash.includes('splash-progress-bar'), 'Splash must include gradient progress line');
+  assert.ok(splash.includes('APP_SPLASH_BG'), 'Splash must declare APP_SPLASH_BG constant');
+  assert.ok(splash.includes('splash-spinner'), 'Splash must include circular spinner loader');
+  assert.ok(!splash.includes('splash-progress-bar'), 'Splash must remove horizontal progress line');
+  assert.ok(!splash.includes('splash-particle'), 'Splash must remove particles');
   assert.ok(!splash.includes('setMounted(false);\n        return;\n      }\n    } catch'), 'Splash must not skip Capacitor');
 
   const cssPath = path.join(frontendDir, 'src', 'app', 'globals.css');
   const css = fs.readFileSync(cssPath, 'utf8');
-  assert.ok(css.includes('splash-progress-slide'), 'globals.css must define splash progress slide animation');
-  assert.ok(css.includes('.splash-progress-bar'), 'globals.css must style splash progress bar');
+  assert.ok(css.includes('splash-subtle-zoom'), 'globals.css must define splash subtle zoom animation');
+  assert.ok(css.includes('.splash-spinner'), 'globals.css must style splash circular spinner');
 
   // 2. Header: solid black, no separate box, no border/shadow/blur, safe area
   const navbarPath = path.join(frontendDir, 'src', 'components', 'Navbar.tsx');
@@ -711,6 +707,55 @@ test('App Mode Fixes - Esports ComingSoonCard restored and Leaderboard Avatars m
   const userControllerPath = path.resolve(__dirname, '../controllers/user.controller.ts');
   const userController = fs.readFileSync(userControllerPath, 'utf8');
   assert.ok(userController.includes('avatarUrl: true'), 'getLeaderboard must select avatarUrl');
+});
+
+test('App Mode Redesigned Loading Screen & Native Splash - Specs Verification', () => {
+  const mobileDir = path.resolve(__dirname, '../../../mobile');
+  // 1. Background art WebP exists, path constant defined, file size <= 150KB
+  const webpPath = path.join(frontendDir, 'public', 'app-splash-bg.webp');
+  assert.ok(fs.existsSync(webpPath), 'app-splash-bg.webp must exist in frontend/public');
+  const webpStats = fs.statSync(webpPath);
+  assert.ok(webpStats.size <= 150 * 1024, `app-splash-bg.webp size must be <= 150KB (actual: ${(webpStats.size / 1024).toFixed(1)}KB)`);
+
+  const splashPath = path.join(frontendDir, 'src', 'components', 'SplashScreen.tsx');
+  const splash = fs.readFileSync(splashPath, 'utf8');
+  assert.ok(splash.includes('APP_SPLASH_BG'), 'SplashScreen must export APP_SPLASH_BG constant');
+  assert.ok(splash.includes('/app-splash-bg.webp'), 'SplashScreen must use /app-splash-bg.webp');
+
+  // 2. Removed particles and progress bar
+  assert.ok(!splash.includes('splash-particle'), 'SplashScreen must not have particles');
+  assert.ok(!splash.includes('splash-progress-bar'), 'SplashScreen must not have progress bar');
+  assert.ok(!splash.includes('splash-progress-track'), 'SplashScreen must not have progress track');
+
+  // 3. Circular spinner below logo (44px, 3px stroke, gradient ring)
+  assert.ok(splash.includes('splash-spinner'), 'SplashScreen must render circular spinner');
+  assert.ok(splash.includes('viewBox="0 0 44 44"') || splash.includes('44px'), 'Spinner must be ~44px');
+  assert.ok(splash.includes('strokeWidth="3"') || splash.includes('stroke-width="3"'), 'Spinner must have 3px stroke');
+  assert.ok(splash.includes('splash-spinner-grad'), 'Spinner must have gradient ring from blue to orange');
+  assert.ok(!splash.includes('NEOBATTLE</span>'), 'SplashScreen must not render duplicate brand text');
+
+  // 4. Timing: min 1.2s (1200ms), max 3s (3000ms), fade 300ms
+  assert.ok(splash.includes('1200'), 'SplashScreen must enforce minimum 1.2s display');
+  assert.ok(splash.includes('3000'), 'SplashScreen must enforce maximum 3.0s safety');
+  assert.ok(splash.includes('300'), 'SplashScreen must use 300ms fadeout');
+
+  // 5. Preload in app mode only via layout script
+  const layoutPath = path.join(frontendDir, 'src', 'app', 'layout.tsx');
+  const layout = fs.readFileSync(layoutPath, 'utf8');
+  assert.ok(layout.includes('/app-splash-bg.webp'), 'layout.tsx must preload /app-splash-bg.webp in app mode');
+
+  // 6. Native Android splash: pure black with no logo or icon, max 0.8s, versionCode 5
+  const buildGradlePath = path.join(mobileDir, 'android', 'app', 'build.gradle');
+  const buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
+  assert.ok(buildGradle.includes('versionCode 5'), 'build.gradle must specify versionCode 5');
+
+  const capConfigPath = path.join(mobileDir, 'capacitor.config.json');
+  const capConfig = JSON.parse(fs.readFileSync(capConfigPath, 'utf8'));
+  assert.equal(capConfig.plugins?.SplashScreen?.launchShowDuration, 800, 'launchShowDuration must be 800ms');
+
+  const nativeSplashXmlPath = path.join(mobileDir, 'android', 'app', 'src', 'main', 'res', 'drawable', 'splash.xml');
+  const nativeSplashXml = fs.readFileSync(nativeSplashXmlPath, 'utf8');
+  assert.ok(!nativeSplashXml.includes('neobattle_logo'), 'Native splash.xml must have no logo');
 });
 
 

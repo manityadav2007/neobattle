@@ -2,23 +2,18 @@
 
 import { useEffect, useState } from 'react';
 
-const SESSION_STORAGE_KEY = 'neobattle_splash_shown';
+export const APP_SPLASH_BG = '/app-splash-bg.webp';
+export const FALLBACK_LOGO = '/logo/image_21332e.jpg';
 
-const PARTICLES = [
-  { left: '16%', bottom: '26%', size: '3px', color: '#f97316', delay: '0s', duration: '2.5s' },
-  { left: '26%', bottom: '18%', size: '2px', color: '#60a5fa', delay: '0.6s', duration: '3.1s' },
-  { left: '38%', bottom: '32%', size: '4px', color: '#fb923c', delay: '1.2s', duration: '2.4s' },
-  { left: '48%', bottom: '20%', size: '2px', color: '#ef4444', delay: '0.3s', duration: '2.8s' },
-  { left: '60%', bottom: '28%', size: '3px', color: '#f97316', delay: '1.5s', duration: '2.6s' },
-  { left: '72%', bottom: '22%', size: '2px', color: '#3b82f6', delay: '0.8s', duration: '3.2s' },
-  { left: '82%', bottom: '34%', size: '3px', color: '#fbbf24', delay: '1.8s', duration: '2.7s' },
-  { left: '32%', bottom: '42%', size: '2px', color: '#f97316', delay: '2.1s', duration: '2.9s' },
-  { left: '66%', bottom: '44%', size: '3px', color: '#fb923c', delay: '0.4s', duration: '2.3s' },
-];
+const SESSION_STORAGE_KEY = 'neobattle_splash_shown';
+const MIN_DISPLAY_MS = 1200; // minimum 1.2 seconds
+const MAX_DISPLAY_MS = 3000; // maximum 3.0 seconds
+const FADE_OUT_MS = 300;     // 300ms fadeout
 
 export default function SplashScreen() {
   const [mounted, setMounted] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
+  const [bgLoaded, setBgLoaded] = useState(false);
 
   useEffect(() => {
     let isApp = false;
@@ -71,7 +66,9 @@ export default function SplashScreen() {
       document.documentElement.classList.add('twa-splash-active');
     } catch {}
 
+    const startTime = Date.now();
     let dismissed = false;
+
     const triggerDismiss = () => {
       if (dismissed) return;
       dismissed = true;
@@ -82,28 +79,46 @@ export default function SplashScreen() {
           document.documentElement.classList.add('twa-splash-dismissed');
           document.documentElement.classList.remove('twa-splash-active');
         } catch {}
-      }, 300);
+      }, FADE_OUT_MS);
     };
 
-    // Fade out after ~1.8s once initial data/layout is ready
-    const fadeTimer = setTimeout(() => {
-      triggerDismiss();
-    }, 1800);
+    // Preload image object in JS to set bgLoaded as soon as available
+    const img = new Image();
+    img.src = APP_SPLASH_BG;
+    if (img.complete) {
+      setBgLoaded(true);
+    } else {
+      img.onload = () => setBgLoaded(true);
+    }
 
-    // Hard safety timeout: never block the app for longer than 2.8s - 3.0s
+    // Schedule dismiss once data is ready, respecting minimum 1.2s
+    let dismissTimeout: ReturnType<typeof setTimeout> | null = null;
+    const scheduleDismiss = () => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
+      dismissTimeout = setTimeout(triggerDismiss, remaining);
+    };
+
+    // Hard safety timeout: maximum 3.0s
     const safetyTimer = setTimeout(() => {
       triggerDismiss();
-    }, 2800);
+    }, MAX_DISPLAY_MS);
 
+    // Initial data ready listener
     const onDataReady = () => {
-      // Give at least 1.4s of splash brand presence before dismissing on early data ready
-      setTimeout(triggerDismiss, 1400);
+      scheduleDismiss();
     };
     window.addEventListener('app:data-ready', onDataReady, { once: true });
 
+    // Fallback default: if app:data-ready hasn't fired by ~1.8s, schedule dismiss
+    const defaultTimer = setTimeout(() => {
+      scheduleDismiss();
+    }, 1800);
+
     return () => {
-      clearTimeout(fadeTimer);
+      if (dismissTimeout) clearTimeout(dismissTimeout);
       clearTimeout(safetyTimer);
+      clearTimeout(defaultTimer);
       window.removeEventListener('app:data-ready', onDataReady);
     };
   }, []);
@@ -116,66 +131,71 @@ export default function SplashScreen() {
     <div
       id="twa-splash-screen"
       aria-hidden="true"
-      className={`fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-black overflow-hidden select-none transition-opacity duration-300 ease-out ${
+      className={`fixed inset-0 z-[99999] bg-black overflow-hidden select-none transition-opacity duration-300 ease-out ${
         fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
-      {/* Background radial gradient glow (soft blue-to-orange theme style) */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.18) 0%, rgba(249, 115, 22, 0.12) 35%, rgba(0, 0, 0, 0) 70%)',
-        }}
-      />
+      {/* Background artwork: full screen object-fit cover, centered over pure #000 */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <img
+          src={APP_SPLASH_BG}
+          alt=""
+          onLoad={() => setBgLoaded(true)}
+          className={`w-full h-full object-cover object-center splash-bg-art transition-opacity duration-300 ease-out ${
+            bgLoaded ? 'opacity-100' : 'opacity-0'
+          }`}
+          loading="eager"
+          decoding="async"
+        />
 
-      {/* Faint floating particles like home page hero */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {PARTICLES.map((p, i) => (
-          <span
-            key={i}
-            className="splash-particle"
-            style={{
-              left: p.left,
-              bottom: p.bottom,
-              width: p.size,
-              height: p.size,
-              backgroundColor: p.color,
-              animationDelay: p.delay,
-              animationDuration: p.duration,
-            }}
-          />
-        ))}
+        {/* Dark gradient overlay (stronger at top and bottom) */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 25%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.3) 75%, rgba(0,0,0,0.85) 100%)',
+          }}
+        />
       </div>
 
-      {/* Centered content: logo matches native splash (144px x 144px) */}
-      <div className="relative flex flex-col items-center justify-center z-10 px-4">
-        {/* Gentle pulsing glow behind the logo */}
-        <div className="splash-glow" />
-
-        {/* Logo container with continuous diagonal shine sweep - exactly 144px to match native splash */}
-        <div className="splash-logo-container w-[144px] h-[144px]">
-          <img
-            src="/logo/image_21332e.jpg"
-            alt="NEOBATTLE"
-            width={144}
-            height={144}
-            className="w-full h-full object-contain mix-blend-screen relative z-10"
-            loading="eager"
-            decoding="sync"
-          />
-        </div>
-
-        {/* Brand name */}
-        <div className="mt-4 text-center">
-          <span className="font-display font-black text-2xl sm:text-3xl tracking-widest gradient-text">
-            NEOBATTLE
-          </span>
-        </div>
-
-        {/* Thin gradient progress line */}
-        <div className="splash-progress-track mt-6 w-44 h-[2px] rounded-full overflow-hidden bg-white/10 relative">
-          <div className="splash-progress-bar absolute inset-y-0 w-2/5 rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-orange-500" />
+      {/* Circular spinner loader below the baked shield logo */}
+      <div
+        className="absolute inset-x-0 flex flex-col items-center justify-center pointer-events-none z-10"
+        style={{ top: 'calc(55% + 18px)' }}
+      >
+        <div className="splash-spinner-container">
+          <svg
+            className="splash-spinner"
+            viewBox="0 0 44 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient id="splash-spinner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#3b82f6" />
+                <stop offset="50%" stopColor="#8b5cf6" />
+                <stop offset="100%" stopColor="#f97316" />
+              </linearGradient>
+            </defs>
+            {/* Thin dim track */}
+            <circle
+              cx="22"
+              cy="22"
+              r="19"
+              stroke="rgba(255, 255, 255, 0.12)"
+              strokeWidth="3"
+            />
+            {/* Gradient ring */}
+            <circle
+              cx="22"
+              cy="22"
+              r="19"
+              stroke="url(#splash-spinner-grad)"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray="75 120"
+            />
+          </svg>
         </div>
       </div>
     </div>

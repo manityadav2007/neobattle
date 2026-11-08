@@ -151,6 +151,7 @@ async function main() {
       fs.mkdirSync(folderPath, { recursive: true });
     }
 
+    // Pure black native splash with transparent icon (seamless transition to web loading screen)
     await sharp({
       create: {
         width: splashCanvas,
@@ -159,20 +160,13 @@ async function main() {
         background: { r: 0, g: 0, b: 0, alpha: 0 },
       },
     })
-      .composite([{ input: splashLogo, gravity: 'center' }])
       .png()
       .toFile(path.join(folderPath, 'splash_icon_v31.png'));
 
-    console.log(`Generated splash_icon_v31 for ${s.folder} (${splashCanvas}x${splashCanvas})`);
+    console.log(`Generated transparent splash_icon_v31 for ${s.folder} (${splashCanvas}x${splashCanvas})`);
   }
 
-  // Also default splash_icon_v31 in res/drawable
-  const defaultSplashHeight = Math.round(576 * 0.52);
-  const defaultSplashWidth = Math.round(defaultSplashHeight * (trimmedMeta.width / trimmedMeta.height));
-  const defaultSplashLogo = await sharp(trimmedLogoBuffer)
-    .resize(defaultSplashWidth, defaultSplashHeight, { fit: 'contain' })
-    .toBuffer();
-
+  // Also default splash_icon_v31 in res/drawable (fully transparent)
   await sharp({
     create: {
       width: 576,
@@ -181,7 +175,6 @@ async function main() {
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
   })
-    .composite([{ input: defaultSplashLogo, gravity: 'center' }])
     .png()
     .toFile(path.join(resDir, 'drawable/splash_icon_v31.png'));
 
