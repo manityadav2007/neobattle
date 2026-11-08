@@ -1,6 +1,108 @@
 import crypto from 'crypto';
+import net from 'net';
 import sharp from 'sharp';
 import cloudinary from '../config/cloudinary';
+
+/**
+ * Checks whether an IP address is private, loopback, link-local, or broadcast.
+ */
+export function isPrivateOrLoopbackIp(ip: string): boolean {
+  if (!ip) return true;
+  // IPv4 checks
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map((p) => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) return true;
+    const [a, b] = parts;
+    if (a === 0) return true; // 0.0.0.0/8
+    if (a === 127) return true; // 127.0.0.0/8 (loopback)
+    if (a === 10) return true; // 10.0.0.0/8 (private)
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 (private)
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16 (private)
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16 (link-local / AWS metadata)
+    if (a === 255 && b === 255) return true; // Broadcast
+    return false;
+  }
+  // IPv6 checks
+  if (net.isIPv6(ip)) {
+    const normalized = ip.toLowerCase();
+    if (normalized === '::1' || normalized === '::') return true; // loopback / unspecified
+    if (normalized.startsWith('fe80:')) return true; // link-local
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // unique local
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Validates that a target URL belongs to an allowlisted storage host from env,
+ * and is not loopback, private, or link-local.
+ */
+export function validateStorageUrl(rawUrl: string, expectedHostEnvVar?: string): URL {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    throw new Error('Invalid storage URL: URL is required');
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error('Malformed storage URL');
+  }
+
+  // Enforce HTTPS
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`Unsupported protocol for storage URL: ${parsed.protocol}`);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Block localhost and standard loopback hostnames
+  if (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname.endsWith('.localhost') ||
+    hostname.endsWith('.local')
+  ) {
+    throw new Error('SSRF blocked: loopback or local hostname is forbidden');
+  }
+
+  // Block direct private/loopback/link-local IP addresses
+  if (net.isIP(hostname) && isPrivateOrLoopbackIp(hostname)) {
+    throw new Error(`SSRF blocked: private or loopback IP ${hostname} is forbidden`);
+  }
+
+  // Allowlist verification against configured storage hosts
+  const allowedHosts: string[] = [];
+
+  if (expectedHostEnvVar) {
+    try {
+      const u = new URL(expectedHostEnvVar.startsWith('http') ? expectedHostEnvVar : `https://${expectedHostEnvVar}`);
+      allowedHosts.push(u.hostname.toLowerCase());
+    } catch {
+      allowedHosts.push(expectedHostEnvVar.toLowerCase());
+    }
+  }
+
+  if (process.env.SUPABASE_URL) {
+    try {
+      allowedHosts.push(new URL(process.env.SUPABASE_URL).hostname.toLowerCase());
+    } catch {}
+  }
+
+  // Cloudinary standard delivery hosts
+  allowedHosts.push('res.cloudinary.com', 'api.cloudinary.com');
+
+  const isAllowlisted = allowedHosts.some(
+    (h) => hostname === h || (h.startsWith('.') && hostname.endsWith(h))
+  );
+
+  if (!isAllowlisted) {
+    throw new Error(`SSRF blocked: storage host "${hostname}" is not in the allowlist`);
+  }
+
+  return parsed;
+}
 
 export interface ImageValidationResult {
   valid: boolean;
@@ -110,6 +212,14 @@ export class PrivateStorageService {
     tournamentId: string,
     format: 'jpeg' | 'png' | 'webp'
   ): Promise<StoredScreenshot> {
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(tournamentId)) {
+      throw new Error('Invalid tournament ID for storage upload');
+    }
+
+    const safeFormat: 'jpeg' | 'png' | 'webp' =
+      format === 'png' ? 'png' : format === 'webp' ? 'webp' : 'jpeg';
+    const serverGeneratedId = crypto.randomBytes(16).toString('hex');
+
     const isSupabaseConfigured =
       Boolean(process.env.SUPABASE_URL) && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -123,18 +233,25 @@ export class PrivateStorageService {
       const supabaseUrl = process.env.SUPABASE_URL!.replace(/\/$/, '');
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
       const bucket = process.env.SUPABASE_TOURNAMENT_BUCKET || 'private-tournaments';
-      const storageKey = `tournaments/${tournamentId}/${crypto.randomBytes(8).toString('hex')}.${format}`;
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(bucket)) {
+        throw new Error('Invalid Supabase bucket configuration');
+      }
 
-      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${storageKey}`;
-      const response = await fetch(uploadUrl, {
+      const storageKey = `tournaments/${tournamentId}/${serverGeneratedId}.${safeFormat}`;
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${storageKey}`;
+      const validatedUrl = validateStorageUrl(uploadUrl, supabaseUrl);
+
+      const response = await fetch(validatedUrl.toString(), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${supabaseKey}`,
           apikey: supabaseKey,
-          'Content-Type': `image/${format === 'jpeg' ? 'jpeg' : format}`,
+          'Content-Type': `image/${safeFormat}`,
           'x-upsert': 'true',
         },
         body: buffer as any,
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -145,13 +262,13 @@ export class PrivateStorageService {
       return {
         storageKey: `sb://${bucket}/${storageKey}`,
         provider: 'SUPABASE',
-        format,
+        format: safeFormat,
       };
     }
 
     // 2. Cloudinary Authenticated Storage
     if (isCloudinaryConfigured) {
-      const publicId = `tournament_screenshots/${tournamentId}_${crypto.randomBytes(8).toString('hex')}`;
+      const publicId = `tournament_screenshots/${tournamentId}_${serverGeneratedId}`;
 
       const uploadResult = await new Promise<any>((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -160,7 +277,7 @@ export class PrivateStorageService {
             folder: 'neobattle/private_tournaments',
             type: 'authenticated',
             resource_type: 'image',
-            format,
+            format: safeFormat,
           },
           (error, result) => {
             if (error) reject(error);
@@ -173,13 +290,13 @@ export class PrivateStorageService {
       return {
         storageKey: `cld://${uploadResult.public_id}`,
         provider: 'CLOUDINARY',
-        format,
+        format: safeFormat,
       };
     }
 
     // 3. Fallback Storage for tests & local development
-    const fallbackKey = `fallback_tourn_${tournamentId}_${crypto.randomBytes(8).toString('hex')}`;
-    const contentType = `image/${format === 'jpeg' ? 'jpeg' : format}`;
+    const fallbackKey = `fallback_tourn_${tournamentId}_${serverGeneratedId}`;
+    const contentType = `image/${safeFormat}`;
     fallbackStorageCache.set(fallbackKey, {
       buffer,
       contentType,
@@ -189,7 +306,7 @@ export class PrivateStorageService {
     return {
       storageKey: `mem://${fallbackKey}`,
       provider: 'FALLBACK',
-      format,
+      format: safeFormat,
     };
   }
 
@@ -197,10 +314,15 @@ export class PrivateStorageService {
    * Retrieves image buffer from any storage provider for AI scanning.
    */
   async getImageBuffer(storageKey: string): Promise<Buffer> {
-    if (!storageKey) throw new Error('Storage key is required');
+    if (!storageKey || typeof storageKey !== 'string') {
+      throw new Error('Storage key is required');
+    }
 
     if (storageKey.startsWith('mem://')) {
       const fallbackKey = storageKey.slice(6);
+      if (!/^[a-zA-Z0-9_-]{1,128}$/.test(fallbackKey)) {
+        throw new Error('Invalid fallback storage key format');
+      }
       const item = fallbackStorageCache.get(fallbackKey);
       if (!item) throw new Error('Screenshot not found in storage cache');
       return item.buffer;
@@ -209,18 +331,41 @@ export class PrivateStorageService {
     if (storageKey.startsWith('sb://')) {
       const withoutPrefix = storageKey.slice(5);
       const firstSlash = withoutPrefix.indexOf('/');
+      if (firstSlash === -1) {
+        throw new Error('Invalid Supabase storage key structure');
+      }
       const bucket = withoutPrefix.slice(0, firstSlash);
       const objectPath = withoutPrefix.slice(firstSlash + 1);
-      const supabaseUrl = process.env.SUPABASE_URL!.replace(/\/$/, '');
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-      const downloadUrl = `${supabaseUrl}/storage/v1/object/authenticated/${bucket}/${objectPath}`;
-      const response = await fetch(downloadUrl, {
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(bucket)) {
+        throw new Error('Invalid storage bucket identifier');
+      }
+      if (
+        !/^[a-zA-Z0-9_\-\/.]+\.(jpeg|jpg|png|webp)$/.test(objectPath) ||
+        objectPath.includes('..') ||
+        objectPath.includes(':')
+      ) {
+        throw new Error('Invalid storage object path format');
+      }
+
+      const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase storage is not configured');
+      }
+
+      const downloadUrl = `${supabaseUrl}/storage/v1/object/authenticated/${encodeURIComponent(bucket)}/${objectPath}`;
+      const validatedUrl = validateStorageUrl(downloadUrl, supabaseUrl);
+
+      const response = await fetch(validatedUrl.toString(), {
         headers: {
           Authorization: `Bearer ${supabaseKey}`,
           apikey: supabaseKey,
         },
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
       });
+
       if (!response.ok) {
         throw new Error(`Failed to fetch image from Supabase storage: ${response.statusText}`);
       }
@@ -230,26 +375,33 @@ export class PrivateStorageService {
 
     if (storageKey.startsWith('cld://')) {
       const publicId = storageKey.slice(6);
+      if (!/^[a-zA-Z0-9_\-\/]+$/.test(publicId) || publicId.includes('..')) {
+        throw new Error('Invalid Cloudinary storage key format');
+      }
+
       const signedUrl = cloudinary.url(publicId, {
         type: 'authenticated',
         sign_url: true,
         expires_at: Math.floor(Date.now() / 1000) + 300,
         secure: true,
       });
-      const response = await fetch(signedUrl);
-      if (!response.ok) throw new Error(`Failed to fetch image from Cloudinary storage: ${response.statusText}`);
+
+      const validatedUrl = validateStorageUrl(signedUrl, 'res.cloudinary.com');
+
+      const response = await fetch(validatedUrl.toString(), {
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image from Cloudinary storage: ${response.statusText}`);
+      }
       const arrayBuf = await response.arrayBuffer();
       return Buffer.from(arrayBuf);
     }
 
-    if (storageKey.startsWith('http://') || storageKey.startsWith('https://')) {
-      const response = await fetch(storageKey);
-      if (!response.ok) throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
-      const arrayBuf = await response.arrayBuffer();
-      return Buffer.from(arrayBuf);
-    }
-
-    throw new Error(`Unsupported storage key format: ${storageKey}`);
+    // Reject any arbitrary external URLs (SSRF protection)
+    throw new Error(`Unsupported or untrusted storage key format: ${storageKey}`);
   }
 
   /**
@@ -261,6 +413,14 @@ export class PrivateStorageService {
     claimId: string,
     format: 'jpeg' | 'png' | 'webp'
   ): Promise<StoredScreenshot> {
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(claimId)) {
+      throw new Error('Invalid claim ID for storage upload');
+    }
+
+    const safeFormat: 'jpeg' | 'png' | 'webp' =
+      format === 'png' ? 'png' : format === 'webp' ? 'webp' : 'jpeg';
+    const serverGeneratedId = crypto.randomBytes(16).toString('hex');
+
     const isSupabaseConfigured =
       Boolean(process.env.SUPABASE_URL) && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -274,18 +434,25 @@ export class PrivateStorageService {
       const supabaseUrl = process.env.SUPABASE_URL!.replace(/\/$/, '');
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
       const bucket = process.env.SUPABASE_DEPOSIT_BUCKET || 'private-deposits';
-      const storageKey = `claims/${claimId}.${format}`;
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(bucket)) {
+        throw new Error('Invalid Supabase bucket configuration');
+      }
 
-      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${storageKey}`;
-      const response = await fetch(uploadUrl, {
+      const storageKey = `claims/${claimId}_${serverGeneratedId}.${safeFormat}`;
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${storageKey}`;
+      const validatedUrl = validateStorageUrl(uploadUrl, supabaseUrl);
+
+      const response = await fetch(validatedUrl.toString(), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${supabaseKey}`,
           apikey: supabaseKey,
-          'Content-Type': `image/${format === 'jpeg' ? 'jpeg' : format}`,
+          'Content-Type': `image/${safeFormat}`,
           'x-upsert': 'true',
         },
         body: buffer as any,
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -296,13 +463,13 @@ export class PrivateStorageService {
       return {
         storageKey: `sb://${bucket}/${storageKey}`,
         provider: 'SUPABASE',
-        format,
+        format: safeFormat,
       };
     }
 
     // 2. Cloudinary Authenticated Storage
     if (isCloudinaryConfigured) {
-      const publicId = `deposit_claims/claim_${claimId}_${crypto.randomBytes(6).toString('hex')}`;
+      const publicId = `deposit_claims/claim_${claimId}_${serverGeneratedId}`;
 
       const uploadResult = await new Promise<any>((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -311,7 +478,7 @@ export class PrivateStorageService {
             folder: 'neobattle/private_deposit_claims',
             type: 'authenticated', // Private asset in Cloudinary
             resource_type: 'image',
-            format,
+            format: safeFormat,
           },
           (error, result) => {
             if (error) reject(error);
@@ -324,14 +491,13 @@ export class PrivateStorageService {
       return {
         storageKey: `cld://${uploadResult.public_id}`,
         provider: 'CLOUDINARY',
-        format,
+        format: safeFormat,
       };
     }
 
     // 3. Fallback Storage for tests & local development when external cloud storage is not connected
-    const fallbackKey = `fallback_${claimId}_${crypto.randomBytes(8).toString('hex')}`;
-    const contentType = `image/${format === 'jpeg' ? 'jpeg' : format}`;
-    // Store in memory for 24 hours
+    const fallbackKey = `fallback_${claimId}_${serverGeneratedId}`;
+    const contentType = `image/${safeFormat}`;
     fallbackStorageCache.set(fallbackKey, {
       buffer,
       contentType,
@@ -341,7 +507,7 @@ export class PrivateStorageService {
     return {
       storageKey: `mem://${fallbackKey}`,
       provider: 'FALLBACK',
-      format,
+      format: safeFormat,
     };
   }
 

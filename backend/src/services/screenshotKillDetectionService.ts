@@ -364,11 +364,9 @@ Return strict JSON only, without any commentary or markdown formatting.`;
   for (let idx = 0; idx < candidateModels.length; idx++) {
     const currentModel = candidateModels[idx];
     const isFallback = idx > 0;
-    const maskedKey = `...${apiKey.slice(-4)}`;
 
     console.log(`\n======================================================`);
     console.log(`[ScreenshotScan] [Gemini Pre-Flight] ${isFallback ? '(Fallback Model)' : 'Primary'}`);
-    console.log(`[ScreenshotScan] API Key (masked): ${maskedKey}`);
     console.log(`[ScreenshotScan] Model: "${currentModel}"`);
     console.log(`[ScreenshotScan] Screenshots to scan: ${imageParts.length}`);
     console.log(`======================================================`);
@@ -423,7 +421,7 @@ Return strict JSON only, without any commentary or markdown formatting.`;
       })).filter((r) => r.name.length > 0);
     }
   } catch (parseErr: any) {
-    console.warn('[ScreenshotScan] Failed to parse Gemini response as JSON:', parseErr.message, rawResponseText);
+    console.warn('[ScreenshotScan] Failed to parse Gemini response as JSON:', parseErr.message);
   }
 
   // If multiple screenshots yielded separate row arrays, merge by slot

@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import multer from 'multer';
+import { z } from 'zod';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { TournamentStatus, TransactionType, TransactionStatus } from '@prisma/client';
@@ -10,6 +11,39 @@ import {
   PlayerCandidate,
 } from '../services/screenshotKillDetectionService';
 import { notificationService } from '../services/notification.service';
+
+const tournamentIdParamSchema = z.object({
+  id: z.string().trim().min(1, 'Tournament ID is required').max(100),
+});
+
+const submitHostScreenshotsBodySchema = z.object({
+  winnerUid: z.string().trim().min(1, 'Winner UID is required').max(100),
+});
+
+const scanScreenshotsBodySchema = z.object({
+  tournamentId: z.string().trim().min(1, 'Tournament ID is required').max(100),
+  storageKeys: z.array(z.string().trim().min(1).max(500)).optional(),
+});
+
+const distributePrizesBodySchema = z.object({
+  tournamentId: z.string().trim().min(1, 'Tournament ID is required').max(100),
+  confirmedWinnerUid: z.string().trim().min(1, 'Confirmed Winner UID is required').max(100),
+  kills: z.array(
+    z.object({
+      playerId: z.string().trim().min(1).max(100),
+      kills: z.union([z.number(), z.string()]).transform((val) => {
+        const parsed = typeof val === 'number' ? val : parseInt(val, 10);
+        return isNaN(parsed) ? 0 : Math.max(0, Math.floor(parsed));
+      }),
+    })
+  ),
+});
+
+const viewAdminScreenshotQuerySchema = z.object({
+  key: z.string().trim().min(1).max(500),
+  exp: z.string().regex(/^\d+$/, 'Expiration must be a valid numeric timestamp'),
+  sig: z.string().trim().min(1).max(256),
+});
 
 // Multer memory storage for 1 to 8 screenshots, max 5 MB each
 const upload = multer({
@@ -35,13 +69,29 @@ interface UploadedFile {
  * No AI runs on host side; no kill results are seen by host.
  */
 export async function submitHostScreenshots(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const tournamentId = req.params.id;
+  const paramParsed = tournamentIdParamSchema.safeParse(req.params);
+  if (!paramParsed.success) {
+    res.status(400).json({ success: false, message: 'Invalid tournament ID format' });
+    return;
+  }
+  const tournamentId = paramParsed.data.id;
+
   const hostId = req.user?.id;
 
   if (!hostId) {
     res.status(401).json({ success: false, message: 'Authentication required' });
     return;
   }
+
+  const bodyParsed = submitHostScreenshotsBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    res.status(400).json({
+      success: false,
+      message: bodyParsed.error.issues[0]?.message || 'Winner UID is required',
+    });
+    return;
+  }
+  const winnerUid = bodyParsed.data.winnerUid;
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
@@ -87,13 +137,7 @@ export async function submitHostScreenshots(req: AuthenticatedRequest, res: Resp
     return;
   }
 
-  // 4. Winner UID check (required and must belong to a registered player)
-  const winnerUid = String(req.body.winnerUid || '').trim();
-  if (!winnerUid) {
-    res.status(400).json({ success: false, message: 'Winner UID is required' });
-    return;
-  }
-
+  // 4. Winner UID check (must belong to a registered player)
   const registeredPlayerUids = new Set<string>();
   for (const entry of tournament.entries) {
     if (entry.user) {
@@ -228,7 +272,12 @@ export async function submitHostScreenshots(req: AuthenticatedRequest, res: Resp
  * Admin-only: Fetch tournament details, registered player roster, host-given Winner UID, and host screenshots.
  */
 export async function getTournamentScreenshotData(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const tournamentId = req.params.id;
+  const paramParsed = tournamentIdParamSchema.safeParse(req.params);
+  if (!paramParsed.success) {
+    res.status(400).json({ success: false, message: 'Invalid tournament ID format' });
+    return;
+  }
+  const tournamentId = paramParsed.data.id;
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
@@ -376,12 +425,15 @@ export async function getTournamentScreenshotData(req: AuthenticatedRequest, res
  * normalize names and fuzzy-match to registered players.
  */
 export async function scanScreenshots(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const { tournamentId, storageKeys } = req.body;
-
-  if (!tournamentId) {
-    res.status(400).json({ success: false, message: 'Tournament ID is required' });
+  const bodyParsed = scanScreenshotsBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    res.status(400).json({
+      success: false,
+      message: bodyParsed.error.issues[0]?.message || 'Tournament ID is required',
+    });
     return;
   }
+  const { tournamentId, storageKeys } = bodyParsed.data;
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
@@ -485,7 +537,6 @@ export async function scanScreenshots(req: AuthenticatedRequest, res: Response):
  * Uses atomic row locks, idempotency checks, and creates an audit log.
  */
 export async function distributePerKillPrizes(req: AuthenticatedRequest, res: Response): Promise<void> {
-  const { tournamentId, confirmedWinnerUid, kills } = req.body;
   const adminId = req.user?.id;
 
   if (!adminId) {
@@ -493,20 +544,15 @@ export async function distributePerKillPrizes(req: AuthenticatedRequest, res: Re
     return;
   }
 
-  if (!tournamentId) {
-    res.status(400).json({ success: false, message: 'Tournament ID is required' });
+  const bodyParsed = distributePrizesBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    res.status(400).json({
+      success: false,
+      message: bodyParsed.error.issues[0]?.message || 'Invalid prize distribution payload',
+    });
     return;
   }
-
-  if (!confirmedWinnerUid) {
-    res.status(400).json({ success: false, message: 'Confirmed Winner UID is required' });
-    return;
-  }
-
-  if (!Array.isArray(kills)) {
-    res.status(400).json({ success: false, message: 'Kills list must be an array' });
-    return;
-  }
+  const { tournamentId, confirmedWinnerUid, kills } = bodyParsed.data;
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
@@ -607,7 +653,7 @@ export async function distributePerKillPrizes(req: AuthenticatedRequest, res: Re
 
   for (const k of kills) {
     const pId = String(k.playerId || '');
-    const killCount = Math.max(0, parseInt(k.kills, 10) || 0);
+    const killCount = Math.max(0, Math.floor(Number(k.kills)) || 0);
     const reg = registeredPlayerMap.get(pId);
 
     if (reg) {
@@ -818,15 +864,15 @@ export async function distributePerKillPrizes(req: AuthenticatedRequest, res: Re
  * Admin-only: Stream an in-memory or private storage screenshot.
  */
 export async function viewAdminScreenshot(req: any, res: Response): Promise<void> {
-  const { key, exp, sig } = req.query;
-
-  if (!key || typeof key !== 'string') {
-    res.status(400).send('Key is required');
+  const queryParsed = viewAdminScreenshotQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    res.status(400).send('Key, valid expiration, and signature are required');
     return;
   }
+  const { key, exp, sig } = queryParsed.data;
 
   try {
-    const img = privateStorageService.getFallbackImage(key, parseInt(exp as string, 10), sig as string);
+    const img = privateStorageService.getFallbackImage(key, parseInt(exp, 10), sig);
     if (!img) {
       res.status(404).send('Screenshot expired or signature invalid');
       return;

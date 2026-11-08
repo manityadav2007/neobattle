@@ -260,7 +260,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
         console.warn('[TournamentDetails] Failed to slice crop preview:', err);
       }
     };
-    img.src = firstFrameDataUrl;
+    img.src = encodeURI(sanitizeMediaUrl(firstFrameDataUrl));
   }, [firstFrameDataUrl, cropRegion]);
 
   // Immediately auto-play video as soon as crop area is confirmed
@@ -1771,7 +1771,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
-                                src={previewUrl}
+                                src={encodeURI(sanitizeMediaUrl(previewUrl))}
                                 alt={`Screenshot ${idx + 1}`}
                                 className="absolute inset-0 w-full h-full object-cover"
                               />
