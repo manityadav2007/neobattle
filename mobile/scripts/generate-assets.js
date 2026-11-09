@@ -53,7 +53,7 @@ async function main() {
       fs.mkdirSync(targetFolder, { recursive: true });
     }
 
-    // A. Adaptive Icon Foreground (60% safe zone inside 108dp canvas)
+    // A. Adaptive Icon Foreground (58% safe zone inside 108dp canvas)
     const adaptiveSize = d.adaptiveCanvas;
     const fgShieldHeight = Math.round(adaptiveSize * 0.58);
     const fgShieldWidth = Math.round(fgShieldHeight * (trimmedMeta.width / trimmedMeta.height));
@@ -129,21 +129,23 @@ async function main() {
     console.log(`Generated icons for ${d.name} (${adaptiveSize}px adaptive, ${legacySize}px legacy)`);
   }
 
-  // 3. Android 12+ SplashScreen Animated Icon (288dp canvas, <= 60% logo, no background tint)
+  // 3. Android 12+ System Splash Icon & Pre-Android 12 Centered Shield
+  // Canvas: 288dp. Visible circular mask: 192dp.
+  // Shield size: 116dp wide/high (safely inside 192dp circle, radius 82dp <= 96dp circle radius, no cut corners, transparent padding).
   const splashDensities = [
-    { folder: 'drawable-mdpi', canvas: 288 },
-    { folder: 'drawable-hdpi', canvas: 432 },
-    { folder: 'drawable-xhdpi', canvas: 576 },
-    { folder: 'drawable-xxhdpi', canvas: 864 },
-    { folder: 'drawable-xxxhdpi', canvas: 1152 },
+    { folder: 'drawable-mdpi', canvas: 288, shield: 116 },
+    { folder: 'drawable-hdpi', canvas: 432, shield: 174 },
+    { folder: 'drawable-xhdpi', canvas: 576, shield: 232 },
+    { folder: 'drawable-xxhdpi', canvas: 864, shield: 348 },
+    { folder: 'drawable-xxxhdpi', canvas: 1152, shield: 464 },
   ];
 
   for (const s of splashDensities) {
     const splashCanvas = s.canvas;
-    const logoHeight = Math.round(splashCanvas * 0.52); // ~150dp in 288dp canvas, safely inside 160dp circular mask
-    const logoWidth = Math.round(logoHeight * (trimmedMeta.width / trimmedMeta.height));
-    const splashLogo = await sharp(trimmedLogoBuffer)
-      .resize(logoWidth, logoHeight, { fit: 'contain' })
+    const shieldSize = s.shield;
+
+    const splashShield = await sharp(trimmedLogoBuffer)
+      .resize(shieldSize, shieldSize, { fit: 'contain' })
       .toBuffer();
 
     const folderPath = path.join(resDir, s.folder);
@@ -151,7 +153,7 @@ async function main() {
       fs.mkdirSync(folderPath, { recursive: true });
     }
 
-    // Pure black native splash with transparent icon (seamless transition to web loading screen)
+    // Android 12+ splash icon: pure transparent 288dp canvas with centered shield
     await sharp({
       create: {
         width: splashCanvas,
@@ -160,13 +162,31 @@ async function main() {
         background: { r: 0, g: 0, b: 0, alpha: 0 },
       },
     })
+      .composite([{ input: splashShield, gravity: 'center' }])
       .png()
       .toFile(path.join(folderPath, 'splash_icon_v31.png'));
 
-    console.log(`Generated transparent splash_icon_v31 for ${s.folder} (${splashCanvas}x${splashCanvas})`);
+    // Also splash.png in each density for backwards compatibility
+    await sharp({
+      create: {
+        width: splashCanvas,
+        height: splashCanvas,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .composite([{ input: splashShield, gravity: 'center' }])
+      .png()
+      .toFile(path.join(folderPath, 'splash.png'));
+
+    console.log(`Generated splash_icon_v31 and splash for ${s.folder} (${splashCanvas}x${splashCanvas}, shield: ${shieldSize}px)`);
   }
 
-  // Also default splash_icon_v31 in res/drawable (fully transparent)
+  // Default in res/drawable (576x576, shield 232px)
+  const defaultShield = await sharp(trimmedLogoBuffer)
+    .resize(232, 232, { fit: 'contain' })
+    .toBuffer();
+
   await sharp({
     create: {
       width: 576,
@@ -175,10 +195,45 @@ async function main() {
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
   })
+    .composite([{ input: defaultShield, gravity: 'center' }])
     .png()
     .toFile(path.join(resDir, 'drawable/splash_icon_v31.png'));
 
-  // 4. Update ic_launcher_background.xml files
+  await sharp({
+    create: {
+      width: 576,
+      height: 576,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: defaultShield, gravity: 'center' }])
+    .png()
+    .toFile(path.join(resDir, 'drawable/splash.png'));
+
+  // 4. Remove all legacy full-screen drawable-port-* and drawable-land-* splash art folders
+  const legacyFolders = [
+    'drawable-port-mdpi',
+    'drawable-port-hdpi',
+    'drawable-port-xhdpi',
+    'drawable-port-xxhdpi',
+    'drawable-port-xxxhdpi',
+    'drawable-land-mdpi',
+    'drawable-land-hdpi',
+    'drawable-land-xhdpi',
+    'drawable-land-xxhdpi',
+    'drawable-land-xxxhdpi',
+  ];
+
+  for (const lf of legacyFolders) {
+    const fullPath = path.join(resDir, lf);
+    if (fs.existsSync(fullPath)) {
+      fs.rmSync(fullPath, { recursive: true, force: true });
+      console.log(`Removed legacy full-screen art directory: ${lf}`);
+    }
+  }
+
+  // 5. Update ic_launcher_background.xml files
   fs.writeFileSync(
     path.join(resDir, 'values/ic_launcher_background.xml'),
     `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#000000</color>\n</resources>\n`
@@ -196,7 +251,7 @@ async function main() {
     console.log('Removed default Android robot vector in drawable-v24/ic_launcher_foreground.xml');
   }
 
-  // 5. Update mipmap-anydpi-v26 xmls to include monochrome
+  // 6. Update mipmap-anydpi-v26 xmls to include monochrome
   const adaptiveXml = `<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@color/ic_launcher_background"/>\n    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n    <monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>\n</adaptive-icon>\n`;
   fs.writeFileSync(path.join(resDir, 'mipmap-anydpi-v26/ic_launcher.xml'), adaptiveXml);
   fs.writeFileSync(path.join(resDir, 'mipmap-anydpi-v26/ic_launcher_round.xml'), adaptiveXml);

@@ -1,19 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { SPLASH_SHIELD_DATA_URI } from './splashShieldData';
 
 export const APP_SPLASH_BG = '/app-splash-bg.webp';
 export const FALLBACK_LOGO = '/logo/image_21332e.jpg';
 
 const SESSION_STORAGE_KEY = 'neobattle_splash_shown';
 const MIN_POST_NATIVE_HIDE_MS = 800; // minimum 0.8s after native splash hidden
-const MAX_SAFETY_MS = 6000;          // maximum 6.0s safety timeout
+const MAX_SAFETY_MS = 8000;          // maximum 8.0s timeout before showing retry screen
 const FADE_OUT_MS = 300;             // 300ms fadeout on top of painted content
 
 export default function SplashScreen() {
   const [mounted, setMounted] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
   const [bgLoaded, setBgLoaded] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     let isApp = false;
@@ -67,12 +69,13 @@ export default function SplashScreen() {
     } catch {}
 
     let dismissed = false;
+    let isTimedOut = false;
     let nativeSplashHiddenAt = 0;
     let routeContentPainted = false;
     let dismissTimer: ReturnType<typeof setTimeout> | null = null;
 
     const triggerDismiss = () => {
-      if (dismissed) return;
+      if (dismissed || isTimedOut) return;
       dismissed = true;
       setFadeOut(true);
       setTimeout(() => {
@@ -85,7 +88,7 @@ export default function SplashScreen() {
     };
 
     const checkDismissReady = () => {
-      if (dismissed) return;
+      if (dismissed || isTimedOut) return;
       // Fade out ONLY after the first real content of the route has painted
       // AND native splash has been hidden with at least 0.8s elapsed
       if (!routeContentPainted || nativeSplashHiddenAt === 0) return;
@@ -122,7 +125,17 @@ export default function SplashScreen() {
       }
     };
 
-    // 1. Preload and decode background artwork
+    // 1. Call SplashScreen.hide() as soon as the inline shield layer is painted (two requestAnimationFrame calls)
+    // There is NO network dependency for the native hide: pure black background + inlined shield matches the system splash.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        nativeSplashHiddenAt = Date.now();
+        hideNativeSplashWithRetry();
+        checkDismissReady();
+      });
+    });
+
+    // 2. Background artwork loads asynchronously in background; does NOT block native hide
     const img = new Image();
     img.src = APP_SPLASH_BG;
 
@@ -134,17 +147,7 @@ export default function SplashScreen() {
       } catch {
         // decode fallback
       }
-
-      // Two requestAnimationFrame calls guarantee web overlay's artwork has painted
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setBgLoaded(true);
-          nativeSplashHiddenAt = Date.now();
-          // Call SplashScreen.hide() ONLY after web artwork has loaded and painted
-          hideNativeSplashWithRetry();
-          checkDismissReady();
-        });
-      });
+      setBgLoaded(true);
     };
 
     if (img.complete) {
@@ -154,7 +157,7 @@ export default function SplashScreen() {
       img.onerror = () => onArtworkReady();
     }
 
-    // 2. Listeners for route painted & data ready
+    // 3. Listeners for route painted & data ready
     const handleRoutePainted = () => {
       markRoutePainted();
     };
@@ -162,7 +165,7 @@ export default function SplashScreen() {
     window.addEventListener('app:route-painted', handleRoutePainted, { once: true });
     window.addEventListener('app:data-ready', handleRoutePainted, { once: true });
 
-    // 3. MutationObserver fallback to detect route elements in DOM
+    // 4. MutationObserver fallback to detect route elements in DOM
     const checkDom = () => {
       if (typeof document !== 'undefined') {
         const target = document.querySelector('[data-app-login-gate], [data-app-main], main');
@@ -183,14 +186,19 @@ export default function SplashScreen() {
       observer.observe(document.body, { childList: true, subtree: true });
     }
 
-    // 4. Fallback route painted timer (in case no event fires and DOM observer misses)
+    // 5. Fallback route painted timer (in case no event fires and DOM observer misses)
     const fallbackRouteTimer = setTimeout(() => {
       markRoutePainted();
-    }, 1200);
+    }, 1500);
 
-    // 5. Maximum 6-second safety timeout so splash can NEVER get stuck
+    // 6. Maximum 8-second safety timeout: if content is still not painted, show black-themed retry screen
     const safetyTimer = setTimeout(() => {
-      triggerDismiss();
+      if (!routeContentPainted && !dismissed) {
+        isTimedOut = true;
+        setTimedOut(true);
+      } else {
+        triggerDismiss();
+      }
     }, MAX_SAFETY_MS);
 
     return () => {
@@ -214,14 +222,15 @@ export default function SplashScreen() {
         fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
-      {/* Background artwork: full screen object-fit cover, centered over pure #000 */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Background artwork: loads in background and fades in over 400ms behind the shield */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
         <img
           src={APP_SPLASH_BG}
           alt=""
-          className={`w-full h-full object-cover object-center splash-bg-art transition-opacity duration-300 ease-out ${
+          className={`w-full h-full object-cover object-center splash-bg-art transition-opacity ease-out ${
             bgLoaded ? 'opacity-100' : 'opacity-0'
           }`}
+          style={{ transitionDuration: '400ms' }}
           loading="eager"
           decoding="async"
         />
@@ -236,46 +245,87 @@ export default function SplashScreen() {
         />
       </div>
 
-      {/* Circular spinner loader below the baked shield logo */}
-      <div
-        className="absolute inset-x-0 flex flex-col items-center justify-center pointer-events-none z-10"
-        style={{ top: 'calc(55% + 18px)' }}
-      >
-        <div className="splash-spinner-container">
-          <svg
-            className="splash-spinner"
-            viewBox="0 0 44 44"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <defs>
-              <linearGradient id="splash-spinner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#3b82f6" />
-                <stop offset="50%" stopColor="#8b5cf6" />
-                <stop offset="100%" stopColor="#f97316" />
-              </linearGradient>
-            </defs>
-            {/* Thin dim track */}
-            <circle
-              cx="22"
-              cy="22"
-              r="19"
-              stroke="rgba(255, 255, 255, 0.12)"
-              strokeWidth="3"
+      {/* Main centered shield & loader: rendered from the very first HTML with zero network dependencies */}
+      {!timedOut ? (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+          <div className="relative flex flex-col items-center">
+            {/* The shield placed at EXACTLY the same position and size (116dp / 116px) as the system splash icon */}
+            <img
+              src={SPLASH_SHIELD_DATA_URI}
+              alt="NeoBattle"
+              width={116}
+              height={116}
+              className="w-[116px] h-[116px] object-contain drop-shadow-[0_0_24px_rgba(249,115,22,0.25)]"
+              decoding="sync"
             />
-            {/* Gradient ring */}
-            <circle
-              cx="22"
-              cy="22"
-              r="19"
-              stroke="url(#splash-spinner-grad)"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray="75 120"
-            />
-          </svg>
+
+            {/* Circular gradient loader placed below the centered shield */}
+            <div className="absolute top-[calc(100%+24px)] splash-spinner-container">
+              <svg
+                className="splash-spinner"
+                viewBox="0 0 44 44"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <linearGradient id="splash-spinner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#3b82f6" />
+                    <stop offset="50%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#f97316" />
+                  </linearGradient>
+                </defs>
+                {/* Thin dim track */}
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="19"
+                  stroke="rgba(255, 255, 255, 0.12)"
+                  strokeWidth="3"
+                />
+                {/* Gradient ring */}
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="19"
+                  stroke="url(#splash-spinner-grad)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray="75 120"
+                />
+              </svg>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Black-themed retry screen with the shield and Try again button if 8s safety timeout reached */
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black px-6 text-center select-auto">
+          <img
+            src={SPLASH_SHIELD_DATA_URI}
+            alt="NeoBattle"
+            width={116}
+            height={116}
+            className="w-[116px] h-[116px] object-contain drop-shadow-[0_0_28px_rgba(249,115,22,0.3)] mb-6"
+            decoding="sync"
+          />
+          <h2 className="text-xl font-bold text-white mb-2 font-display tracking-wider">
+            Connection Timeout
+          </h2>
+          <p className="text-sm text-neutral-400 max-w-xs mb-6">
+            Unable to connect to the arena. Please check your internet connection.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }}
+            className="px-6 py-2.5 rounded-lg font-semibold text-sm bg-gradient-to-r from-orange-500 to-amber-500 text-black shadow-lg shadow-orange-500/20 active:scale-95 transition-transform cursor-pointer"
+          >
+            Try again
+          </button>
+        </div>
+      )}
     </div>
   );
 }

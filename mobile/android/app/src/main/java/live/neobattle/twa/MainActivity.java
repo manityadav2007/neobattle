@@ -40,7 +40,7 @@ public class MainActivity extends BridgeActivity {
             if (getBridge() != null) {
                 getBridge().eval("window.Capacitor?.Plugins?.SplashScreen?.hide({ fadeOutDuration: 250 });", null);
             }
-        }, 6000);
+        }, 4000);
 
         // Hardware back button: navigate history in WebView, exit only from root/home page
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

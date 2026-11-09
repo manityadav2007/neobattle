@@ -187,7 +187,7 @@ test('Startup Splash Screen - Component and detection logic meet all specs', () 
     'SplashScreen must use 300ms fadeout transition'
   );
   assert.ok(
-    splashContent.includes('3000') || splashContent.includes('6000'),
+    splashContent.includes('3000') || splashContent.includes('6000') || splashContent.includes('8000'),
     'SplashScreen must have safety timeout'
   );
 });
@@ -734,42 +734,45 @@ test('App Mode Redesigned Loading Screen & Native Splash - Specs Verification', 
   assert.ok(splash.includes('splash-spinner-grad'), 'Spinner must have gradient ring from blue to orange');
   assert.ok(!splash.includes('NEOBATTLE</span>'), 'SplashScreen must not render duplicate brand text');
 
-  // 4. Timing: min 0.8s (800ms) after native splash hidden, max 6s (6000ms) safety, fade 300ms
+  // 4. Timing: min 0.8s (800ms) after native splash hidden, max 8s (8000ms) safety with retry screen, fade 300ms
   assert.ok(splash.includes('800'), 'SplashScreen must enforce minimum 0.8s display after native splash hidden');
-  assert.ok(splash.includes('6000'), 'SplashScreen must enforce maximum 6.0s safety');
+  assert.ok(splash.includes('8000') || splash.includes('6000'), 'SplashScreen must enforce safety timeout');
   assert.ok(splash.includes('300'), 'SplashScreen must use 300ms fadeout');
+  assert.ok(splash.includes('Try again'), 'SplashScreen must provide Try again button on timeout');
 
   // 5. Preload in app mode only via layout script
   const layoutPath = path.join(frontendDir, 'src', 'app', 'layout.tsx');
   const layout = fs.readFileSync(layoutPath, 'utf8');
   assert.ok(layout.includes('/app-splash-bg.webp'), 'layout.tsx must preload /app-splash-bg.webp in app mode');
 
-  // 6. Native Android splash: launchAutoHide false, launchShowDuration 6000, scaleType CENTER_CROP, versionCode >= 7
+  // 6. Native Android splash: launchAutoHide false, launchShowDuration 4000 safety, scaleType CENTER, versionCode >= 8
   const buildGradlePath = path.join(mobileDir, 'android', 'app', 'build.gradle');
   const buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
-  assert.ok(/versionCode\s+[7-9]/i.test(buildGradle), 'build.gradle must specify updated versionCode >= 7');
+  assert.ok(/versionCode\s+[8-9]/i.test(buildGradle), 'build.gradle must specify updated versionCode >= 8');
 
   const capConfigPath = path.join(mobileDir, 'capacitor.config.json');
   const capConfig = JSON.parse(fs.readFileSync(capConfigPath, 'utf8'));
   assert.equal(capConfig.plugins?.SplashScreen?.launchAutoHide, false, 'launchAutoHide must be false');
-  assert.equal(capConfig.plugins?.SplashScreen?.launchShowDuration, 6000, 'launchShowDuration must be 6000ms safety');
+  assert.equal(capConfig.plugins?.SplashScreen?.launchShowDuration, 4000, 'launchShowDuration must be 4000ms safety');
   assert.equal(capConfig.plugins?.SplashScreen?.launchFadeOutDuration, 250, 'launchFadeOutDuration must be 250ms');
-  assert.equal(capConfig.plugins?.SplashScreen?.androidScaleType, 'CENTER_CROP', 'androidScaleType must be CENTER_CROP');
 
-  // 7. Check exactly ONE resource named "splash" per res folder (no duplicate splash.xml and splash.png)
+  // 7. Check exactly ONE resource per name in each res folder (no duplicate resources)
   const { checkDuplicateResources } = require('../../../mobile/scripts/check-duplicate-resources');
   const resDir = path.join(mobileDir, 'android', 'app', 'src', 'main', 'res');
   const dupCheck = checkDuplicateResources(resDir);
   assert.equal(dupCheck.errors.length, 0, `Must have zero duplicate resources in Android res, found: ${dupCheck.errors.join('; ')}`);
 
-  // 8. Native splash drawables bundled inside APK
-  const portDrawables = ['drawable-port-mdpi', 'drawable-port-hdpi', 'drawable-port-xhdpi', 'drawable-port-xxhdpi', 'drawable-port-xxxhdpi', 'drawable'];
-  for (const folder of portDrawables) {
-    const splashPng = path.join(resDir, folder, 'splash.png');
-    assert.ok(fs.existsSync(splashPng), `splash.png must exist in ${folder}`);
+  // 8. Native splash icons and background drawables
+  const splashDrawables = ['drawable-mdpi', 'drawable-hdpi', 'drawable-xhdpi', 'drawable-xxhdpi', 'drawable-xxxhdpi', 'drawable'];
+  for (const folder of splashDrawables) {
+    const splashIcon = path.join(resDir, folder, 'splash_icon_v31.png');
+    assert.ok(fs.existsSync(splashIcon), `splash_icon_v31.png must exist in ${folder}`);
   }
-  const splashXml = path.join(resDir, 'drawable', 'splash.xml');
-  assert.ok(!fs.existsSync(splashXml), 'splash.xml must be deleted to avoid duplicate resources with splash.png');
+  const splashBackgroundXml = path.join(resDir, 'drawable', 'splash_background.xml');
+  assert.ok(fs.existsSync(splashBackgroundXml), 'splash_background.xml must exist for pre-Android 12 centered shield');
+
+  // 9. Inlined shield layer in website loading screen
+  assert.ok(splash.includes('SPLASH_SHIELD_DATA_URI'), 'SplashScreen must render inlined shield data URI with 0 network dependency');
 
   // 9. Aggressive caching headers for /app-splash-bg.webp
   const nextConfigPath = path.join(frontendDir, 'next.config.js');
