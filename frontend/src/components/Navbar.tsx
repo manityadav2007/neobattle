@@ -73,6 +73,7 @@ export default function Navbar() {
 
   return (
     <nav
+      data-app-header="true"
       className={`site-navbar fixed top-0 left-0 right-0 z-50 ${
         isApp
           ? 'bg-black border-none shadow-none backdrop-blur-none'

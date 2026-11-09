@@ -21,7 +21,10 @@ export default function BottomNav() {
   };
 
   return (
-    <nav className="site-bottom-nav fixed bottom-0 left-0 right-0 z-50 md:hidden border-t border-white/10 bg-[#0d0d13]/95 backdrop-blur-xl safe-bottom">
+    <nav
+      data-app-bottom-nav="true"
+      className="site-bottom-nav fixed bottom-0 left-0 right-0 z-50 md:hidden border-t border-white/10 bg-[#0d0d13]/95 backdrop-blur-xl safe-bottom"
+    >
       <div className="flex items-center justify-around h-14 max-w-lg mx-auto">
         {navItems.map((item) => {
           const Icon = item.icon;

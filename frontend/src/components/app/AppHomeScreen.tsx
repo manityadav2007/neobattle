@@ -143,7 +143,7 @@ export default function AppHomeScreen() {
   const openMatches = myEntries.filter(({ tournament }) => !isTournamentEnded(tournament)).length;
 
   return (
-    <div className="relative w-full max-w-lg mx-auto px-4 pb-12 text-white">
+    <div data-app-home="true" className="relative w-full max-w-lg mx-auto px-4 pb-12 text-white">
       {/* 3. HOME TOP STRIP: "Good <morning/afternoon/evening>, <first name>" and a wallet chip */}
       <div className="pt-3 pb-3 flex items-center justify-between gap-3">
         {authLoading ? (

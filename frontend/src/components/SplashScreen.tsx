@@ -157,41 +157,19 @@ export default function SplashScreen() {
       img.onerror = () => onArtworkReady();
     }
 
-    // 3. Listeners for route painted & data ready
-    const handleRoutePainted = () => {
+    // 3. Listen for explicit app-content-ready flag set by layout after header + bottom nav + route content mount
+    const handleContentReady = () => {
       markRoutePainted();
     };
 
-    window.addEventListener('app:route-painted', handleRoutePainted, { once: true });
-    window.addEventListener('app:data-ready', handleRoutePainted, { once: true });
-
-    // 4. MutationObserver fallback to detect route elements in DOM
-    const checkDom = () => {
-      if (typeof document !== 'undefined') {
-        const target = document.querySelector('[data-app-login-gate], [data-app-main], main');
-        if (target) {
-          markRoutePainted();
-          return true;
-        }
-      }
-      return false;
-    };
-
-    if (!checkDom() && typeof MutationObserver !== 'undefined') {
-      const observer = new MutationObserver(() => {
-        if (checkDom()) {
-          observer.disconnect();
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
+    if (typeof window !== 'undefined' && (window as any).__appContentReady) {
+      markRoutePainted();
+    } else {
+      window.addEventListener('app-content-ready', handleContentReady, { once: true });
+      window.addEventListener('app:route-painted', handleContentReady, { once: true });
     }
 
-    // 5. Fallback route painted timer (in case no event fires and DOM observer misses)
-    const fallbackRouteTimer = setTimeout(() => {
-      markRoutePainted();
-    }, 1500);
-
-    // 6. Maximum 8-second safety timeout: if content is still not painted, show black-themed retry screen
+    // 4. Maximum 8-second safety timeout: if content is still not painted, show black-themed retry screen
     const safetyTimer = setTimeout(() => {
       if (!routeContentPainted && !dismissed) {
         isTimedOut = true;
@@ -203,10 +181,9 @@ export default function SplashScreen() {
 
     return () => {
       if (dismissTimer) clearTimeout(dismissTimer);
-      clearTimeout(fallbackRouteTimer);
       clearTimeout(safetyTimer);
-      window.removeEventListener('app:route-painted', handleRoutePainted);
-      window.removeEventListener('app:data-ready', handleRoutePainted);
+      window.removeEventListener('app-content-ready', handleContentReady);
+      window.removeEventListener('app:route-painted', handleContentReady);
     };
   }, []);
 
