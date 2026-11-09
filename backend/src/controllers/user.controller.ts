@@ -181,7 +181,7 @@ export async function getLeaderboard(_req: AuthenticatedRequest, res: Response):
     where: { userId: { in: userIdsForWins }, placement: 1 },
     _count: { id: true },
   });
-  const winMap = new Map(winCounts.map((w) => [w.userId!, w._count.id]));
+  const winMap = new Map<string, number>(winCounts.map((w) => [w.userId!, w._count.id]));
 
   function getLeague(wins: number): string {
     if (wins >= 30) return 'Diamond/Elite';
