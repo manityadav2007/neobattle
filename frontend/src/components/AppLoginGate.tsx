@@ -82,12 +82,7 @@ export default function AppLoginGate({ children }: { children: ReactNode }) {
     };
   }, [isApp, refetch, router]);
 
-  // If not running in installed app mode, don't gate: normal browser view unchanged
-  if (!isApp) {
-    return <>{children}</>;
-  }
-
-  // If user is already authenticated, allow through
+  // Notify splash screen that route content has painted when not verifying auth
   useEffect(() => {
     if (!isApp) return;
     if (!loading || !cachedTokenHint) {
@@ -101,6 +96,12 @@ export default function AppLoginGate({ children }: { children: ReactNode }) {
     }
   }, [isApp, loading, cachedTokenHint, user]);
 
+  // If not running in installed app mode, don't gate: normal browser view unchanged
+  if (!isApp) {
+    return <>{children}</>;
+  }
+
+  // If user is already authenticated, allow through
   if (user) {
     return <>{children}</>;
   }

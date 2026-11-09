@@ -1306,7 +1306,7 @@ export default function HostDashboardPage() {
                         />
                         {t.format !== 'SOLO' && (
                           <p className="text-[11px] text-zinc-400 mt-1.5">
-                            Enter any verified Free Fire UID belonging to the 1st winning team. When approved by admin, the full prize will be credited directly to the team captain's wallet.
+                            Enter any verified Free Fire UID belonging to the 1st winning team. When approved by admin, the full prize will be credited directly to the team captain&apos;s wallet.
                           </p>
                         )}
                       </div>

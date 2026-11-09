@@ -12,12 +12,13 @@ export const validate =
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const first = error.errors[0];
+        const issues = error.issues || (error as any).errors || [];
+        const first = issues[0];
         res.status(400).json({
           success: false,
           message: first?.message || 'Validation failed',
-          errors: error.errors.map((e) => ({
-            field: e.path.join('.'),
+          errors: issues.map((e) => ({
+            field: Array.isArray(e.path) ? e.path.join('.') : '',
             message: e.message,
           })),
         });

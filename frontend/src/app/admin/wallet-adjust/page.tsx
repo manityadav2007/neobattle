@@ -56,7 +56,7 @@ export default function AdminWalletAdjustPage() {
             <Banknote className="w-8 h-8 text-purple-400" />
             Wallet Adjustment
           </h1>
-          <p className="text-zinc-400 mt-1">Manually credit or debit any user's wallet for corrections or bonuses</p>
+          <p className="text-zinc-400 mt-1">Manually credit or debit any user&apos;s wallet for corrections or bonuses</p>
         </div>
 
         {error && (
