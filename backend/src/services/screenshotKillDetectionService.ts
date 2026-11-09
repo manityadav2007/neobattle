@@ -78,21 +78,31 @@ export function normalizePlayerName(raw: string): string {
   // 3. Strip common gaming decorative Unicode characters and symbols first
   str = str.replace(/[★☆亗彡⚡♛✿™★•●◆◇▼▲►◄✓✔✗✘\-_+=~`!@#$%^&*|\\:;"'<>,.?/]/gu, '');
 
-  // 3. Strip clan tags inside brackets [TAG] ONLY when there are alphanumeric letters outside the brackets
-  if (/[a-z0-9]+\s*\[.*?\]|\[.*?\]\s*[a-z0-9]+/i.test(str)) {
-    str = str.replace(/\[.*?\]|\(.*?\)|<.*?>|\{.*?\}/g, '');
+  // 3. Strip clan tags inside brackets [TAG], (TAG), {TAG} ONLY when there are alphanumeric letters outside the brackets
+  // Repeatedly strip innermost bracket groups until the string stops changing to prevent overlapping/nested bypasses
+  const hasAlphanumericOutside = /[a-z0-9]/.test(str.replace(/\[[^\[\]]*\]|\([^\(\)]*\)|\{[^\{\}]*\}/g, ''));
+  if (hasAlphanumericOutside) {
+    let prev = '';
+    while (prev !== str) {
+      prev = str;
+      str = str.replace(/\[[^\[\]]*\]|\([^\(\)]*\)|\{[^\{\}]*\}/g, '');
+    }
   }
 
-  // 4. Strip any remaining bracket characters
-  str = str.replace(/[\[\]\(\)\{\}<>]/g, '');
+  // 4. Strip any remaining bracket characters repeatedly until string stops changing
+  let prevBrackets = '';
+  while (prevBrackets !== str) {
+    prevBrackets = str;
+    str = str.replace(/[\[\]\(\)\{\}]/g, '');
+  }
 
   // 5. Lookalike unification (0 -> o, 1/i -> l)
   str = str
     .replace(/0/g, 'o')
     .replace(/[1i]/g, 'l');
 
-  // 6. Collapse whitespace
-  return str.replace(/\s+/g, '').trim();
+  // 6. Strict allowlist: keep only allowed alphanumeric characters [a-z0-9]
+  return str.replace(/[^a-z0-9]/g, '').trim();
 }
 
 /**

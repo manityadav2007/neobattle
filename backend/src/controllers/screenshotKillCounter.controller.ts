@@ -69,6 +69,15 @@ interface UploadedFile {
  * No AI runs on host side; no kill results are seen by host.
  */
 export async function submitHostScreenshots(req: AuthenticatedRequest, res: Response): Promise<void> {
+  if (!req.params || typeof req.params !== 'object' || Array.isArray(req.params)) {
+    res.status(400).json({ success: false, message: 'Invalid request parameters' });
+    return;
+  }
+  if (typeof req.params.id !== 'string') {
+    res.status(400).json({ success: false, message: 'Invalid tournament ID format' });
+    return;
+  }
+
   const paramParsed = tournamentIdParamSchema.safeParse(req.params);
   if (!paramParsed.success) {
     res.status(400).json({ success: false, message: 'Invalid tournament ID format' });
@@ -78,8 +87,17 @@ export async function submitHostScreenshots(req: AuthenticatedRequest, res: Resp
 
   const hostId = req.user?.id;
 
-  if (!hostId) {
+  if (!hostId || typeof hostId !== 'string') {
     res.status(401).json({ success: false, message: 'Authentication required' });
+    return;
+  }
+
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    res.status(400).json({ success: false, message: 'Invalid request body' });
+    return;
+  }
+  if (typeof req.body.winnerUid !== 'string') {
+    res.status(400).json({ success: false, message: 'Winner UID is required' });
     return;
   }
 
@@ -161,7 +179,11 @@ export async function submitHostScreenshots(req: AuthenticatedRequest, res: Resp
   }
 
   // 5. File upload validation (1 to 8 images, max 5MB, genuine magic bytes)
-  const files = (req.files as UploadedFile[]) || [];
+  if (req.files && !Array.isArray(req.files)) {
+    res.status(400).json({ success: false, message: 'Invalid files upload format' });
+    return;
+  }
+  const files = Array.isArray(req.files) ? (req.files as UploadedFile[]) : [];
   if (files.length === 0) {
     res.status(400).json({ success: false, message: 'Please upload at least 1 match screenshot' });
     return;
@@ -175,6 +197,13 @@ export async function submitHostScreenshots(req: AuthenticatedRequest, res: Resp
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
+    if (!file || typeof file !== 'object' || !Buffer.isBuffer(file.buffer) || typeof file.size !== 'number') {
+      res.status(400).json({
+        success: false,
+        message: `Screenshot #${i + 1} has invalid file content`,
+      });
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       res.status(400).json({
         success: false,
@@ -272,6 +301,15 @@ export async function submitHostScreenshots(req: AuthenticatedRequest, res: Resp
  * Admin-only: Fetch tournament details, registered player roster, host-given Winner UID, and host screenshots.
  */
 export async function getTournamentScreenshotData(req: AuthenticatedRequest, res: Response): Promise<void> {
+  if (!req.params || typeof req.params !== 'object' || Array.isArray(req.params)) {
+    res.status(400).json({ success: false, message: 'Invalid request parameters' });
+    return;
+  }
+  if (typeof req.params.id !== 'string') {
+    res.status(400).json({ success: false, message: 'Invalid tournament ID format' });
+    return;
+  }
+
   const paramParsed = tournamentIdParamSchema.safeParse(req.params);
   if (!paramParsed.success) {
     res.status(400).json({ success: false, message: 'Invalid tournament ID format' });
@@ -425,6 +463,27 @@ export async function getTournamentScreenshotData(req: AuthenticatedRequest, res
  * normalize names and fuzzy-match to registered players.
  */
 export async function scanScreenshots(req: AuthenticatedRequest, res: Response): Promise<void> {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    res.status(400).json({ success: false, message: 'Invalid request body' });
+    return;
+  }
+  if (typeof req.body.tournamentId !== 'string') {
+    res.status(400).json({ success: false, message: 'Tournament ID is required' });
+    return;
+  }
+  if (req.body.storageKeys !== undefined) {
+    if (!Array.isArray(req.body.storageKeys)) {
+      res.status(400).json({ success: false, message: 'storageKeys must be an array' });
+      return;
+    }
+    for (let kIdx = 0; kIdx < req.body.storageKeys.length; kIdx++) {
+      if (typeof req.body.storageKeys[kIdx] !== 'string') {
+        res.status(400).json({ success: false, message: 'Each storage key must be a string' });
+        return;
+      }
+    }
+  }
+
   const bodyParsed = scanScreenshotsBodySchema.safeParse(req.body);
   if (!bodyParsed.success) {
     res.status(400).json({
@@ -504,8 +563,15 @@ export async function scanScreenshots(req: AuthenticatedRequest, res: Response):
     }
   }
 
-  const uploadedFiles = (req.files as UploadedFile[]) || [];
+  if (req.files && !Array.isArray(req.files)) {
+    res.status(400).json({ success: false, message: 'Invalid uploaded files format' });
+    return;
+  }
+  const uploadedFiles = Array.isArray(req.files) ? (req.files as UploadedFile[]) : [];
   for (const f of uploadedFiles) {
+    if (!f || typeof f !== 'object' || !Buffer.isBuffer(f.buffer)) {
+      continue;
+    }
     const magicCheck = privateStorageService.validateImageMagicBytes(f.buffer);
     if (magicCheck.valid && magicCheck.format) {
       const sanitized = await privateStorageService.stripExifAndSanitize(f.buffer);
@@ -539,9 +605,41 @@ export async function scanScreenshots(req: AuthenticatedRequest, res: Response):
 export async function distributePerKillPrizes(req: AuthenticatedRequest, res: Response): Promise<void> {
   const adminId = req.user?.id;
 
-  if (!adminId) {
+  if (!adminId || typeof adminId !== 'string') {
     res.status(401).json({ success: false, message: 'Admin authentication required' });
     return;
+  }
+
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    res.status(400).json({ success: false, message: 'Invalid request body' });
+    return;
+  }
+  if (typeof req.body.tournamentId !== 'string') {
+    res.status(400).json({ success: false, message: 'Tournament ID is required' });
+    return;
+  }
+  if (typeof req.body.confirmedWinnerUid !== 'string') {
+    res.status(400).json({ success: false, message: 'Confirmed Winner UID is required' });
+    return;
+  }
+  if (!Array.isArray(req.body.kills)) {
+    res.status(400).json({ success: false, message: 'Kills list must be an array' });
+    return;
+  }
+  for (let killIdx = 0; killIdx < req.body.kills.length; killIdx++) {
+    const kItem = req.body.kills[killIdx];
+    if (!kItem || typeof kItem !== 'object' || Array.isArray(kItem)) {
+      res.status(400).json({ success: false, message: 'Each kill entry must be an object' });
+      return;
+    }
+    if (typeof kItem.playerId !== 'string') {
+      res.status(400).json({ success: false, message: 'Each playerId must be a string' });
+      return;
+    }
+    if (typeof kItem.kills !== 'number' && typeof kItem.kills !== 'string') {
+      res.status(400).json({ success: false, message: 'Each kills count must be a number or string' });
+      return;
+    }
   }
 
   const bodyParsed = distributePrizesBodySchema.safeParse(req.body);
@@ -868,6 +966,19 @@ export async function distributePerKillPrizes(req: AuthenticatedRequest, res: Re
  * Admin-only: Stream an in-memory or private storage screenshot.
  */
 export async function viewAdminScreenshot(req: any, res: Response): Promise<void> {
+  if (!req.query || typeof req.query !== 'object' || Array.isArray(req.query)) {
+    res.status(400).send('Invalid query parameters');
+    return;
+  }
+  if (
+    typeof req.query.key !== 'string' ||
+    typeof req.query.exp !== 'string' ||
+    typeof req.query.sig !== 'string'
+  ) {
+    res.status(400).send('Key, valid expiration, and signature are required');
+    return;
+  }
+
   const queryParsed = viewAdminScreenshotQuerySchema.safeParse(req.query);
   if (!queryParsed.success) {
     res.status(400).send('Key, valid expiration, and signature are required');

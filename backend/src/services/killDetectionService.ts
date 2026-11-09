@@ -449,6 +449,65 @@ export interface ProgressData {
  * 5. Computes timestamps and deduplicates kills within a 10-second window / across consecutive batches
  * 6. Cleans up temporary frames and returns detected kills
  */
+const FIXED_VIDEO_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'kill-counter');
+
+/**
+ * Validates and safely resolves video file path:
+ * 1. Rejects null bytes, encoded dots, relative traversal.
+ * 2. Extracts path.basename as the final segment.
+ * 3. Strict regex validation for server-generated ID and allowed extension.
+ * 4. Builds path using path.join from the fixed base directory.
+ * 5. Uses path.resolve and asserts startsWith(baseDir + path.sep) right before fs call.
+ * 6. Checks for symlinks and rejects any link target outside base directory.
+ */
+function resolveStrictSafeVideoPath(videoFilePath: string): string {
+  if (
+    !videoFilePath ||
+    typeof videoFilePath !== 'string' ||
+    videoFilePath.includes('\0') ||
+    videoFilePath.includes('..') ||
+    videoFilePath.includes('%2e') ||
+    videoFilePath.includes('%2E') ||
+    videoFilePath.includes('%2f') ||
+    videoFilePath.includes('%2F') ||
+    videoFilePath.includes('%5c') ||
+    videoFilePath.includes('%5C')
+  ) {
+    throw new Error('Invalid videoFilePath parameter provided.');
+  }
+
+  const baseDir = FIXED_VIDEO_UPLOAD_DIR;
+  const finalSegment = path.basename(videoFilePath);
+
+  // Validate server-generated filename: server ID (8-64 chars: alphanumeric, _, -) + allowed extension
+  const match = finalSegment.match(/^([a-zA-Z0-9_-]{8,64})\.(mp4|mkv|mov|webm|avi)$/i);
+  if (!match) {
+    throw new Error('Access denied: invalid or unauthorized video file name.');
+  }
+
+  // Build path with path.join from fixed base directory, apply path.basename, and path.resolve
+  const joinedPath = path.join(baseDir, path.basename(finalSegment));
+  const resolvedPath = path.resolve(joinedPath);
+
+  // Verify startsWith(baseDir + path.sep) right before every fs call
+  if (!resolvedPath.startsWith(baseDir + path.sep)) {
+    throw new Error('Access denied: video file must be within allowed directory.');
+  }
+
+  // Do not follow symlinks outside the base
+  if (fs.existsSync(resolvedPath)) {
+    const lstat = fs.lstatSync(resolvedPath);
+    if (lstat.isSymbolicLink()) {
+      const realPath = fs.realpathSync(resolvedPath);
+      if (!realPath.startsWith(baseDir + path.sep)) {
+        throw new Error('Access denied: symlink target outside base directory.');
+      }
+    }
+  }
+
+  return resolvedPath;
+}
+
 export async function detectKillsFromVideo(
   videoFilePath: string,
   onProgressOrCrop?: ((progress: ProgressData) => void) | CropRegion | null,
@@ -464,21 +523,9 @@ export async function detectKillsFromVideo(
     );
   }
 
-  if (!videoFilePath || typeof videoFilePath !== 'string' || videoFilePath.includes('\0') || videoFilePath.includes('..')) {
-    throw new Error('Invalid videoFilePath parameter provided.');
-  }
+  const resolvedVideoPath = resolveStrictSafeVideoPath(videoFilePath);
 
-  const resolvedVideoPath = path.resolve(videoFilePath);
-  const allowedRoots = [
-    path.resolve(process.cwd(), 'uploads'),
-    path.resolve(os.tmpdir()),
-  ];
-
-  const isAllowed = allowedRoots.some(
-    (root) => resolvedVideoPath === root || resolvedVideoPath.startsWith(root + path.sep)
-  );
-
-  if (!isAllowed) {
+  if (!resolvedVideoPath.startsWith(FIXED_VIDEO_UPLOAD_DIR + path.sep)) {
     throw new Error('Access denied: video file must be within allowed directory.');
   }
 
@@ -793,21 +840,9 @@ export async function detectKillsForTestFeed(
     );
   }
 
-  if (!videoFilePath || typeof videoFilePath !== 'string' || videoFilePath.includes('\0') || videoFilePath.includes('..')) {
-    throw new Error('Invalid videoFilePath parameter provided.');
-  }
+  const resolvedVideoPath = resolveStrictSafeVideoPath(videoFilePath);
 
-  const resolvedVideoPath = path.resolve(videoFilePath);
-  const allowedRoots = [
-    path.resolve(process.cwd(), 'uploads'),
-    path.resolve(os.tmpdir()),
-  ];
-
-  const isAllowed = allowedRoots.some(
-    (root) => resolvedVideoPath === root || resolvedVideoPath.startsWith(root + path.sep)
-  );
-
-  if (!isAllowed) {
+  if (!resolvedVideoPath.startsWith(FIXED_VIDEO_UPLOAD_DIR + path.sep)) {
     throw new Error('Access denied: video file must be within allowed directory.');
   }
 

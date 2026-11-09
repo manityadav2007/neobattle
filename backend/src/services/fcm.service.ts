@@ -81,7 +81,7 @@ class FcmService {
       });
 
       this.isInitialized = true;
-      console.log(`[FCM] Firebase Admin successfully initialized for project: ${credentials.project_id}`);
+      console.log('[FCM] Firebase Admin successfully initialized.');
     } catch (err) {
       // Security rule: Never log raw credentials or secrets
       console.error('[FCM] Failed to initialize Firebase Admin SDK. Check JSON syntax.');
@@ -157,7 +157,8 @@ class FcmService {
           }
         });
       } catch (err: any) {
-        console.error('[FCM] Batch send error:', err?.message || 'unknown');
+        const errCode = typeof err?.code === 'string' ? err.code : 'unknown';
+        console.error('[FCM] Batch send error, code:', errCode);
         totalFailure += batch.length;
       }
     }
@@ -169,8 +170,8 @@ class FcmService {
           where: { token: { in: tokensToDelete } },
         });
         console.log(`[FCM] Cleaned up ${tokensToDelete.length} unregistered / invalid push token(s)`);
-      } catch (cleanupErr) {
-        console.error('[FCM] Failed to clean up dead tokens:', cleanupErr);
+      } catch {
+        console.error('[FCM] Failed to clean up dead tokens');
       }
     }
 
@@ -211,8 +212,9 @@ class FcmService {
 
       const tokens = user.pushTokens.map((t) => t.token);
       return await this.sendToTokens(tokens, payload);
-    } catch (err) {
-      console.error('[FCM] Error sending to user:', err);
+    } catch (err: any) {
+      const errCode = typeof err?.code === 'string' ? err.code : 'unknown';
+      console.error(`[FCM] Error sending to user ${userId}, code: ${errCode}`);
       return { successCount: 0, failureCount: 0 };
     }
   }
@@ -244,8 +246,9 @@ class FcmService {
 
       const tokens = pushTokens.map((t) => t.token);
       return await this.sendToTokens(tokens, payload);
-    } catch (err) {
-      console.error('[FCM] Error in broadcast sendToAll:', err);
+    } catch (err: any) {
+      const errCode = typeof err?.code === 'string' ? err.code : 'unknown';
+      console.error('[FCM] Error in broadcast sendToAll, code:', errCode);
       return { successCount: 0, failureCount: 0 };
     }
   }
