@@ -7,7 +7,7 @@ import { JSDOM } from 'jsdom';
 // Configure development environment to test non-minified React errors
 process.env.NODE_ENV = 'development';
 
-const frontendDir = path.resolve(__dirname, '../../../frontend');
+const frontendDir = path.resolve(__dirname, '../..');
 
 test('ESLint Configuration - react-hooks/rules-of-hooks is set to error and exhaustive-deps to warn', () => {
   const configPath = path.join(frontendDir, 'eslint.config.mjs');
@@ -89,16 +89,24 @@ test('React Hook Order Lifecycle - Renders without Error #310 when isApp switche
     pretendToBeVisual: true,
   });
 
-  (global as any).window = dom.window;
-  (global as any).document = dom.window.document;
-  (global as any).navigator = dom.window.navigator;
-  (global as any).sessionStorage = dom.window.sessionStorage;
-  (global as any).localStorage = dom.window.localStorage;
-  (global as any).requestAnimationFrame = (cb: () => void) => setTimeout(cb, 16);
-  (global as any).cancelAnimationFrame = (id: any) => clearTimeout(id);
+  const defineGlobal = (key: string, value: any) => {
+    Object.defineProperty(global, key, {
+      value,
+      configurable: true,
+      writable: true,
+    });
+  };
 
-  const React = require(path.join(frontendDir, 'node_modules', 'react'));
-  const ReactDOMClient = require(path.join(frontendDir, 'node_modules', 'react-dom', 'client'));
+  defineGlobal('window', dom.window);
+  defineGlobal('document', dom.window.document);
+  defineGlobal('navigator', dom.window.navigator);
+  defineGlobal('sessionStorage', dom.window.sessionStorage);
+  defineGlobal('localStorage', dom.window.localStorage);
+  defineGlobal('requestAnimationFrame', (cb: () => void) => setTimeout(cb, 16));
+  defineGlobal('cancelAnimationFrame', (id: any) => clearTimeout(id));
+
+  const React = require('react');
+  const ReactDOMClient = require('react-dom/client');
 
   const container = dom.window.document.getElementById('root')!;
   const root = ReactDOMClient.createRoot(container);
