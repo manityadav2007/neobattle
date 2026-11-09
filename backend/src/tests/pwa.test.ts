@@ -177,18 +177,18 @@ test('Startup Splash Screen - Component and detection logic meet all specs', () 
     'SplashScreen must use existing logo /logo/image_21332e.jpg'
   );
 
-  // Timing: ~2s duration, 300ms fadeout, safety <= 3s
+  // Timing: minimum display, 300ms fadeout, safety timeout
   assert.ok(
-    splashContent.includes('1800') || splashContent.includes('2000'),
-    'SplashScreen must trigger fadeout around 1.8-2.0s'
+    splashContent.includes('800') || splashContent.includes('1800') || splashContent.includes('2000'),
+    'SplashScreen must trigger fadeout respecting min display'
   );
   assert.ok(
     splashContent.includes('duration-300'),
     'SplashScreen must use 300ms fadeout transition'
   );
   assert.ok(
-    splashContent.includes('2800') || splashContent.includes('3000'),
-    'SplashScreen must have safety timeout <= 3s'
+    splashContent.includes('3000') || splashContent.includes('6000'),
+    'SplashScreen must have safety timeout'
   );
 });
 
@@ -502,7 +502,7 @@ test('Capacitor Android wrapper - /mobile structure, config, theme, and offline 
   const buildGradlePath = path.join(mobileDir, 'android', 'app', 'build.gradle');
   assert.ok(fs.existsSync(buildGradlePath), 'android/app/build.gradle must exist');
   const buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
-  assert.ok(buildGradle.includes('versionCode 3'), 'build.gradle must specify versionCode 3');
+  assert.ok(/versionCode\s+[3-9]/i.test(buildGradle), 'build.gradle must specify valid versionCode');
   assert.ok(buildGradle.includes('versionName "1.1.0"'), 'build.gradle must specify versionName 1.1.0');
   assert.ok(buildGradle.includes('applicationId "live.neobattle.twa"'), 'applicationId must be live.neobattle.twa');
 
@@ -734,9 +734,9 @@ test('App Mode Redesigned Loading Screen & Native Splash - Specs Verification', 
   assert.ok(splash.includes('splash-spinner-grad'), 'Spinner must have gradient ring from blue to orange');
   assert.ok(!splash.includes('NEOBATTLE</span>'), 'SplashScreen must not render duplicate brand text');
 
-  // 4. Timing: min 1.2s (1200ms), max 3s (3000ms), fade 300ms
-  assert.ok(splash.includes('1200'), 'SplashScreen must enforce minimum 1.2s display');
-  assert.ok(splash.includes('3000'), 'SplashScreen must enforce maximum 3.0s safety');
+  // 4. Timing: min 0.8s (800ms) after native splash hidden, max 6s (6000ms) safety, fade 300ms
+  assert.ok(splash.includes('800'), 'SplashScreen must enforce minimum 0.8s display after native splash hidden');
+  assert.ok(splash.includes('6000'), 'SplashScreen must enforce maximum 6.0s safety');
   assert.ok(splash.includes('300'), 'SplashScreen must use 300ms fadeout');
 
   // 5. Preload in app mode only via layout script
@@ -744,18 +744,38 @@ test('App Mode Redesigned Loading Screen & Native Splash - Specs Verification', 
   const layout = fs.readFileSync(layoutPath, 'utf8');
   assert.ok(layout.includes('/app-splash-bg.webp'), 'layout.tsx must preload /app-splash-bg.webp in app mode');
 
-  // 6. Native Android splash: pure black with no logo or icon, max 0.8s, versionCode >= 5
+  // 6. Native Android splash: launchAutoHide false, launchShowDuration 6000, scaleType CENTER_CROP, versionCode >= 7
   const buildGradlePath = path.join(mobileDir, 'android', 'app', 'build.gradle');
   const buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
-  assert.ok(/versionCode\s+[5-9]/i.test(buildGradle), 'build.gradle must specify updated versionCode >= 5');
+  assert.ok(/versionCode\s+[7-9]/i.test(buildGradle), 'build.gradle must specify updated versionCode >= 7');
 
   const capConfigPath = path.join(mobileDir, 'capacitor.config.json');
   const capConfig = JSON.parse(fs.readFileSync(capConfigPath, 'utf8'));
-  assert.equal(capConfig.plugins?.SplashScreen?.launchShowDuration, 800, 'launchShowDuration must be 800ms');
+  assert.equal(capConfig.plugins?.SplashScreen?.launchAutoHide, false, 'launchAutoHide must be false');
+  assert.equal(capConfig.plugins?.SplashScreen?.launchShowDuration, 6000, 'launchShowDuration must be 6000ms safety');
+  assert.equal(capConfig.plugins?.SplashScreen?.launchFadeOutDuration, 250, 'launchFadeOutDuration must be 250ms');
+  assert.equal(capConfig.plugins?.SplashScreen?.androidScaleType, 'CENTER_CROP', 'androidScaleType must be CENTER_CROP');
 
-  const nativeSplashXmlPath = path.join(mobileDir, 'android', 'app', 'src', 'main', 'res', 'drawable', 'splash.xml');
-  const nativeSplashXml = fs.readFileSync(nativeSplashXmlPath, 'utf8');
-  assert.ok(!nativeSplashXml.includes('neobattle_logo'), 'Native splash.xml must have no logo');
+  // 7. Check exactly ONE resource named "splash" per res folder (no duplicate splash.xml and splash.png)
+  const { checkDuplicateResources } = require('../../../mobile/scripts/check-duplicate-resources');
+  const resDir = path.join(mobileDir, 'android', 'app', 'src', 'main', 'res');
+  const dupCheck = checkDuplicateResources(resDir);
+  assert.equal(dupCheck.errors.length, 0, `Must have zero duplicate resources in Android res, found: ${dupCheck.errors.join('; ')}`);
+
+  // 8. Native splash drawables bundled inside APK
+  const portDrawables = ['drawable-port-mdpi', 'drawable-port-hdpi', 'drawable-port-xhdpi', 'drawable-port-xxhdpi', 'drawable-port-xxxhdpi', 'drawable'];
+  for (const folder of portDrawables) {
+    const splashPng = path.join(resDir, folder, 'splash.png');
+    assert.ok(fs.existsSync(splashPng), `splash.png must exist in ${folder}`);
+  }
+  const splashXml = path.join(resDir, 'drawable', 'splash.xml');
+  assert.ok(!fs.existsSync(splashXml), 'splash.xml must be deleted to avoid duplicate resources with splash.png');
+
+  // 9. Aggressive caching headers for /app-splash-bg.webp
+  const nextConfigPath = path.join(frontendDir, 'next.config.js');
+  const nextConfigContent = fs.readFileSync(nextConfigPath, 'utf8');
+  assert.ok(nextConfigContent.includes('/app-splash-bg.webp'), 'next.config.js must define cache headers for /app-splash-bg.webp');
+  assert.ok(nextConfigContent.includes('immutable'), 'next.config.js must set immutable cache control for /app-splash-bg.webp');
 });
 
 

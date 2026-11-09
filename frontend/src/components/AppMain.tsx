@@ -27,7 +27,7 @@ export default function AppMain({ children }: { children: ReactNode }) {
   }, [isApp, isAppHome, pathname]);
 
   return (
-    <main className={MAIN_CLASS}>
+    <main data-app-main="true" className={MAIN_CLASS}>
       {children}
     </main>
   );

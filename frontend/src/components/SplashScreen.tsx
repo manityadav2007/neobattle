@@ -6,9 +6,9 @@ export const APP_SPLASH_BG = '/app-splash-bg.webp';
 export const FALLBACK_LOGO = '/logo/image_21332e.jpg';
 
 const SESSION_STORAGE_KEY = 'neobattle_splash_shown';
-const MIN_DISPLAY_MS = 1200; // minimum 1.2 seconds
-const MAX_DISPLAY_MS = 3000; // maximum 3.0 seconds
-const FADE_OUT_MS = 300;     // 300ms fadeout
+const MIN_POST_NATIVE_HIDE_MS = 800; // minimum 0.8s after native splash hidden
+const MAX_SAFETY_MS = 6000;          // maximum 6.0s safety timeout
+const FADE_OUT_MS = 300;             // 300ms fadeout on top of painted content
 
 export default function SplashScreen() {
   const [mounted, setMounted] = useState(true);
@@ -66,8 +66,10 @@ export default function SplashScreen() {
       document.documentElement.classList.add('twa-splash-active');
     } catch {}
 
-    const startTime = Date.now();
     let dismissed = false;
+    let nativeSplashHiddenAt = 0;
+    let routeContentPainted = false;
+    let dismissTimer: ReturnType<typeof setTimeout> | null = null;
 
     const triggerDismiss = () => {
       if (dismissed) return;
@@ -82,44 +84,121 @@ export default function SplashScreen() {
       }, FADE_OUT_MS);
     };
 
-    // Preload image object in JS to set bgLoaded as soon as available
+    const checkDismissReady = () => {
+      if (dismissed) return;
+      // Fade out ONLY after the first real content of the route has painted
+      // AND native splash has been hidden with at least 0.8s elapsed
+      if (!routeContentPainted || nativeSplashHiddenAt === 0) return;
+
+      const elapsedSinceNativeHide = Date.now() - nativeSplashHiddenAt;
+      const delay = Math.max(0, MIN_POST_NATIVE_HIDE_MS - elapsedSinceNativeHide);
+
+      if (dismissTimer) clearTimeout(dismissTimer);
+      dismissTimer = setTimeout(triggerDismiss, delay);
+    };
+
+    const markRoutePainted = () => {
+      if (routeContentPainted) return;
+      // Two requestAnimationFrame calls guarantee the route content has painted to screen
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          routeContentPainted = true;
+          checkDismissReady();
+        });
+      });
+    };
+
+    // Retry helper to call Capacitor SplashScreen.hide({ fadeOutDuration: 250 })
+    const hideNativeSplashWithRetry = (retries = 25) => {
+      try {
+        const splashPlugin = (window as any).Capacitor?.Plugins?.SplashScreen;
+        if (splashPlugin && typeof splashPlugin.hide === 'function') {
+          splashPlugin.hide({ fadeOutDuration: 250 }).catch(() => {});
+          return;
+        }
+      } catch {}
+      if (retries > 0) {
+        setTimeout(() => hideNativeSplashWithRetry(retries - 1), 60);
+      }
+    };
+
+    // 1. Preload and decode background artwork
     const img = new Image();
     img.src = APP_SPLASH_BG;
+
+    const onArtworkReady = async () => {
+      try {
+        if (typeof img.decode === 'function') {
+          await img.decode();
+        }
+      } catch {
+        // decode fallback
+      }
+
+      // Two requestAnimationFrame calls guarantee web overlay's artwork has painted
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setBgLoaded(true);
+          nativeSplashHiddenAt = Date.now();
+          // Call SplashScreen.hide() ONLY after web artwork has loaded and painted
+          hideNativeSplashWithRetry();
+          checkDismissReady();
+        });
+      });
+    };
+
     if (img.complete) {
-      setBgLoaded(true);
+      onArtworkReady();
     } else {
-      img.onload = () => setBgLoaded(true);
+      img.onload = () => onArtworkReady();
+      img.onerror = () => onArtworkReady();
     }
 
-    // Schedule dismiss once data is ready, respecting minimum 1.2s
-    let dismissTimeout: ReturnType<typeof setTimeout> | null = null;
-    const scheduleDismiss = () => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
-      dismissTimeout = setTimeout(triggerDismiss, remaining);
+    // 2. Listeners for route painted & data ready
+    const handleRoutePainted = () => {
+      markRoutePainted();
     };
 
-    // Hard safety timeout: maximum 3.0s
+    window.addEventListener('app:route-painted', handleRoutePainted, { once: true });
+    window.addEventListener('app:data-ready', handleRoutePainted, { once: true });
+
+    // 3. MutationObserver fallback to detect route elements in DOM
+    const checkDom = () => {
+      if (typeof document !== 'undefined') {
+        const target = document.querySelector('[data-app-login-gate], [data-app-main], main');
+        if (target) {
+          markRoutePainted();
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (!checkDom() && typeof MutationObserver !== 'undefined') {
+      const observer = new MutationObserver(() => {
+        if (checkDom()) {
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // 4. Fallback route painted timer (in case no event fires and DOM observer misses)
+    const fallbackRouteTimer = setTimeout(() => {
+      markRoutePainted();
+    }, 1200);
+
+    // 5. Maximum 6-second safety timeout so splash can NEVER get stuck
     const safetyTimer = setTimeout(() => {
       triggerDismiss();
-    }, MAX_DISPLAY_MS);
-
-    // Initial data ready listener
-    const onDataReady = () => {
-      scheduleDismiss();
-    };
-    window.addEventListener('app:data-ready', onDataReady, { once: true });
-
-    // Fallback default: if app:data-ready hasn't fired by ~1.8s, schedule dismiss
-    const defaultTimer = setTimeout(() => {
-      scheduleDismiss();
-    }, 1800);
+    }, MAX_SAFETY_MS);
 
     return () => {
-      if (dismissTimeout) clearTimeout(dismissTimeout);
+      if (dismissTimer) clearTimeout(dismissTimer);
+      clearTimeout(fallbackRouteTimer);
       clearTimeout(safetyTimer);
-      clearTimeout(defaultTimer);
-      window.removeEventListener('app:data-ready', onDataReady);
+      window.removeEventListener('app:route-painted', handleRoutePainted);
+      window.removeEventListener('app:data-ready', handleRoutePainted);
     };
   }, []);
 
@@ -140,7 +219,6 @@ export default function SplashScreen() {
         <img
           src={APP_SPLASH_BG}
           alt=""
-          onLoad={() => setBgLoaded(true)}
           className={`w-full h-full object-cover object-center splash-bg-art transition-opacity duration-300 ease-out ${
             bgLoaded ? 'opacity-100' : 'opacity-0'
           }`}

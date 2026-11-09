@@ -21,6 +21,8 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 
@@ -32,6 +34,13 @@ public class MainActivity extends BridgeActivity {
 
         // Default notification channel for high-priority push notifications
         createNotificationChannel();
+
+        // Native safety timeout: ensure splash is dismissed if web fails to call SplashScreen.hide
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (getBridge() != null) {
+                getBridge().eval("window.Capacitor?.Plugins?.SplashScreen?.hide({ fadeOutDuration: 250 });", null);
+            }
+        }, 6000);
 
         // Hardware back button: navigate history in WebView, exit only from root/home page
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -108,17 +117,8 @@ public class MainActivity extends BridgeActivity {
                 return windowInsets;
             });
 
-            // 6. Custom BridgeWebViewClient to intercept external links, handle errors & auto-dismiss splash on first paint
+            // 6. Custom BridgeWebViewClient to intercept external links and handle errors
             webView.setWebViewClient(new BridgeWebViewClient(getBridge()) {
-                @Override
-                public void onPageCommitVisible(WebView view, String url) {
-                    super.onPageCommitVisible(view, url);
-                    // Dismiss native splash as soon as the first page has painted so web animation takes over
-                    if (getBridge() != null) {
-                        getBridge().eval("window.Capacitor?.Plugins?.SplashScreen?.hide({ fadeOutDuration: 200 });", null);
-                    }
-                }
-
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                     Uri uri = request.getUrl();

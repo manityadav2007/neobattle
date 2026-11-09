@@ -66,6 +66,24 @@ export default function AppHomeScreen() {
 
   // Check URL tab parameter on mount (e.g. /?tab=mine from hamburger menu)
   useEffect(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          window.dispatchEvent(new CustomEvent('app:route-painted'));
+        } catch {}
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!tournamentsLoading) {
+      try {
+        window.dispatchEvent(new CustomEvent('app:data-ready'));
+      } catch {}
+    }
+  }, [tournamentsLoading]);
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const paramTab = new URLSearchParams(window.location.search).get('tab');
       if (paramTab === 'mine' || paramTab === 'upcoming') {

@@ -88,6 +88,19 @@ export default function AppLoginGate({ children }: { children: ReactNode }) {
   }
 
   // If user is already authenticated, allow through
+  useEffect(() => {
+    if (!isApp) return;
+    if (!loading || !cachedTokenHint) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try {
+            window.dispatchEvent(new CustomEvent('app:route-painted'));
+          } catch {}
+        });
+      });
+    }
+  }, [isApp, loading, cachedTokenHint, user]);
+
   if (user) {
     return <>{children}</>;
   }
