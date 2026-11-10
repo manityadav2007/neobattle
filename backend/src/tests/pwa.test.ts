@@ -771,8 +771,9 @@ test('App Mode Redesigned Loading Screen & Native Splash - Specs Verification', 
   const splashBackgroundXml = path.join(resDir, 'drawable', 'splash_background.xml');
   assert.ok(fs.existsSync(splashBackgroundXml), 'splash_background.xml must exist for pre-Android 12 centered shield');
 
-  // 9. Inlined shield layer in website loading screen
-  assert.ok(splash.includes('SPLASH_SHIELD_DATA_URI'), 'SplashScreen must render inlined shield data URI with 0 network dependency');
+  // 9. Single logo: shield is part of the art (app-splash-bg.webp), no duplicate overlay shield
+  assert.ok(splash.includes('APP_SPLASH_BG'), 'SplashScreen must render background art containing shield');
+  assert.ok(!splash.includes('SPLASH_SHIELD_DATA_URI'), 'SplashScreen must not render second overlay shield on top of art');
 
   // 9. Aggressive caching headers for /app-splash-bg.webp
   const nextConfigPath = path.join(frontendDir, 'next.config.js');

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { SPLASH_SHIELD_DATA_URI } from './splashShieldData';
 
 export const APP_SPLASH_BG = '/app-splash-bg.webp';
 export const FALLBACK_LOGO = '/logo/image_21332e.jpg';
@@ -125,17 +124,7 @@ export default function SplashScreen() {
       }
     };
 
-    // 1. Call SplashScreen.hide() as soon as the inline shield layer is painted (two requestAnimationFrame calls)
-    // There is NO network dependency for the native hide: pure black background + inlined shield matches the system splash.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        nativeSplashHiddenAt = Date.now();
-        hideNativeSplashWithRetry();
-        checkDismissReady();
-      });
-    });
-
-    // 2. Background artwork loads asynchronously in background; does NOT block native hide
+    // 1. Background artwork loads; hides native splash and fades in the artwork
     const img = new Image();
     img.src = APP_SPLASH_BG;
 
@@ -148,6 +137,14 @@ export default function SplashScreen() {
         // decode fallback
       }
       setBgLoaded(true);
+      // Two requestAnimationFrame calls guarantee web overlay artwork has painted
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          nativeSplashHiddenAt = Date.now();
+          hideNativeSplashWithRetry();
+          checkDismissReady();
+        });
+      });
     };
 
     if (img.complete) {
@@ -199,15 +196,22 @@ export default function SplashScreen() {
         fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
-      {/* Background artwork: loads in background and fades in over 400ms behind the shield */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
+      {/* Background artwork: positioned and scaled so the art's shield aligns with system splash */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-10 flex items-center justify-center">
         <img
           src={APP_SPLASH_BG}
           alt=""
-          className={`w-full h-full object-cover object-center splash-bg-art transition-opacity ease-out ${
+          className={`splash-bg-art transition-opacity ease-out ${
             bgLoaded ? 'opacity-100' : 'opacity-0'
           }`}
-          style={{ transitionDuration: '400ms' }}
+          style={{
+            width: '540px',
+            height: '1080px',
+            maxWidth: 'none',
+            maxHeight: 'none',
+            objectFit: 'contain',
+            transitionDuration: '400ms',
+          }}
           loading="eager"
           decoding="async"
         />
@@ -222,68 +226,57 @@ export default function SplashScreen() {
         />
       </div>
 
-      {/* Main centered shield & loader: rendered from the very first HTML with zero network dependencies */}
+      {/* Circular gradient loader placed below the shield with exact 24px spacing */}
       {!timedOut ? (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-          <div className="relative flex flex-col items-center">
-            {/* The shield placed at EXACTLY the same position and size (116dp / 116px) as the system splash icon */}
-            <img
-              src={SPLASH_SHIELD_DATA_URI}
-              alt="NeoBattle"
-              width={116}
-              height={116}
-              className="w-[116px] h-[116px] object-contain drop-shadow-[0_0_24px_rgba(249,115,22,0.25)]"
-              decoding="sync"
+        <div
+          className="absolute left-1/2 -translate-x-1/2 splash-spinner-container pointer-events-none z-20"
+          style={{ top: 'calc(50% + 82px)' }}
+        >
+          <svg
+            className="splash-spinner"
+            viewBox="0 0 44 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient id="splash-spinner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#3b82f6" />
+                <stop offset="50%" stopColor="#8b5cf6" />
+                <stop offset="100%" stopColor="#f97316" />
+              </linearGradient>
+            </defs>
+            {/* Thin dim track */}
+            <circle
+              cx="22"
+              cy="22"
+              r="19"
+              stroke="rgba(255, 255, 255, 0.12)"
+              strokeWidth="3"
             />
-
-            {/* Circular gradient loader placed below the centered shield */}
-            <div className="absolute top-[calc(100%+24px)] splash-spinner-container">
-              <svg
-                className="splash-spinner"
-                viewBox="0 0 44 44"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <defs>
-                  <linearGradient id="splash-spinner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#3b82f6" />
-                    <stop offset="50%" stopColor="#8b5cf6" />
-                    <stop offset="100%" stopColor="#f97316" />
-                  </linearGradient>
-                </defs>
-                {/* Thin dim track */}
-                <circle
-                  cx="22"
-                  cy="22"
-                  r="19"
-                  stroke="rgba(255, 255, 255, 0.12)"
-                  strokeWidth="3"
-                />
-                {/* Gradient ring */}
-                <circle
-                  cx="22"
-                  cy="22"
-                  r="19"
-                  stroke="url(#splash-spinner-grad)"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeDasharray="75 120"
-                />
-              </svg>
-            </div>
-          </div>
+            {/* Gradient ring */}
+            <circle
+              cx="22"
+              cy="22"
+              r="19"
+              stroke="url(#splash-spinner-grad)"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray="75 120"
+            />
+          </svg>
         </div>
       ) : (
-        /* Black-themed retry screen with the shield and Try again button if 8s safety timeout reached */
+        /* Black-themed retry screen with Try again button if 8s safety timeout reached */
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black px-6 text-center select-auto">
-          <img
-            src={SPLASH_SHIELD_DATA_URI}
-            alt="NeoBattle"
-            width={116}
-            height={116}
-            className="w-[116px] h-[116px] object-contain drop-shadow-[0_0_28px_rgba(249,115,22,0.3)] mb-6"
-            decoding="sync"
-          />
+          <div className="w-[116px] h-[116px] mb-6 flex items-center justify-center">
+            <img
+              src={FALLBACK_LOGO}
+              alt="NeoBattle"
+              width={96}
+              height={96}
+              className="w-24 h-24 object-contain rounded-2xl drop-shadow-[0_0_28px_rgba(249,115,22,0.3)]"
+            />
+          </div>
           <h2 className="text-xl font-bold text-white mb-2 font-display tracking-wider">
             Connection Timeout
           </h2>

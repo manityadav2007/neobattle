@@ -102,7 +102,7 @@ async function runTest() {
 
     let firstOverlayPaintedIndex = -1;
     for (let i = 0; i < frames.length; i++) {
-      if (!frames[i].isBlackFrame && frames[i].nonBlackPixels > 500) {
+      if (!frames[i].isBlackFrame) {
         firstOverlayPaintedIndex = i;
         break;
       }
@@ -111,20 +111,22 @@ async function runTest() {
     let blackFramesAfterOverlay = 0;
     const blackFrameTimings = [];
 
-    for (let i = firstOverlayPaintedIndex; i < frames.length; i++) {
-      if (i >= 0 && frames[i].isBlackFrame) {
-        blackFramesAfterOverlay++;
-        blackFrameTimings.push(frames[i].timeMs);
+    if (firstOverlayPaintedIndex >= 0) {
+      for (let i = firstOverlayPaintedIndex; i < frames.length; i++) {
+        if (frames[i].isBlackFrame) {
+          blackFramesAfterOverlay++;
+          blackFrameTimings.push(frames[i].timeMs);
+        }
       }
     }
 
     console.log('\n--- TIMELINE REPORT ---');
     console.log(`First visible overlay paint at: ${firstOverlayPaintedIndex >= 0 ? frames[firstOverlayPaintedIndex].timeMs + 'ms' : 'N/A'}`);
-    console.log(`Total frames evaluated after overlay paint: ${frames.length - firstOverlayPaintedIndex}`);
+    console.log(`Total frames evaluated after overlay paint: ${firstOverlayPaintedIndex >= 0 ? frames.length - firstOverlayPaintedIndex : 0}`);
     console.log(`Black frames after overlay paint: ${blackFramesAfterOverlay}`);
 
-    // Print sample timeline intervals
-    for (let i = 0; i < frames.length; i += 10) {
+    // Print all timeline intervals
+    for (let i = 0; i < frames.length; i++) {
       const f = frames[i];
       let state = 'BLACK / INITIAL';
       if (!f.isBlackFrame) {
@@ -133,7 +135,7 @@ async function runTest() {
         } else if (f.nonBlackPixels > 5000) {
           state = 'LOADING OVERLAY (ART + SHIELD + SPINNER)';
         } else {
-          state = 'LOADING OVERLAY (SHIELD + SPINNER)';
+          state = 'LOADING OVERLAY (SPINNER / INITIAL)';
         }
       }
       console.log(`[${String(f.timeMs).padStart(5, ' ')} ms] Mean Lum: ${f.meanLuminance.toFixed(2).padStart(5, ' ')}, Visible Px: ${String(f.nonBlackPixels).padStart(6, ' ')} -> ${state}`);
