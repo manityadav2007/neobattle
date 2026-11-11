@@ -6,6 +6,7 @@ export interface PushMessagePayload {
   title: string;
   body: string;
   path?: string;
+  data?: Record<string, string>;
 }
 
 // Allowlist of allowed relative in-app paths
@@ -116,16 +117,26 @@ class FcmService {
     for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
       const batch = tokens.slice(i, i + BATCH_SIZE);
 
+      const dataPayload: Record<string, string> = {
+        path: cleanPath,
+        route: cleanPath,
+        timestamp: Date.now().toString(),
+      };
+      if (payload.data) {
+        for (const [k, v] of Object.entries(payload.data)) {
+          if (v !== undefined && v !== null) {
+            dataPayload[k] = String(v);
+          }
+        }
+      }
+
       const message: MulticastMessage = {
         tokens: batch,
         notification: {
           title,
           body,
         },
-        data: {
-          path: cleanPath,
-          timestamp: Date.now().toString(),
-        },
+        data: dataPayload,
         android: {
           priority: 'high',
           notification: {
@@ -198,7 +209,10 @@ class FcmService {
           notifyTournaments: true,
           notifyResults: true,
           notifyAlerts: true,
-          pushTokens: { select: { token: true } },
+          pushTokens: {
+            where: { platform: 'android' },
+            select: { token: true },
+          },
         },
       });
 
@@ -220,7 +234,9 @@ class FcmService {
   }
 
   /**
-   * Broadcasts push notification to all active users with push notifications enabled
+   * Broadcasts push notification to all active users with push notifications enabled.
+   * Queries push_tokens directly for platform 'android'.
+   * Does NOT drop users if their notification preference is null; defaults to true.
    */
   public async sendToAll(
     payload: PushMessagePayload
@@ -232,9 +248,10 @@ class FcmService {
     try {
       const pushTokens = await prisma.pushToken.findMany({
         where: {
+          platform: 'android',
           user: {
-            pushNotificationsEnabled: true,
-            isActive: true,
+            isActive: { not: false },
+            pushNotificationsEnabled: { not: false },
           },
         },
         select: { token: true },
@@ -252,6 +269,73 @@ class FcmService {
       return { successCount: 0, failureCount: 0 };
     }
   }
+
+  /**
+   * Sends push notification to multiple user IDs.
+   * Queries push_tokens directly for platform 'android'.
+   * Does NOT drop users if their notification preference is null; defaults to true.
+   */
+  public async sendToUsers(
+    userIds: string[],
+    title: string,
+    body: string,
+    data?: Record<string, string>
+  ): Promise<{ successCount: number; failureCount: number }> {
+    if (!this.isInitialized || !userIds || userIds.length === 0) {
+      return { successCount: 0, failureCount: 0 };
+    }
+
+    try {
+      const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+      if (uniqueUserIds.length === 0) {
+        return { successCount: 0, failureCount: 0 };
+      }
+
+      const pushTokens = await prisma.pushToken.findMany({
+        where: {
+          userId: { in: uniqueUserIds },
+          platform: 'android',
+          user: {
+            isActive: { not: false },
+            pushNotificationsEnabled: { not: false },
+          },
+        },
+        select: { token: true },
+      });
+
+      if (pushTokens.length === 0) {
+        return { successCount: 0, failureCount: 0 };
+      }
+
+      const tokens = pushTokens.map((t) => t.token);
+      const stringData: Record<string, string> = {};
+      if (data) {
+        for (const [k, v] of Object.entries(data)) {
+          if (v !== undefined && v !== null) {
+            stringData[k] = String(v);
+          }
+        }
+      }
+
+      return await this.sendToTokens(tokens, {
+        title,
+        body,
+        path: data?.route || data?.path,
+        data: stringData,
+      });
+    } catch (err: any) {
+      const errCode = typeof err?.code === 'string' ? err.code : 'unknown';
+      console.error('[FCM] Error in sendToUsers, code:', errCode);
+      return { successCount: 0, failureCount: 0 };
+    }
+  }
 }
 
 export const fcmService = new FcmService();
+
+export const sendToUsers = (
+  userIds: string[],
+  title: string,
+  body: string,
+  data?: Record<string, string>
+) => fcmService.sendToUsers(userIds, title, body, data);

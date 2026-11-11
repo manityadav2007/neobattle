@@ -1,6 +1,7 @@
 import { TournamentStatus } from '@prisma/client';
 import { prisma } from '../config/db';
 import { cacheDelPattern } from '../config/redis';
+import { notificationService } from '../services/notification.service';
 
 /** Grace window after startTime during which an ACTIVE tournament is still 'Playing' (1 hour) */
 export const TOURNAMENT_PLAY_GRACE_MS = 60 * 60 * 1000;
@@ -61,6 +62,17 @@ export async function syncTournamentStatuses(force = false): Promise<{ completed
 
   try {
     // 1. Complete tournaments whose play window has expired (1h past start) or whose endTime passed
+    const expiredTournaments = await prisma.tournament.findMany({
+      where: {
+        status: { in: [TournamentStatus.REGISTRATION, TournamentStatus.ACTIVE] },
+        OR: [
+          { startTime: { lte: cutoff } },
+          { endTime: { not: null, lte: now } },
+        ],
+      },
+      select: { id: true, title: true },
+    });
+
     const completeResult = await prisma.tournament.updateMany({
       where: {
         status: { in: [TournamentStatus.REGISTRATION, TournamentStatus.ACTIVE] },
@@ -74,6 +86,14 @@ export async function syncTournamentStatuses(force = false): Promise<{ completed
         endTime: now,
       },
     });
+
+    if (expiredTournaments.length > 0) {
+      for (const t of expiredTournaments) {
+        notificationService.notifyTournamentCompleted(t.id, t.title).catch((err) => {
+          console.error('[TournamentLifecycle] Failed to notify auto-completed tournament:', err);
+        });
+      }
+    }
 
     // 2. Activate tournaments whose startTime has arrived but haven't expired (within the 1h window)
     const activateResult = await prisma.tournament.updateMany({

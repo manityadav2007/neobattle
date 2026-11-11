@@ -239,3 +239,152 @@ test('push notifications - FCM auto-cleanup removes dead/unregistered tokens fro
   // Clean up test user
   await prisma.user.deleteMany({ where: { id: testUserId } });
 });
+
+test('push notifications - admin single user lookup resolves by uid (FA-XXXX), username, email, and id', async () => {
+  const ts = Date.now();
+  const uid = `FA-${ts.toString().slice(-4)}`;
+  const email = `lookup_${ts}@example.com`;
+  const username = `u_${ts.toString().slice(-6)}`;
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      username,
+      uid,
+      passwordHash: 'hash123',
+      role: 'PLAYER',
+    },
+  });
+
+  const adminUser = { id: 'admin-tester-id', role: 'ADMIN' };
+
+  try {
+    // Lookup by UID (e.g. FA-1019)
+    const resByUid = await new Promise<{ status: number; body: any }>((resolve) => {
+      const mockReq: any = {
+        user: adminUser,
+        body: { title: 'Test Alert', message: 'Hello', audience: 'USER', targetUserId: uid },
+      };
+      const mockRes: any = {
+        status: (code: number) => ({ json: (data: any) => resolve({ status: code, body: data }) }),
+      };
+      import('../controllers/admin.controller').then(({ sendPushNotification }) => {
+        sendPushNotification(mockReq, mockRes);
+      });
+    });
+    assert.equal(resByUid.status, 200);
+    assert.equal(resByUid.body.success, true);
+    assert.equal(typeof resByUid.body.sent, 'number');
+    assert.equal(typeof resByUid.body.failed, 'number');
+
+    // Lookup by email
+    const resByEmail = await new Promise<{ status: number; body: any }>((resolve) => {
+      const mockReq: any = {
+        user: adminUser,
+        body: { title: 'Test Alert', message: 'Hello', audience: 'USER', targetUserId: email },
+      };
+      const mockRes: any = {
+        status: (code: number) => ({ json: (data: any) => resolve({ status: code, body: data }) }),
+      };
+      import('../controllers/admin.controller').then(({ sendPushNotification }) => {
+        sendPushNotification(mockReq, mockRes);
+      });
+    });
+    assert.equal(resByEmail.status, 200);
+    assert.equal(resByEmail.body.success, true);
+  } finally {
+    await prisma.user.deleteMany({ where: { id: user.id } });
+  }
+});
+
+test('push notifications - sendToUsers helper dispatches push notifications and handles payloads', async () => {
+  const testUserId = await getOrCreateTestUser('sendtousers');
+  const testToken = `token-users-${Date.now()}`;
+
+  await prisma.pushToken.create({
+    data: {
+      userId: testUserId,
+      token: testToken,
+      platform: 'android',
+    },
+  });
+
+  let capturedTokens: string[] = [];
+  let capturedPayload: any = null;
+  const originalSendToTokens = (fcmService as any).sendToTokens;
+  const originalInitialized = (fcmService as any).isInitialized;
+  (fcmService as any).isInitialized = true;
+  (fcmService as any).sendToTokens = async (tokens: string[], payload: any) => {
+    capturedTokens = tokens;
+    capturedPayload = payload;
+    return { successCount: tokens.length, failureCount: 0 };
+  };
+
+  try {
+    const res = await fcmService.sendToUsers(
+      [testUserId],
+      '⚔️ Match Starting Soon!',
+      'Match is starting shortly. Room ID & Password are now ready in your dashboard!',
+      { tournamentId: 'tour-123', route: '/tournaments/tour-123' }
+    );
+
+    assert.equal(res.successCount, 1);
+    assert.ok(capturedTokens.includes(testToken));
+    assert.equal(capturedPayload.title, '⚔️ Match Starting Soon!');
+    assert.equal(capturedPayload.data.tournamentId, 'tour-123');
+    assert.equal(capturedPayload.data.route, '/tournaments/tour-123');
+  } finally {
+    (fcmService as any).sendToTokens = originalSendToTokens;
+    (fcmService as any).isInitialized = originalInitialized;
+    await prisma.pushToken.deleteMany({ where: { token: testToken } });
+    await prisma.user.deleteMany({ where: { id: testUserId } });
+  }
+});
+
+test('push notifications - tournament lifecycle notifications trigger correctly', async () => {
+  const userA = await getOrCreateTestUser('tour_participant');
+  const capturedCalls: any[] = [];
+  const originalSendToTokens = (fcmService as any).sendToTokens;
+  const originalInitialized = (fcmService as any).isInitialized;
+  (fcmService as any).isInitialized = true;
+  (fcmService as any).sendToTokens = async (tokens: string[], payload: any) => {
+    capturedCalls.push({ tokens, payload });
+    return { successCount: tokens.length, failureCount: 0 };
+  };
+
+  const testToken = `token-tour-${Date.now()}`;
+  await prisma.pushToken.create({
+    data: {
+      userId: userA,
+      token: testToken,
+      platform: 'android',
+    },
+  });
+
+  try {
+    // 1. Tournament Created
+    await notificationService.notifyNewTournament('tour-999', 'Weekly Championship', 50, {
+      mode: 'Clash Squad',
+      prizePool: '1000',
+      name: 'Weekly Championship',
+    });
+    const createdPush = capturedCalls.find((c) => c.payload.title.includes('🏆 New Tournament'));
+    assert.ok(createdPush, 'New Tournament broadcast should be sent');
+    assert.ok(createdPush.payload.body.includes('Mode: Clash Squad'));
+    assert.ok(createdPush.payload.body.includes('Entry: ₹50'));
+    assert.ok(createdPush.payload.body.includes('Prize: ₹1000'));
+    assert.equal(createdPush.payload.data.route, '/tournaments/tour-999');
+
+    // 2. Winner payout push
+    await notificationService.notifyWinnerPayout(userA, 'Weekly Championship', 500, '1st Place');
+    const winnerPush = capturedCalls.find((c) => c.payload.title === '🎉 Prize Credited!');
+    assert.ok(winnerPush, 'Winner prize push should be sent');
+    assert.equal(winnerPush.payload.body, 'Congratulations! You won ₹500 in Weekly Championship. Check your wallet!');
+    assert.equal(winnerPush.payload.data.route, '/wallet');
+  } finally {
+    (fcmService as any).sendToTokens = originalSendToTokens;
+    (fcmService as any).isInitialized = originalInitialized;
+    await prisma.pushToken.deleteMany({ where: { token: testToken } });
+    await prisma.user.deleteMany({ where: { id: userA } });
+  }
+});

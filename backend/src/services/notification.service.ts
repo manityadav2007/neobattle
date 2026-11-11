@@ -12,6 +12,15 @@ interface NotificationPayload {
 }
 
 class NotificationService {
+  async sendToUsers(
+    userIds: string[],
+    title: string,
+    body: string,
+    data?: Record<string, string>
+  ): Promise<{ successCount: number; failureCount: number }> {
+    return fcmService.sendToUsers(userIds, title, body, data);
+  }
+
   async sendToUser(userId: string, payload: NotificationPayload): Promise<void> {
     await prisma.notification.create({
       data: {
@@ -37,26 +46,68 @@ class NotificationService {
     }
   }
 
-  async notifyNewTournament(tournamentId: string, title: string, entryFee: number): Promise<void> {
-    // Notify all active users who have opted in to tournament notifications
-    const users = await prisma.user.findMany({
-      where: { isActive: true, notifyTournaments: true },
-      select: { id: true },
-    });
+  async notifyNewTournament(
+    tournamentId: string,
+    title: string,
+    entryFee: number,
+    details?: { mode?: string; prizePool?: number | string; name?: string }
+  ): Promise<void> {
+    let mode = details?.mode;
+    let prizePool = details?.prizePool;
+    const tourName = details?.name || title;
 
-    const feeText = entryFee > 0 ? `Entry: ₹${entryFee}` : 'Free Entry';
-    const payload: NotificationPayload = {
-      type: 'NEW_TOURNAMENT',
-      title: '🏆 New Tournament Available',
-      message: `"${title}" is now open for registration! ${feeText}. Join now!`,
-      link: `/tournaments/${tournamentId}`,
-    };
+    if (mode === undefined || prizePool === undefined) {
+      try {
+        const tour = await prisma.tournament.findUnique({
+          where: { id: tournamentId },
+          select: { gameMode: true, prizePool: true, title: true },
+        });
+        if (tour) {
+          mode = mode ?? (tour.gameMode || 'Free Fire');
+          prizePool = prizePool ?? tour.prizePool?.toString();
+        }
+      } catch {}
+    }
+    mode = mode || 'Free Fire';
+    prizePool = prizePool ?? '0';
 
-    // Send in batches to avoid blocking the response
-    const batchSize = 50;
-    for (let i = 0; i < users.length; i += batchSize) {
-      const batch = users.slice(i, i + batchSize);
-      await Promise.all(batch.map((u) => this.sendToUser(u.id, payload)));
+    // 1. In-app notifications
+    try {
+      const users = await prisma.user.findMany({
+        where: { isActive: true, notifyTournaments: true },
+        select: { id: true },
+      });
+
+      const feeText = entryFee > 0 ? `Entry: ₹${entryFee}` : 'Free Entry';
+      const payload: NotificationPayload = {
+        type: 'NEW_TOURNAMENT',
+        title: '🏆 New Tournament Available',
+        message: `"${title}" is now open for registration! ${feeText}. Join now!`,
+        link: `/tournaments/${tournamentId}`,
+      };
+
+      const batchSize = 50;
+      for (let i = 0; i < users.length; i += batchSize) {
+        const batch = users.slice(i, i + batchSize);
+        await Promise.all(batch.map((u) => this.sendToUser(u.id, payload).catch(() => {})));
+      }
+    } catch (err) {
+      console.error('[Notification] Failed to create in-app notifications for new tournament:', err);
+    }
+
+    // 2. Broadcast to ALL registered tokens
+    try {
+      await fcmService.sendToAll({
+        title: `🏆 New Tournament: ${tourName}`,
+        body: `Mode: ${mode} | Entry: ₹${entryFee} | Prize: ₹${prizePool}`,
+        path: `/tournaments/${tournamentId}`,
+        data: {
+          tournamentId,
+          route: `/tournaments/${tournamentId}`,
+        },
+      });
+    } catch (err) {
+      console.error('[Notification] Failed to broadcast push notification for new tournament:', err);
     }
   }
 
@@ -92,21 +143,115 @@ class NotificationService {
       for (const userId of userIds) {
         await this.sendToUser(userId, {
           type: 'TOURNAMENT_STARTING',
-          title: 'Tournament Starting Soon',
-          message: `"${t.title}" starts in 15 minutes. Get ready!`,
+          title: '⚔️ Match Starting Soon!',
+          message: `${t.title} is starting shortly. Room ID & Password are now ready in your dashboard!`,
           link: `/tournaments/${t.id}`,
         }).catch((err) => console.error(`[Notification] In-app notify error for user ${userId}:`, err));
-
-        await fcmService.sendToUser(
-          userId,
-          {
-            title: 'Tournament Starting in 15 Minutes!',
-            body: `"${t.title}" starts soon. Get ready to play!`,
-            path: `/tournaments/${t.id}`,
-          },
-          'notifyTournaments'
-        ).catch((err) => console.error(`[FCM] Push notify error for user ${userId}:`, err));
       }
+
+      await fcmService.sendToUsers(
+        userIds,
+        '⚔️ Match Starting Soon!',
+        `${t.title} is starting shortly. Room ID & Password are now ready in your dashboard!`,
+        {
+          tournamentId: t.id,
+          route: `/tournaments/${t.id}`,
+        }
+      ).catch((err) => console.error(`[FCM] Push notify error for upcoming tournament ${t.id}:`, err));
+    }
+  }
+
+  /**
+   * Hook into room code release: dispatches match starting / room code alert to registered players
+   */
+  async notifyRoomCodeReady(tournamentId: string, tournamentTitle?: string): Promise<void> {
+    try {
+      let title = tournamentTitle;
+      if (!title) {
+        const tour = await prisma.tournament.findUnique({
+          where: { id: tournamentId },
+          select: { title: true },
+        });
+        title = tour?.title || 'Tournament';
+      }
+
+      const entries = await prisma.tournamentEntry.findMany({
+        where: { tournamentId, userId: { not: null } },
+        select: { userId: true },
+      });
+      const userIds = [...new Set(entries.map((e) => e.userId).filter(Boolean))] as string[];
+
+      if (userIds.length === 0) return;
+
+      // In-app notifications
+      for (const userId of userIds) {
+        this.sendToUser(userId, {
+          type: 'TOURNAMENT_STARTING',
+          title: '⚔️ Match Starting Soon!',
+          message: `${title} is starting shortly. Room ID & Password are now ready in your dashboard!`,
+          link: `/tournaments/${tournamentId}`,
+        }).catch(() => {});
+      }
+
+      // Native push notifications to registered players
+      await fcmService.sendToUsers(
+        userIds,
+        '⚔️ Match Starting Soon!',
+        `${title} is starting shortly. Room ID & Password are now ready in your dashboard!`,
+        {
+          tournamentId,
+          route: `/tournaments/${tournamentId}`,
+        }
+      );
+    } catch (err) {
+      console.error(`[Notification] Failed to notify room code ready for tournament ${tournamentId}:`, err);
+    }
+  }
+
+  /**
+   * Dispatches tournament completed notification to participants
+   */
+  async notifyTournamentCompleted(tournamentId: string, tournamentTitle?: string): Promise<void> {
+    try {
+      let title = tournamentTitle;
+      if (!title) {
+        const tour = await prisma.tournament.findUnique({
+          where: { id: tournamentId },
+          select: { title: true },
+        });
+        title = tour?.title || 'Tournament';
+      }
+
+      const entries = await prisma.tournamentEntry.findMany({
+        where: { tournamentId, userId: { not: null } },
+        select: { userId: true },
+      });
+      const userIds = [...new Set(entries.map((e) => e.userId).filter(Boolean))] as string[];
+
+      if (userIds.length === 0) return;
+
+      // In-app notifications
+      for (const userId of userIds) {
+        this.sendToUser(userId, {
+          type: 'MATCH_UPDATE',
+          title: '🏁 Match Completed',
+          message: `${title} has ended. Match results and kill counts are being finalized.`,
+          link: `/tournaments/${tournamentId}`,
+        }).catch(() => {});
+      }
+
+      // Native push notifications to registered players
+      await fcmService.sendToUsers(
+        userIds,
+        '🏁 Match Completed',
+        `${title} has ended. Match results and kill counts are being finalized.`,
+        {
+          tournamentId,
+          route: `/tournaments/${tournamentId}`,
+        }
+      );
+    } catch (err) {
+      console.error(`[Notification] Failed to notify tournament completed for ${tournamentId}:`, err);
     }
   }
 
@@ -174,12 +319,29 @@ class NotificationService {
 
   async notifyWinnerPayout(userId: string, tournamentTitle: string, amount: number, placementLabel?: string): Promise<void> {
     const labelText = placementLabel ? ` (${placementLabel})` : '';
+    // 1. In-app notification
     await this.sendToUser(userId, {
       type: 'PAYOUT_APPROVED',
       title: '🏆 Tournament Prize Won!',
       message: `You won ₹${amount}${labelText} from tournament "${tournamentTitle}". Prize added to your wallet!`,
       link: '/wallet',
-    });
+    }).catch((err) => console.error(`[Notification] In-app notify error for winner ${userId}:`, err));
+
+    // 2. Native push notification (Winners Only)
+    try {
+      await fcmService.sendToUser(
+        userId,
+        {
+          title: '🎉 Prize Credited!',
+          body: `Congratulations! You won ₹${amount} in ${tournamentTitle}. Check your wallet!`,
+          path: '/wallet',
+          data: { route: '/wallet' },
+        },
+        'notifyResults'
+      );
+    } catch (pushErr) {
+      console.error(`[FCM] Winner push notify error for user ${userId}:`, pushErr);
+    }
   }
 
   async notifyHostCommission(hostId: string, tournamentTitle: string, amount: number): Promise<void> {
@@ -221,20 +383,20 @@ class NotificationService {
   }
 
   /**
-   * Sends push notification for withdrawal status changes (COMPLETED / REJECTED)
+   * Sends push notification for withdrawal status changes (COMPLETED / APPROVED / REJECTED)
    * Guaranteed to execute outside transaction, exactly once per withdrawal (deduplicated via `notified` flag).
-   * Strictly avoids including amount, balance, UPI ID, bank details, transaction IDs or email.
    * Catches errors gracefully without failing, delaying, or affecting the withdrawal.
    */
   async notifyWithdrawalStatus(params: {
     withdrawalId: string;
     userId: string;
-    status: 'COMPLETED' | 'REJECTED';
+    status: 'COMPLETED' | 'APPROVED' | 'REJECTED';
     type: 'TRANSACTION' | 'REDEEM_REQUEST';
     linkedRedeemId?: string;
     linkedTransactionId?: string;
+    amount?: number;
   }): Promise<void> {
-    const { withdrawalId, userId, status, type, linkedRedeemId, linkedTransactionId } = params;
+    const { withdrawalId, userId, status, type, linkedRedeemId, linkedTransactionId, amount } = params;
 
     try {
       // 1. Atomic deduplication: claim notification on the withdrawal record
@@ -273,19 +435,28 @@ class NotificationService {
         return;
       }
 
-      // 2. Prepare payload without amount, balance, UPI ID, bank details, transaction IDs or email
-      const payload =
-        status === 'COMPLETED'
-          ? {
-              title: 'Withdrawal successful',
-              body: 'Your withdrawal has been processed. Tap to view your wallet.',
-              path: '/wallet',
-            }
-          : {
-              title: 'Withdrawal not processed',
-              body: 'Withdrawal not processed: tap to view details',
-              path: '/wallet',
-            };
+      // 2. Prepare payload
+      const isApprovedOrCompleted = status === 'COMPLETED' || status === 'APPROVED';
+      const payload = isApprovedOrCompleted
+        ? (amount !== undefined
+            ? {
+                title: '✅ Withdrawal Successful!',
+                body: `₹${amount} has been successfully transferred to your UPI/bank account.`,
+                path: '/wallet',
+                data: { route: '/wallet' },
+              }
+            : {
+                title: 'Withdrawal successful',
+                body: 'Your withdrawal has been processed. Tap to view your wallet.',
+                path: '/wallet',
+                data: { route: '/wallet' },
+              })
+        : {
+            title: 'Withdrawal not processed',
+            body: 'Withdrawal not processed: tap to view details',
+            path: '/wallet',
+            data: { route: '/wallet' },
+          };
 
       // 3. Dispatch push notification respecting user preferences and skipping users without registered tokens
       await fcmService.sendToUser(userId, payload, 'notifyAlerts');

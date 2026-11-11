@@ -116,7 +116,11 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
     });
 
     // Fire-and-forget: notify subscribed users about the new tournament
-    notificationService.notifyNewTournament(tournament.id, tournament.title, entryFeeNum).catch((err) => {
+    notificationService.notifyNewTournament(tournament.id, tournament.title, entryFeeNum, {
+      mode: tournament.gameMode,
+      prizePool: tournament.prizePool?.toString(),
+      name: tournament.title,
+    }).catch((err) => {
       console.error('[Host] Failed to send new-tournament notifications:', err);
     });
 
@@ -163,7 +167,11 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   });
 
   // Fire-and-forget: notify subscribed users about the new free tournament
-  notificationService.notifyNewTournament(tournament.id, tournament.title, 0).catch((err) => {
+  notificationService.notifyNewTournament(tournament.id, tournament.title, 0, {
+    mode: tournament.gameMode,
+    prizePool: tournament.prizePool?.toString(),
+    name: tournament.title,
+  }).catch((err) => {
     console.error('[Host] Failed to send new-tournament notifications:', err);
   });
 
@@ -318,6 +326,16 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
       await escrowService.releaseToWinner(escrow.id, winnerWallet.id, winner.user!.id);
     }
 
+    // Notify participants and winner
+    notificationService.notifyTournamentCompleted(tournamentId, tournament.title).catch((err) => {
+      console.error('[Host] Failed to notify tournament completion:', err);
+    });
+    if (prizePoolNum > 0) {
+      notificationService.notifyWinnerPayout(winner.user!.id, tournament.title, prizePoolNum, '1st Place').catch((err) => {
+        console.error('[Host] Failed to notify winner payout:', err);
+      });
+    }
+
     res.json({
       success: true,
       message: `Tournament completed! Winner: ${winner.user?.username || 'Unknown'}. Prize: ₹${prizePoolNum}. Host commission: ₹${hostCommissionNum}`,
@@ -348,6 +366,12 @@ export async function updateTournamentStatus(req: AuthenticatedRequest, res: Res
     where: { id: req.params.id },
     data: { status: status as TournamentStatus },
   });
+
+  if (status === TournamentStatus.COMPLETED || status === 'COMPLETED') {
+    notificationService.notifyTournamentCompleted(updated.id, tournament.title).catch((err) => {
+      console.error('[Host] Failed to notify tournament completion:', err);
+    });
+  }
 
   res.json({ success: true, data: updated });
 }
@@ -464,6 +488,13 @@ export async function updateRoomDetails(req: AuthenticatedRequest, res: Response
     await cacheDel(`tournament:${req.params.id}`);
   } catch (cacheErr) {
     console.warn('[HostController] Failed to clear cache:', cacheErr);
+  }
+
+  // Hook into room code release: dispatch match starting / room code alert to registered players
+  if (updated.roomId) {
+    notificationService.notifyRoomCodeReady(updated.id, tournament.title).catch((err) => {
+      console.error('[HostController] Failed to notify room code release:', err);
+    });
   }
 
   res.json({

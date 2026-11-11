@@ -86,7 +86,11 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
     await cacheDelPattern('tournaments:list*');
 
     // Fire-and-forget: notify subscribed users about the new tournament
-    notificationService.notifyNewTournament(tournament.id, tournament.title, entryFeeNum).catch((err) => {
+    notificationService.notifyNewTournament(tournament.id, tournament.title, entryFeeNum, {
+      mode: tournament.gameMode,
+      prizePool: tournament.prizePool?.toString(),
+      name: tournament.title,
+    }).catch((err) => {
       console.error('[Tournament] Failed to send new-tournament notifications:', err);
     });
 
@@ -130,7 +134,11 @@ export async function createTournament(req: AuthenticatedRequest, res: Response)
   await cacheDelPattern('tournaments:list*');
 
   // Fire-and-forget: notify subscribed users about the new free tournament
-  notificationService.notifyNewTournament(tournament.id, tournament.title, 0).catch((err) => {
+  notificationService.notifyNewTournament(tournament.id, tournament.title, 0, {
+    mode: tournament.gameMode,
+    prizePool: tournament.prizePool?.toString(),
+    name: tournament.title,
+  }).catch((err) => {
     console.error('[Tournament] Failed to send new-tournament notifications:', err);
   });
 
@@ -1023,6 +1031,11 @@ export async function completeTournament(req: AuthenticatedRequest, res: Respons
 
   await cacheDelPattern('tournaments:list*');
   await cacheDel(`tournament:${req.params.id}`);
+
+  // Notify participants that tournament has completed
+  notificationService.notifyTournamentCompleted(updated.id, updated.title).catch((err) => {
+    console.error('[Tournament] Failed to notify tournament completion:', err);
+  });
 
   res.json({ success: true, data: updated, message: 'Tournament marked as completed' });
 }

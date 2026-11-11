@@ -245,6 +245,10 @@ export async function releaseTournamentPrizes(
     data: { status: TournamentStatus.COMPLETED, endTime: new Date() },
   });
 
+  notificationService.notifyTournamentCompleted(tournamentId).catch((err) => {
+    console.error('[Admin] Failed to notify tournament completion:', err);
+  });
+
   res.json({ success: true, message: 'Prizes released', data: results });
 }
 
@@ -1247,6 +1251,7 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
           status: 'COMPLETED',
           type: 'TRANSACTION',
           linkedRedeemId: (result.tx.metadata as any)?.redeemRequestId,
+          amount: Number(result.amount),
         }).catch((err) => {
           console.error(`[Push] Failed to notify withdrawalId: ${result.tx.id}, errorType: ${err?.name || 'Error'}`);
         });
@@ -1290,6 +1295,7 @@ export async function reviewWithdrawal(req: AuthenticatedRequest, res: Response)
           userId: result.userId,
           status: 'COMPLETED',
           type: 'REDEEM_REQUEST',
+          amount: Number(result.amount),
         }).catch((err) => {
           console.error(`[Push] Failed to notify withdrawalId: ${result.withdrawalId}, errorType: ${err?.name || 'Error'}`);
         });
@@ -1507,6 +1513,7 @@ export async function sendPushNotification(req: AuthenticatedRequest, res: Respo
     let result = { successCount: 0, failureCount: 0 };
     const isSingle = audience === 'USER' || audience === 'single' || target === 'single';
     const recipient = targetUserId || targetUser;
+    let resolvedUserId: string | null = null;
 
     if (isSingle) {
       if (!recipient || typeof recipient !== 'string') {
@@ -1514,11 +1521,17 @@ export async function sendPushNotification(req: AuthenticatedRequest, res: Respo
         return;
       }
 
-      // Check if recipient is a username or user ID
+      // Check if recipient is a username, user ID, customId/uid (e.g. FA-1019), or email
       let targetId = recipient.trim();
       const userFound = await prisma.user.findFirst({
         where: {
-          OR: [{ id: targetId }, { username: targetId }],
+          OR: [
+            { id: targetId },
+            { username: targetId },
+            { uid: targetId },
+            { uid: targetId.toUpperCase() },
+            { email: targetId },
+          ],
         },
         select: { id: true },
       });
@@ -1527,9 +1540,9 @@ export async function sendPushNotification(req: AuthenticatedRequest, res: Respo
         res.status(404).json({ success: false, message: `User "${recipient}" not found` });
         return;
       }
-      targetId = userFound.id;
+      resolvedUserId = userFound.id;
 
-      result = await fcmService.sendToUser(targetId, {
+      result = await fcmService.sendToUser(resolvedUserId, {
         title: cleanTitle,
         body: cleanBody,
         path: cleanPath,
@@ -1537,7 +1550,7 @@ export async function sendPushNotification(req: AuthenticatedRequest, res: Respo
 
       // Also create an in-app notification record
       try {
-        await notificationService.sendToUser(targetId, {
+        await notificationService.sendToUser(resolvedUserId, {
           type: 'MATCH_UPDATE',
           title: cleanTitle,
           message: cleanBody,
@@ -1558,15 +1571,19 @@ export async function sendPushNotification(req: AuthenticatedRequest, res: Respo
       data: {
         userId: adminId,
         action: 'ADMIN_PUSH_NOTIFICATION',
-        targetId: audience === 'USER' ? targetUserId : null,
+        targetId: isSingle ? resolvedUserId : null,
         details: {
           title: cleanTitle,
           body: cleanBody,
           path: cleanPath,
-          audience: audience || 'ALL',
-          targetUserId: audience === 'USER' ? targetUserId : undefined,
+          audience: isSingle ? 'USER' : (audience || 'ALL'),
+          targetUserId: isSingle ? resolvedUserId : undefined,
+          sentCount: result.successCount,
+          failedCount: result.failureCount,
           successCount: result.successCount,
           failureCount: result.failureCount,
+          sent: result.successCount,
+          failed: result.failureCount,
         },
       },
     });
@@ -1574,7 +1591,20 @@ export async function sendPushNotification(req: AuthenticatedRequest, res: Respo
     res.status(200).json({
       success: true,
       message: 'Notification sent successfully',
-      result,
+      sent: result.successCount,
+      failed: result.failureCount,
+      data: {
+        sentCount: result.successCount,
+        failedCount: result.failureCount,
+        sent: result.successCount,
+        failed: result.failureCount,
+      },
+      result: {
+        successCount: result.successCount,
+        failureCount: result.failureCount,
+        sent: result.successCount,
+        failed: result.failureCount,
+      },
     });
   } catch (err: any) {
     console.error('[Admin] Error sending push notification:', err?.message || err);
@@ -1594,9 +1624,35 @@ export async function getPushNotificationHistory(_req: AuthenticatedRequest, res
       take: 50,
     });
 
+    const adminIds = [...new Set(logs.map((l) => l.userId).filter(Boolean))] as string[];
+    const admins =
+      adminIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: adminIds } },
+            select: { id: true, username: true },
+          })
+        : [];
+    const adminMap = new Map(admins.map((a) => [a.id, a.username]));
+
+    const formatted = logs.map((log) => {
+      const details = (log.details as any) || {};
+      return {
+        id: log.id,
+        title: details.title || '',
+        message: details.body || '',
+        path: details.path || '/',
+        target: details.audience || (log.targetId ? 'USER' : 'ALL'),
+        targetUser: details.targetUserId || log.targetId || undefined,
+        sentCount: details.sentCount ?? details.successCount ?? details.sent ?? 0,
+        failedCount: details.failedCount ?? details.failureCount ?? details.failed ?? 0,
+        createdAt: log.createdAt.toISOString(),
+        admin: (log.userId && adminMap.get(log.userId)) || 'Admin',
+      };
+    });
+
     res.status(200).json({
       success: true,
-      data: logs,
+      data: formatted,
     });
   } catch (err: any) {
     console.error('[Admin] Error fetching notification history:', err?.message || err);
