@@ -1,10 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Orbitron } from 'next/font/google';
-import GlobalSidebar from '@/components/GlobalSidebar';
 import GlobalBackButton from '@/components/GlobalBackButton';
-import Navbar from '@/components/Navbar';
-import BottomNav from '@/components/BottomNav';
-import ConditionalFooter from '@/components/ConditionalFooter';
 import AppMain from '@/components/AppMain';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import SplashScreen from '@/components/SplashScreen';
@@ -73,16 +69,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AppScrollReset />
           <ServiceWorkerRegister />
           <AppLoginGate>
-            <Navbar />
-            <GlobalSidebar />
             <NotificationPermissionPrompt />
             <ForegroundNotificationToast />
             <AppMain>
               <GlobalBackButton />
               {children}
             </AppMain>
-            <BottomNav />
-            <ConditionalFooter />
           </AppLoginGate>
           <AppContentReadyNotifier />
         </AuthProvider>
