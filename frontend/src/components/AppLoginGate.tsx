@@ -67,7 +67,8 @@ export default function AppLoginGate({ children }: { children: ReactNode }) {
         setError('');
         setCachedTokenHint(true);
         await refetch();
-        router.push('/');
+        const target = pathname?.startsWith('/arena') ? '/arena' : isApp ? '/arena' : '/dashboard';
+        router.push(target);
       },
       (err) => {
         setLoadingProvider(null);
@@ -125,7 +126,8 @@ export default function AppLoginGate({ children }: { children: ReactNode }) {
       await authApi.login({ email, password });
       setCachedTokenHint(true);
       await refetch();
-      router.push('/');
+      const target = pathname?.startsWith('/arena') ? '/arena' : isApp ? '/arena' : '/dashboard';
+      router.push(target);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

@@ -64,6 +64,8 @@ public class MainActivity extends BridgeActivity {
                     WebView webView = getBridge().getWebView();
                     String currentUrl = webView.getUrl();
                     boolean isHome = currentUrl == null ||
+                            currentUrl.equals("https://neobattle.live/arena") ||
+                            currentUrl.equals("https://neobattle.live/arena/") ||
                             currentUrl.equals("https://neobattle.live") ||
                             currentUrl.equals("https://neobattle.live/") ||
                             currentUrl.startsWith("capacitor://localhost");
@@ -218,7 +220,7 @@ public class MainActivity extends BridgeActivity {
             // Background retry after 2000ms
             mainHandler.postDelayed(() -> {
                 if (view != null && !isInitialPageLoaded) {
-                    view.loadUrl("https://neobattle.live");
+                    view.loadUrl("https://neobattle.live/arena");
                 }
             }, RETRY_INTERVAL_MS);
         } else {

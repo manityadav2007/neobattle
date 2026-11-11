@@ -70,7 +70,8 @@ export default function AuthSocialButtons() {
       () => {
         setLoadingProvider(null);
         setError('');
-        router.push('/');
+        const target = isApp ? '/arena' : '/dashboard';
+        router.push(target);
       },
       (err) => {
         setLoadingProvider(null);

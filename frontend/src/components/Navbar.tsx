@@ -85,7 +85,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo on the left */}
           <Link
-            href="/"
+            href={isApp ? '/arena' : '/'}
             className={`flex items-center gap-2 group ${isApp ? 'ml-0' : 'ml-4'}`}
             onClick={closeMenu}
           >

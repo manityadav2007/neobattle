@@ -21,6 +21,7 @@ export interface PushReceivedEventDetail {
 // Allowlisted safe in-app path regex patterns
 const ALLOWED_APP_PATTERNS = [
   /^\/$/,
+  /^\/arena(\/[a-zA-Z0-9_-]+)?$/,
   /^\/tournaments(\/[a-zA-Z0-9_-]+)?$/,
   /^\/dashboard(\/[a-zA-Z0-9_-]+)?$/,
   /^\/wallet(\/[a-zA-Z0-9_-]+)?$/,

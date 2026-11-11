@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BarChart3, Home, Radio, ShoppingBag, Trophy } from 'lucide-react';
+import { useIsApp } from '@/hooks/useIsApp';
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
@@ -14,9 +15,12 @@ const navItems = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const isApp = useIsApp();
+
+  const homeHref = isApp ? '/arena' : '/';
 
   const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
+    if (href === '/' || href === '/arena') return pathname === '/' || pathname === '/arena';
     return pathname === href || pathname.startsWith(href + '/');
   };
 
@@ -29,10 +33,11 @@ export default function BottomNav() {
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
+          const targetHref = item.href === '/' ? homeHref : item.href;
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={targetHref}
               onClick={() => {
                 window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
                 if (document.documentElement) document.documentElement.scrollTop = 0;

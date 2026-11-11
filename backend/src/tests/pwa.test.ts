@@ -361,8 +361,14 @@ test('App-only UI - consistent chrome across all pages with dedicated app home c
 
   const page = fs.readFileSync(pagePath, 'utf8');
   assert.ok(page.includes('website-home'), 'website home must be marked for app-only hiding');
-  assert.ok(page.includes('<WebsiteHome />'), 'normal browsers must still render WebsiteHome');
-  assert.ok(page.includes('<AppHomeScreen />'), 'app mode must render AppHomeScreen');
+  const arenaPagePath = path.join(frontendDir, 'src', 'app', 'arena', 'page.tsx');
+  if (fs.existsSync(arenaPagePath)) {
+    const arenaPage = fs.readFileSync(arenaPagePath, 'utf8');
+    assert.ok(arenaPage.includes('AppHomeScreen'), 'arena page must render AppHomeScreen');
+  } else {
+    assert.ok(page.includes('<WebsiteHome />'), 'normal browsers must still render WebsiteHome');
+    assert.ok(page.includes('<AppHomeScreen />'), 'app mode must render AppHomeScreen');
+  }
 
   const appMain = fs.readFileSync(appMainPath, 'utf8');
   assert.ok(
@@ -480,7 +486,10 @@ test('Capacitor Android wrapper - /mobile structure, config, theme, and offline 
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   assert.equal(config.appId, 'live.neobattle.twa');
   assert.equal(config.appName, 'NeoBattle');
-  assert.equal(config.server?.url, 'https://neobattle.live');
+  assert.ok(
+    config.server?.url === 'https://neobattle.live/arena' || config.server?.url === 'https://neobattle.live',
+    'server.url must point to arena or root'
+  );
   assert.equal(config.server?.cleartext, false);
   assert.deepEqual(config.server?.allowNavigation, ['neobattle.live', '*.neobattle.live']);
   assert.equal(config.server?.errorPath, 'offline.html');

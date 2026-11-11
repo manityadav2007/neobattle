@@ -146,7 +146,7 @@ class NotificationService {
           title: '⚔️ Match Starting Soon!',
           message: `${t.title} is starting shortly. Room ID & Password are now ready in your dashboard!`,
           link: `/tournaments/${t.id}`,
-        }).catch((err) => console.error(`[Notification] In-app notify error for user ${userId}:`, err));
+        }).catch((err) => console.error('[Notification] In-app notify error for user %s:', userId, err));
       }
 
       await fcmService.sendToUsers(
@@ -157,7 +157,7 @@ class NotificationService {
           tournamentId: t.id,
           route: `/tournaments/${t.id}`,
         }
-      ).catch((err) => console.error(`[FCM] Push notify error for upcoming tournament ${t.id}:`, err));
+      ).catch((err) => console.error('[FCM] Push notify error for upcoming tournament %s:', t.id, err));
     }
   }
 
@@ -204,7 +204,7 @@ class NotificationService {
         }
       );
     } catch (err) {
-      console.error(`[Notification] Failed to notify room code ready for tournament ${tournamentId}:`, err);
+      console.error('[Notification] Failed to notify room code ready for tournament %s:', tournamentId, err);
     }
   }
 
@@ -251,7 +251,7 @@ class NotificationService {
         }
       );
     } catch (err) {
-      console.error(`[Notification] Failed to notify tournament completed for ${tournamentId}:`, err);
+      console.error('[Notification] Failed to notify tournament completed for %s:', tournamentId, err);
     }
   }
 
@@ -268,7 +268,7 @@ class NotificationService {
         title: 'Results Published',
         message: `Results for tournament "${tournamentTitle}" are out! Check the winners and standings.`,
         link: `/tournaments/${tournamentId}`,
-      }).catch((err) => console.error(`[Notification] Result notify error for user ${userId}:`, err));
+      }).catch((err) => console.error('[Notification] Result notify error for user %s:', userId, err));
 
       await fcmService.sendToUser(
         userId,
@@ -278,7 +278,7 @@ class NotificationService {
           path: `/tournaments/${tournamentId}`,
         },
         'notifyResults'
-      ).catch((err) => console.error(`[FCM] Result push notify error for user ${userId}:`, err));
+      ).catch((err) => console.error('[FCM] Result push notify error for user %s:', userId, err));
     }
   }
 
@@ -325,7 +325,7 @@ class NotificationService {
       title: '🏆 Tournament Prize Won!',
       message: `You won ₹${amount}${labelText} from tournament "${tournamentTitle}". Prize added to your wallet!`,
       link: '/wallet',
-    }).catch((err) => console.error(`[Notification] In-app notify error for winner ${userId}:`, err));
+    }).catch((err) => console.error('[Notification] In-app notify error for winner %s:', userId, err));
 
     // 2. Native push notification (Winners Only)
     try {
@@ -340,7 +340,7 @@ class NotificationService {
         'notifyResults'
       );
     } catch (pushErr) {
-      console.error(`[FCM] Winner push notify error for user ${userId}:`, pushErr);
+      console.error('[FCM] Winner push notify error for user %s:', userId, pushErr);
     }
   }
 
@@ -463,7 +463,7 @@ class NotificationService {
     } catch (err: any) {
       // Catch error, log only withdrawal id and error type, never fail or delay withdrawal
       const errorType = err?.name || err?.code || 'UnknownError';
-      console.error(`[Push] Failed to send withdrawal push notification for withdrawalId=${withdrawalId}, errorType=${errorType}`);
+      console.error('[Push] Failed to send withdrawal push notification for withdrawalId=%s, errorType=%s', withdrawalId, errorType);
     }
   }
 }
