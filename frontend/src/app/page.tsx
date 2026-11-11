@@ -179,26 +179,23 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-xl mx-auto"
+              className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-xl mx-auto w-full"
             >
               {/* Android Primary CTA */}
               <a
                 href={APP_APK_URL}
                 download="neobattle.apk"
-                className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl text-base font-bold text-black bg-gradient-to-r from-orange-500 via-amber-400 to-orange-500 hover:brightness-110 shadow-xl shadow-orange-500/25 active:scale-95 transition-all"
+                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-2.5 px-7 py-4 rounded-2xl text-base font-bold text-black bg-gradient-to-r from-orange-500 via-amber-400 to-orange-500 hover:brightness-110 shadow-lg shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
               >
                 <AndroidIcon className="w-5 h-5 text-black shrink-0" />
                 <span className="whitespace-nowrap">Download Android APK</span>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-black/20 text-black border border-black/20">
-                  v1.1.0 • ~7.5 MB
-                </span>
               </a>
 
               {/* iOS Clean Secondary CTA */}
               <button
                 type="button"
                 onClick={() => setIosModalOpen(true)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl text-base font-bold text-white border border-white/20 bg-white/5 hover:bg-white/10 hover:border-orange-500/40 active:scale-95 transition-all shadow-lg"
+                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-2.5 px-7 py-4 rounded-2xl text-base font-bold text-white border border-white/20 bg-white/5 hover:bg-white/10 hover:border-orange-500/40 active:scale-95 transition-all shadow-lg cursor-pointer"
               >
                 <AppleIcon className="w-5 h-5 text-white shrink-0" />
                 <span className="whitespace-nowrap">Install on iPhone (iOS)</span>
