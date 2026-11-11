@@ -26,6 +26,14 @@ export default function AppMain({ children }: { children: ReactNode }) {
     }
   }, [isApp, isAppHome, pathname]);
 
+  if (pathname === '/') {
+    return (
+      <main data-app-main="true" className="min-h-screen w-full overflow-x-hidden">
+        {children}
+      </main>
+    );
+  }
+
   return (
     <main data-app-main="true" className={MAIN_CLASS}>
       {children}

@@ -77,7 +77,7 @@ export const IOS_STEPS = [
   '4. Tap Add',
 ] as const;
 
-export default function DownloadSection() {
+export default function DownloadSection({ hidden = true }: { hidden?: boolean } = {}) {
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIosModalOpen, setIsIosModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -158,8 +158,8 @@ export default function DownloadSection() {
     }
   };
 
-  // Hide the whole section when already running as an installed app
-  if (isInstalled) {
+  // Hide the whole section when already running as an installed app, or when hidden
+  if (isInstalled || hidden) {
     return null;
   }
 

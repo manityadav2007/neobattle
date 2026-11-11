@@ -44,11 +44,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="color-scheme" content="dark" />
         <meta name="theme-color" content="#000000" />
         <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="NeoBattle" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="NeoBattle" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <style
           dangerouslySetInnerHTML={{
             __html: `html,body{background:#000 !important;color-scheme:dark;}#twa-splash-screen{background:#000;}`,

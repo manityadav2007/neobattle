@@ -2,7 +2,7 @@
   "name": "NeoBattle",
   "short_name": "NeoBattle",
   "description": "Free Fire Tournament Platform",
-  "start_url": "/",
+  "start_url": "/arena",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

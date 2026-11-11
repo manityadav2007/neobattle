@@ -3,28 +3,33 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppHomeScreen from '@/components/app/AppHomeScreen';
-import { useIsApp } from '@/hooks/useIsApp';
 
 export default function ArenaPage() {
   const router = useRouter();
-  const isApp = useIsApp();
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    // Strict Native Check: redirect immediately to / if accessed via desktop/mobile browser without Capacitor
-    const isCapacitor =
-      typeof window !== 'undefined' &&
-      (Boolean((window as any).Capacitor?.isNativePlatform?.()) ||
-       Boolean((window as any).Capacitor) ||
-       window.navigator?.userAgent?.includes('NeoBattleApp') ||
-       document.documentElement.classList.contains('app-mode'));
+    if (typeof window === 'undefined') return;
 
-    if (isCapacitor || isApp) {
+    // 1. Android APK (Capacitor native platform)
+    const isCapacitor = Boolean(
+      (window as any).Capacitor?.isNativePlatform?.() ||
+      (window as any).Capacitor ||
+      window.navigator?.userAgent?.includes('NeoBattleApp')
+    );
+
+    // 2. iOS Home Screen App (PWA Standalone)
+    const isStandalonePWA = Boolean(
+      (window.navigator as any)?.standalone === true ||
+      (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches)
+    );
+
+    if (isCapacitor || isStandalonePWA) {
       setIsAuthorized(true);
     } else {
-      router.replace('/');
+      router.replace('/?download=required');
     }
-  }, [isApp, router]);
+  }, [router]);
 
   if (!isAuthorized) {
     return null;

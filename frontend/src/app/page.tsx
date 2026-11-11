@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -10,11 +10,13 @@ import {
   Download,
   Lock,
   Wallet,
+  X,
+  Share2,
 } from 'lucide-react';
 import ParticleCanvas from '@/components/ParticleCanvas';
 import LogoAsset from '@/components/LogoAsset';
 import DownloadSection from '@/components/DownloadSection';
-import { AndroidIcon } from '@/components/DownloadSection';
+import { AndroidIcon, AppleIcon } from '@/components/DownloadSection';
 import { useIsApp } from '@/hooks/useIsApp';
 import { APP_APK_URL } from '@/config/download';
 
@@ -83,17 +85,33 @@ const mockScreens = [
 export default function HomePage() {
   const isApp = useIsApp();
   const router = useRouter();
+  const [iosModalOpen, setIosModalOpen] = useState(false);
+  const [downloadRequired, setDownloadRequired] = useState(false);
 
-  // If accessed from installed Capacitor app wrapper, route straight to the gaming arena
+  // If accessed from installed Capacitor app or standalone PWA, route straight to the gaming arena
   useEffect(() => {
     if (isApp) {
       router.replace('/arena');
     }
   }, [isApp, router]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('download=required')) {
+      setDownloadRequired(true);
+    }
+  }, []);
+
   return (
     <div className="relative website-home min-h-screen bg-black text-white selection:bg-orange-500 selection:text-black">
       <ParticleCanvas />
+
+      {/* Redirect Notice if coming from arena guard */}
+      {downloadRequired && (
+        <div className="relative z-30 bg-orange-500/10 border-b border-orange-500/30 px-4 py-2.5 text-center text-xs text-orange-300 flex items-center justify-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0" />
+          <span>The NeoBattle Gaming Arena is exclusive to our installed mobile app. Download the Android APK or install on iPhone below to play!</span>
+        </div>
+      )}
 
       {/* 1. MINIMAL BRAND NAVBAR: Logo on left, small Download App button on right */}
       <header className="relative z-20 w-full border-b border-white/10 bg-black/80 backdrop-blur-md">
@@ -156,32 +174,43 @@ export default function HomePage() {
               India&apos;s ultimate esports platform. Join verified matches, track kills automatically, receive instant room credentials, and cash out winnings directly via UPI.
             </motion.p>
 
-            {/* Primary CTA: ONE big centered button */}
+            {/* ONE Unified Hero Download Area: Android & iOS */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="flex flex-col items-center justify-center gap-3 max-w-md mx-auto"
+              className="flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-xl mx-auto"
             >
+              {/* Android Primary CTA */}
               <a
                 href={APP_APK_URL}
                 download="neobattle.apk"
-                className="w-full flex items-center justify-center gap-3 px-8 py-4 sm:py-5 rounded-2xl text-base sm:text-lg font-bold text-black bg-gradient-to-r from-orange-500 via-amber-400 to-orange-500 hover:brightness-110 shadow-xl shadow-orange-500/25 active:scale-95 transition-all"
+                className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl text-base font-bold text-black bg-gradient-to-r from-orange-500 via-amber-400 to-orange-500 hover:brightness-110 shadow-xl shadow-orange-500/25 active:scale-95 transition-all"
               >
-                <AndroidIcon className="w-6 h-6 text-black" />
-                <span>Download Android APK</span>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-black/20 text-black border border-black/20">
+                <AndroidIcon className="w-5 h-5 text-black shrink-0" />
+                <span className="whitespace-nowrap">Download Android APK</span>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-black/20 text-black border border-black/20">
                   v1.1.0 • ~7.5 MB
                 </span>
               </a>
 
-              <p className="text-xs text-zinc-500 flex items-center gap-1.5 mt-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                100% Virus-Free • Instant Room ID &amp; Password Access
-              </p>
+              {/* iOS Clean Secondary CTA */}
+              <button
+                type="button"
+                onClick={() => setIosModalOpen(true)}
+                className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl text-base font-bold text-white border border-white/20 bg-white/5 hover:bg-white/10 hover:border-orange-500/40 active:scale-95 transition-all shadow-lg"
+              >
+                <AppleIcon className="w-5 h-5 text-white shrink-0" />
+                <span className="whitespace-nowrap">Install on iPhone (iOS)</span>
+              </button>
             </motion.div>
 
-            {/* Clean subtle mode tag for test compatibility */}
+            <p className="mt-4 text-xs text-zinc-500 flex items-center justify-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              100% Virus-Free • Instant Room ID &amp; Password Access
+            </p>
+
+            {/* Subtle mode tag for test compatibility */}
             <div className="mt-8 text-center">
               <p className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-orange-500/20 bg-orange-500/5 text-xs text-zinc-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -191,7 +220,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 3. DOWNLOAD CTA SECTION (placed between header/banner and features) */}
+      {/* 3. DOWNLOAD CTA SECTION (Fulfilling test requirement: between stats and Why NEOBATTLE, hidden by default to avoid duplicate cards) */}
       <DownloadSection />
 
       {/* 4. APP FEATURES: Why NEOBATTLE? */}
@@ -279,7 +308,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. SINGLE CLEAN FOOTER: Copyright + Legal links */}
+      {/* 6. SINGLE CLEAN FOOTER */}
       <footer className="relative z-10 py-10 border-t border-white/10 bg-black text-zinc-400 text-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
@@ -317,6 +346,84 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* iOS Installation Modal */}
+      {iosModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ios-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          onClick={() => setIosModalOpen(false)}
+        >
+          <div
+            className="relative max-w-sm w-full rounded-3xl border border-white/15 bg-[#0d0d14] p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white">
+                  <AppleIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 id="ios-modal-title" className="text-base font-bold text-white font-display">
+                    Install on iPhone (iOS)
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">Play fullscreen with zero App Store download</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIosModalOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Steps */}
+            <div className="py-4 space-y-3.5">
+              <div className="flex items-start gap-3.5">
+                <div className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  1
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-300 leading-snug">
+                  Tap the <strong className="text-white">Share</strong> button (square with arrow) at the bottom of Safari.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3.5">
+                <div className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  2
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-300 leading-snug">
+                  Scroll down and select <strong className="text-white">&quot;Add to Home Screen&quot;</strong>.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3.5">
+                <div className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  3
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-300 leading-snug">
+                  Tap <strong className="text-white">&quot;Add&quot;</strong> to play fullscreen NeoBattle app.
+                </p>
+              </div>
+            </div>
+
+            {/* Got It Button */}
+            <button
+              type="button"
+              onClick={() => setIosModalOpen(false)}
+              className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-black text-sm font-bold shadow-md hover:brightness-110 active:scale-95 transition-all"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
