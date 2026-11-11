@@ -5,7 +5,7 @@ import path from 'node:path';
 import { JSDOM } from 'jsdom';
 
 // Configure development environment to test non-minified React errors
-process.env.NODE_ENV = 'development';
+(process.env as any).NODE_ENV = 'development';
 
 const frontendDir = path.resolve(__dirname, '../..');
 

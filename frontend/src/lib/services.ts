@@ -51,6 +51,7 @@ export interface Tournament {
   maxParticipants: number;
   teamSize: string | null;
   mapName: string | null;
+  map?: string | null;
   roomId: string | null;
   roomPassword?: string | null;
   requiredLevel: number;
@@ -1138,7 +1139,9 @@ export function formatDate(date: string): string {
   }).format(new Date(date));
 }
 
-export function getMapTheme(mapName: string | null): { gradient: string; accent: string; label: string; overlay: string; image: string | null } {
+export const DEFAULT_MAP_IMAGE = '/maps/bermuda.jpg';
+
+export function getMapTheme(mapName: string | null): { gradient: string; accent: string; label: string; overlay: string; image: string } {
   const map = (mapName || '').toLowerCase();
   if (map.includes('bermuda')) return {
     gradient: '135deg, #0f766e 0%, #0d9488 25%, #0891b2 50%, #155e75 75%, #0c4a6e 100%',
@@ -1166,7 +1169,7 @@ export function getMapTheme(mapName: string | null): { gradient: string; accent:
     accent: '#38bdf8',
     label: 'Alpine',
     overlay: 'radial-gradient(circle at 30% 20%, rgba(56,189,248,0.15) 0%, transparent 55%), radial-gradient(circle at 80% 60%, rgba(12,74,110,0.18) 0%, transparent 50%)',
-    image: null,
+    image: DEFAULT_MAP_IMAGE,
   };
   if (map.includes('nexterra')) return {
     gradient: '135deg, #7f1d1d 0%, #991b1b 25%, #b91c1c 50%, #9f1239 75%, #881337 100%',
@@ -1180,8 +1183,13 @@ export function getMapTheme(mapName: string | null): { gradient: string; accent:
     accent: '#f97316',
     label: mapName || 'Unknown',
     overlay: 'radial-gradient(circle at 50% 50%, rgba(249,115,22,0.08) 0%, transparent 60%)',
-    image: null,
+    image: DEFAULT_MAP_IMAGE,
   };
+}
+
+export function getMapImage(mapName?: string | null): string {
+  const theme = getMapTheme(mapName ?? null);
+  return theme.image || DEFAULT_MAP_IMAGE;
 }
 
 export function getCountdown(date?: string | Date | null): string {

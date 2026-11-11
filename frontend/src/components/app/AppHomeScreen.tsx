@@ -24,6 +24,8 @@ import {
   getCountdown,
   getEffectiveStatus,
   getMapTheme,
+  getMapImage,
+  DEFAULT_MAP_IMAGE,
   getStatusColor,
   isTournamentEnded,
   tournamentApi,
@@ -194,7 +196,9 @@ export default function AppHomeScreen() {
 
           <div className="app-hide-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 pt-1 -mx-4 px-4">
             {featured.map((tournament) => {
-              const theme = getMapTheme(tournament.mapName);
+              const mapName = tournament.mapName || (tournament as any).map;
+              const theme = getMapTheme(mapName);
+              const mapImage = getMapImage(mapName);
               const status = getEffectiveStatus(tournament);
               const entryFee = toNumber(tournament.entryFee);
 
@@ -202,22 +206,41 @@ export default function AppHomeScreen() {
                 <Link
                   key={tournament.id}
                   href={`/tournaments/${tournament.id}`}
-                  className="glass-card relative flex min-h-[168px] w-[86%] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-2xl border border-white/10 p-4 transition-transform active:scale-[0.985] hover:fire-glow"
-                  style={{ backgroundImage: `linear-gradient(${theme.gradient})` }}
+                  className="group relative flex min-h-[175px] w-[86%] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-2xl border border-white/10 p-4 transition-all active:scale-[0.985] hover:border-fire-500/40 hover:shadow-[0_0_25px_rgba(249,115,22,0.18)]"
                 >
+                  {/* Map Image Background */}
+                  <img
+                    src={mapImage}
+                    alt={theme.label}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = DEFAULT_MAP_IMAGE;
+                    }}
+                    className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                  />
+                  {/* Map Theme Overlays & Dark Gradient */}
                   <div
-                    className="pointer-events-none absolute inset-0 opacity-40"
+                    className="pointer-events-none absolute inset-0 opacity-20"
+                    style={{ background: `linear-gradient(${theme.gradient})` }}
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 opacity-25"
                     style={{ backgroundImage: theme.overlay }}
                     aria-hidden="true"
                   />
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-black/30"
+                    aria-hidden="true"
+                  />
+
                   <div className="relative z-10 flex items-start justify-between gap-2">
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getStatusColor(status)}`}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getStatusColor(status)} shadow-sm`}
                     >
                       <Zap className="h-3 w-3" />
                       {status}
                     </span>
-                    <span className="rounded-full border border-white/15 bg-black/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90">
+                    <span className="rounded-full border border-white/20 bg-black/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white backdrop-blur-xs shadow-sm">
                       {tournament.format}
                     </span>
                   </div>
@@ -226,7 +249,7 @@ export default function AppHomeScreen() {
                     <h3 className="line-clamp-1 text-lg font-display font-bold uppercase tracking-wide text-white drop-shadow">
                       {tournament.title}
                     </h3>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-white/80">
+                    <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-white/90 drop-shadow">
                       <ModeIcon gameMode={tournament.gameMode} className="h-3.5 w-3.5" />
                       {modeLabel(tournament.gameMode)}
                       <span className="text-white/40">•</span>
@@ -234,19 +257,19 @@ export default function AppHomeScreen() {
                     </p>
                     <div className="mt-3 flex items-end justify-between gap-2">
                       <div>
-                        <p className="text-xs text-zinc-400 uppercase tracking-wider">Prize Pool</p>
-                        <p className="text-base font-bold text-white">{formatCurrency(tournament.prizePool)}</p>
+                        <p className="text-[10px] text-zinc-300 uppercase tracking-wider font-medium">Prize Pool</p>
+                        <p className="text-base font-bold text-white drop-shadow">{formatCurrency(tournament.prizePool)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-zinc-400 uppercase tracking-wider">
+                        <p className="text-[10px] text-zinc-300 uppercase tracking-wider font-medium">
                           {entryFee === 0 ? 'Free entry' : 'Entry'}
                         </p>
-                        <p className="text-sm font-bold text-white">
+                        <p className="text-sm font-bold text-white drop-shadow">
                           {entryFee === 0 ? 'FREE' : formatCurrency(entryFee)}
                         </p>
                       </div>
                     </div>
-                    <p className="mt-2 flex items-center gap-1 text-xs font-medium text-zinc-300">
+                    <p className="mt-2 flex items-center gap-1 text-xs font-medium text-zinc-200 drop-shadow">
                       <Clock className="h-3.5 w-3.5" />
                       {getCountdown(tournament.startTime)}
                     </p>
@@ -403,7 +426,9 @@ function CompactTournamentCard({
   tournament: Tournament;
   registeredAt?: string;
 }) {
-  const theme = getMapTheme(tournament.mapName);
+  const mapName = tournament.mapName || (tournament as any).map;
+  const theme = getMapTheme(mapName);
+  const mapImage = getMapImage(mapName);
   const effectiveStatus = getEffectiveStatus(tournament);
   const ended = isTournamentEnded(tournament);
   const entryFee = toNumber(tournament.entryFee);
@@ -429,19 +454,31 @@ function CompactTournamentCard({
       className="glass-card flex min-h-[100px] items-center gap-3 rounded-2xl border border-white/5 p-3 sm:p-3.5 transition-all hover:fire-glow hover:border-fire-500/30"
     >
       {/* Map Thumbnail */}
-      <div
-        className="relative flex h-[68px] w-[68px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-white/10"
-        style={{ backgroundImage: `linear-gradient(${theme.gradient})` }}
-      >
+      <div className="relative flex h-[68px] w-[68px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
+        <img
+          src={mapImage}
+          alt={theme.label}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = DEFAULT_MAP_IMAGE;
+          }}
+          className="absolute inset-0 h-full w-full object-cover rounded-xl"
+        />
+        {/* Subtle dark tinting over map thumbnail */}
+        <div className="absolute inset-0 bg-black/40 rounded-xl" aria-hidden="true" />
         <div
-          className="pointer-events-none absolute inset-0 opacity-40"
-          style={{ backgroundImage: theme.overlay }}
+          className="pointer-events-none absolute inset-0 opacity-20 rounded-xl"
+          style={{ background: `linear-gradient(${theme.gradient})` }}
           aria-hidden="true"
         />
-        <ModeIcon gameMode={tournament.gameMode} className="relative h-5 w-5 text-white/90" />
-        <span className="relative mt-1 text-[9px] font-bold uppercase tracking-wide text-white/80 whitespace-nowrap">
-          {tournament.format}
-        </span>
+        {/* Format & Map Badges layered over */}
+        <div className="relative z-10 flex flex-col items-center justify-center px-1 text-center">
+          <span className="rounded-full bg-black/75 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white backdrop-blur-xs border border-white/20 whitespace-nowrap shadow">
+            {tournament.format}
+          </span>
+          <span className="mt-1 text-[8px] font-bold text-white uppercase tracking-tight drop-shadow truncate max-w-[62px]">
+            {theme.label}
+          </span>
+        </div>
       </div>
 
       {/* Middle column: Line 1 (status + mode), Line 2 (full map name + start state), Title */}
