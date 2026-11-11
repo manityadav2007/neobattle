@@ -32,6 +32,10 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Disable WebView remote debugging for release builds
+        boolean isDebuggable = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        WebView.setWebContentsDebuggingEnabled(isDebuggable);
+
         // Default notification channel for high-priority push notifications
         createNotificationChannel();
 
@@ -161,20 +165,36 @@ public class MainActivity extends BridgeActivity {
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            String channelId = "neobattle_default_channel";
-            CharSequence name = "NeoBattle";
-            String description = "Tournament starts, results, and announcements";
-            int importance = NotificationManager.IMPORTANCE_HIGH;
-            NotificationChannel channel = new NotificationChannel(channelId, name, importance);
-            channel.setDescription(description);
-            channel.enableLights(true);
-            channel.setLightColor(Color.parseColor("#F97316"));
-            channel.enableVibration(true);
-            channel.setShowBadge(true);
-            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            if (notificationManager != null) {
+            if (notificationManager == null) return;
+
+            // Ensure high-importance notification channels ("default", "match_alerts", "neobattle_default_channel")
+            String[] channelIds = new String[] {
+                "default",
+                "match_alerts",
+                "neobattle_default_channel"
+            };
+
+            for (String channelId : channelIds) {
+                String name;
+                if ("default".equals(channelId)) {
+                    name = "Match Alerts & Announcements";
+                } else if ("match_alerts".equals(channelId)) {
+                    name = "Match Alerts";
+                } else {
+                    name = "NeoBattle Alerts";
+                }
+
+                String description = "Tournament starts, match room updates, and wallet alerts";
+                int importance = NotificationManager.IMPORTANCE_HIGH;
+                NotificationChannel channel = new NotificationChannel(channelId, name, importance);
+                channel.setDescription(description);
+                channel.enableLights(true);
+                channel.setLightColor(Color.parseColor("#F97316"));
+                channel.enableVibration(true);
+                channel.setShowBadge(true);
+                channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+
                 notificationManager.createNotificationChannel(channel);
             }
         }

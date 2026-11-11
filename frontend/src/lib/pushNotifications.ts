@@ -172,11 +172,16 @@ export async function registerPushNotifications(
 
       // Handle notification received while app is in foreground
       await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        const route =
+          notification.data?.route ||
+          notification.data?.url ||
+          notification.data?.path;
+
         const detail: PushReceivedEventDetail = {
           id: notification.id,
           title: notification.title || 'NeoBattle',
           body: notification.body || '',
-          path: isSafeAppPath(notification.data?.path) ? notification.data.path : undefined,
+          path: isSafeAppPath(route) ? route : undefined,
         };
 
         window.dispatchEvent(
@@ -185,14 +190,18 @@ export async function registerPushNotifications(
       });
 
       // Handle user tapping on a notification
-      await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-        const path = action.notification.data?.path;
-        if (isSafeAppPath(path)) {
-          if (navigate) {
-            navigate(path);
-          } else if (typeof window !== 'undefined') {
-            window.location.href = path;
-          }
+      await PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+        const route =
+          notification.notification.data?.route ||
+          notification.notification.data?.url ||
+          notification.notification.data?.path ||
+          '/';
+
+        const target = isSafeAppPath(route) ? route : '/';
+        if (navigate) {
+          navigate(target);
+        } else if (typeof window !== 'undefined') {
+          window.location.href = target;
         }
       });
     }
