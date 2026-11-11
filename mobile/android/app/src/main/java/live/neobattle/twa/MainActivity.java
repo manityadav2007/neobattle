@@ -1,6 +1,7 @@
 package live.neobattle.twa;
 
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -28,6 +29,15 @@ import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
 
+    private static final int MAX_PAGE_LOAD_RETRIES = 2;
+    private static final long RETRY_INTERVAL_MS = 2000;
+    private static final long LOAD_TIMEOUT_MS = 18000; // 18-20s timeout window for mobile cellular networks
+
+    private int pageLoadRetryCount = 0;
+    private boolean isInitialPageLoaded = false;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Runnable loadTimeoutRunnable = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -39,12 +49,12 @@ public class MainActivity extends BridgeActivity {
         // Default notification channel for high-priority push notifications
         createNotificationChannel();
 
-        // Native safety timeout: ensure splash is dismissed if web fails to call SplashScreen.hide
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+        // Native safety timeout: relaxed to 20s to ensure splash is not prematurely dismissed on cellular cold start
+        mainHandler.postDelayed(() -> {
             if (getBridge() != null) {
                 getBridge().eval("window.Capacitor?.Plugins?.SplashScreen?.hide({ fadeOutDuration: 250 });", null);
             }
-        }, 4000);
+        }, 20000);
 
         // Hardware back button: navigate history in WebView, exit only from root/home page
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -107,7 +117,6 @@ public class MainActivity extends BridgeActivity {
             settings.setDisplayZoomControls(false);
 
             // 5. Edge-to-edge system bars insets handling for Android 13, 14, 15+
-            // Offsets WebView margins so content starts strictly below the status bar and bottom nav sits above gesture bar
             ViewCompat.setOnApplyWindowInsetsListener(webView, (v, windowInsets) -> {
                 Insets insets = windowInsets.getInsets(
                         WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
@@ -121,7 +130,7 @@ public class MainActivity extends BridgeActivity {
                 return windowInsets;
             });
 
-            // 6. Custom BridgeWebViewClient to intercept external links and handle errors
+            // 6. Custom BridgeWebViewClient to intercept external links, manage timeout & auto-retry
             webView.setWebViewClient(new BridgeWebViewClient(getBridge()) {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -152,14 +161,72 @@ public class MainActivity extends BridgeActivity {
                 }
 
                 @Override
+                public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                    super.onPageStarted(view, url, favicon);
+                    if (url != null && url.contains("neobattle.live") && !isInitialPageLoaded) {
+                        if (loadTimeoutRunnable != null) {
+                            mainHandler.removeCallbacks(loadTimeoutRunnable);
+                        }
+                        loadTimeoutRunnable = () -> {
+                            if (!isInitialPageLoaded && view != null) {
+                                handleInitialLoadFailure(view);
+                            }
+                        };
+                        mainHandler.postDelayed(loadTimeoutRunnable, LOAD_TIMEOUT_MS);
+                    }
+                }
+
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    if (url != null && url.contains("neobattle.live")) {
+                        isInitialPageLoaded = true;
+                        pageLoadRetryCount = 0;
+                        if (loadTimeoutRunnable != null) {
+                            mainHandler.removeCallbacks(loadTimeoutRunnable);
+                            loadTimeoutRunnable = null;
+                        }
+                    }
+                }
+
+                @Override
                 public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                     super.onReceivedError(view, request, error);
-                    // For main frame connection errors, load the bundled offline screen
-                    if (request.isForMainFrame()) {
-                        view.loadUrl("capacitor://localhost/offline.html");
+                    // For main frame connection errors, auto-retry 1-2 times before loading offline screen
+                    if (request != null && request.isForMainFrame()) {
+                        Uri failingUri = request.getUrl();
+                        if (failingUri != null && failingUri.getHost() != null && failingUri.getHost().contains("neobattle.live")) {
+                            if (loadTimeoutRunnable != null) {
+                                mainHandler.removeCallbacks(loadTimeoutRunnable);
+                                loadTimeoutRunnable = null;
+                            }
+                            handleInitialLoadFailure(view);
+                        }
                     }
                 }
             });
+        }
+    }
+
+    private void handleInitialLoadFailure(WebView view) {
+        if (isInitialPageLoaded) {
+            return;
+        }
+
+        if (pageLoadRetryCount < MAX_PAGE_LOAD_RETRIES) {
+            pageLoadRetryCount++;
+            // Background retry after 2000ms
+            mainHandler.postDelayed(() -> {
+                if (view != null && !isInitialPageLoaded) {
+                    view.loadUrl("https://neobattle.live");
+                }
+            }, RETRY_INTERVAL_MS);
+        } else {
+            // All retries exhausted, render offline screen
+            pageLoadRetryCount = 0;
+            if (view != null) {
+                view.loadUrl("capacitor://localhost/offline.html");
+            }
         }
     }
 

@@ -7,7 +7,8 @@ export const FALLBACK_LOGO = '/logo/image_21332e.jpg';
 
 const SESSION_STORAGE_KEY = 'neobattle_splash_shown';
 const MIN_POST_NATIVE_HIDE_MS = 800; // minimum 0.8s after native splash hidden
-const MAX_SAFETY_MS = 8000;          // maximum 8.0s timeout before showing retry screen
+const INITIAL_RETRY_MS = 8000;        // 8.0s initial safety window before background auto-retry
+const MAX_SAFETY_MS = 18000;         // maximum 18.0s timeout before showing retry screen (relaxed from 8000ms)
 const FADE_OUT_MS = 300;             // 300ms fadeout on top of painted content
 
 export default function SplashScreen() {
@@ -166,7 +167,19 @@ export default function SplashScreen() {
       window.addEventListener('app:route-painted', handleContentReady, { once: true });
     }
 
-    // 4. Maximum 8-second safety timeout: if content is still not painted, show black-themed retry screen
+    // 4. Auto-retry check at 8.0s and extended safety timeout at 18.0s
+    const retryTimer = setTimeout(() => {
+      if (!routeContentPainted && !dismissed) {
+        // Auto-retry check: if DOM mounted, trigger paint detection
+        const content = document.querySelector('main[data-app-main], nav.site-navbar, [data-app-login-gate]');
+        if (content) {
+          markRoutePainted();
+        } else {
+          window.dispatchEvent(new CustomEvent('app-content-ready'));
+        }
+      }
+    }, INITIAL_RETRY_MS);
+
     const safetyTimer = setTimeout(() => {
       if (!routeContentPainted && !dismissed) {
         isTimedOut = true;
@@ -178,6 +191,7 @@ export default function SplashScreen() {
 
     return () => {
       if (dismissTimer) clearTimeout(dismissTimer);
+      clearTimeout(retryTimer);
       clearTimeout(safetyTimer);
       window.removeEventListener('app-content-ready', handleContentReady);
       window.removeEventListener('app:route-painted', handleContentReady);
