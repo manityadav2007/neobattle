@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FireArena — Next-Gen Free Fire Esports & Tournament Platform</title>
+  <meta name="description" content="Join high-stakes Free Fire tournaments, track live kills with AI OCR verification, and cash out instantly with automated escrow safety.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              orange: '#FF5500',
+              fire: '#FF3300',
+              gold: '#FFB800',
+              dark: '#0B0E14',
+              card: '#131822',
+              border: '#1E2638',
+              neon: '#00F0FF'
+            }
+          },
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            display: ['Orbitron', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <style>
+    body {
+      background-color: #0B0E14;
+      color: #F3F4F6;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      overflow-x: hidden;
+    }
+    .font-display {
+      font-family: 'Orbitron', sans-serif;
+    }
+    .glow-orange {
+      box-shadow: 0 0 35px rgba(255, 85, 0, 0.35);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.25);
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #FF7700 0%, #FF3300 50%, #FFB800 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .glass-card {
+      background: rgba(19, 24, 34, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card:hover {
+      border-color: rgba(255, 85, 0, 0.4);
+    }
+    .hero-grid {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-brand-orange selection:text-white">
+
+  <!-- Announcement Bar -->
+  <div class="bg-gradient-to-r from-brand-orange via-brand-fire to-red-600 text-white text-xs md:text-sm font-semibold py-2 px-4 text-center flex items-center justify-center gap-2 shadow-lg">
+    <span class="bg-black/30 text-xs px-2 py-0.5 rounded-full uppercase tracking-wider font-bold border border-white/20">NEW</span>
+    <span>AI OCR Automated Screenshot Verification is now LIVE for all Squad Matches!</span>
+    <a href="#tournaments" class="underline font-bold hover:text-black transition-colors ml-1">Join Arena &rarr;</a>
+  </div>
+
+  <!-- Navigation -->
+  <header class="sticky top-0 z-50 glass-card border-b border-brand-border/60 bg-brand-dark/90 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      
+      <!-- Logo -->
+      <a href="/" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-fire to-brand-orange flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+          <i data-lucide="flame" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <span class="font-display font-black text-2xl tracking-wider text-white flex items-center gap-1">
+            FIRE<span class="text-brand-orange">ARENA</span>
+          </span>
+          <span class="text-[10px] tracking-widest text-gray-400 block -mt-1 font-semibold uppercase">Esports Ecosystem</span>
+        </div>
+      </a>
+
+      <!-- Desktop Nav Links -->
+      <nav class="hidden md:flex items-center gap-8 font-semibold text-sm text-gray-300">
+        <a href="#tournaments" class="hover:text-brand-orange transition-colors flex items-center gap-1.5">
+          <i data-lucide="trophy" class="w-4 h-4 text-brand-orange"></i> Tournaments
+        </a>
+        <a href="#features" class="hover:text-brand-orange transition-colors flex items-center gap-1.5">
+          <i data-lucide="shield-check" class="w-4 h-4 text-brand-neon"></i> Security & Escrow
+        </a>
+        <a href="#leaderboard" class="hover:text-brand-orange transition-colors flex items-center gap-1.5">
+          <i data-lucide="crown" class="w-4 h-4 text-brand-gold"></i> Leaderboard
+        </a>
+        <a href="#download" class="hover:text-brand-orange transition-colors flex items-center gap-1.5">
+          <i data-lucide="smartphone" class="w-4 h-4 text-green-400"></i> Download App
+        </a>
+      </nav>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-4">
+        <a href="/dashboard" class="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-brand-border bg-brand-card hover:bg-brand-border text-white text-sm font-semibold transition-all">
+          <i data-lucide="user" class="w-4 h-4"></i> Dashboard
+        </a>
+        <a href="#tournaments" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-orange to-brand-fire hover:from-brand-fire hover:to-red-600 text-white text-sm font-bold shadow-lg glow-orange transition-all hover:scale-[1.02]">
+          <i data-lucide="gamepad-2" class="w-4 h-4"></i> Enter Battle
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="relative min-h-[85vh] flex items-center justify-center hero-grid py-20 overflow-hidden">
+    <!-- Glow Accents -->
+    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-brand-fire/20 rounded-full blur-[140px] pointer-events-none"></div>
+    <div class="absolute bottom-10 right-10 w-[300px] h-[300px] bg-brand-neon/15 rounded-full blur-[120px] pointer-events-none"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+      
+      <!-- Live Status Badge -->
+      <div class="inline-flex items-center gap-3 px-4 py-2 rounded-full glass-card border border-brand-orange/30 text-xs font-semibold mb-8">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+        </span>
+        <span class="text-gray-300">Live Arena Active &bull; <strong class="text-white">1,420+ Battles Hosted Today</strong></span>
+      </div>
+
+      <!-- Headline -->
+      <h1 class="font-display font-black text-4xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight text-white mb-6 uppercase leading-[1.05]">
+        DOMINATE THE <br/>
+        <span class="gradient-text">FREE FIRE</span> ARENA
+      </h1>
+
+      <p class="max-w-2xl mx-auto text-base sm:text-lg md:text-xl text-gray-400 font-medium mb-10 leading-relaxed">
+        Compete in Solo, Duo, and Squad esports tournaments. AI OCR kill detection, instant escrow payouts, and guaranteed zero-cheat gameplay.
+      </p>
+
+      <!-- Hero CTA Buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+        <a href="#tournaments" class="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-brand-orange via-brand-fire to-red-600 hover:opacity-95 text-white font-bold text-base shadow-xl glow-orange flex items-center justify-center gap-3 transition-all hover:scale-105">
+          <i data-lucide="swords" class="w-5 h-5"></i> Browse Active Tournaments
+        </a>
+        <a href="#download" class="w-full sm:w-auto px-8 py-4 rounded-xl glass-card hover:bg-brand-card text-white font-bold text-base border border-brand-border flex items-center justify-center gap-3 transition-all hover:border-brand-orange/50">
+          <i data-lucide="download" class="w-5 h-5 text-green-400"></i> Download Android APK
+        </a>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 max-w-4xl mx-auto">
+        <div class="glass-card p-5 rounded-2xl text-center border border-brand-border/60">
+          <div class="font-display text-2xl sm:text-3xl font-extrabold text-brand-orange mb-1">$120,000+</div>
+          <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Prizes Distributed</div>
+        </div>
+        <div class="glass-card p-5 rounded-2xl text-center border border-brand-border/60">
+          <div class="font-display text-2xl sm:text-3xl font-extrabold text-brand-neon mb-1">85,000+</div>
+          <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Registered Players</div>
+        </div>
+        <div class="glass-card p-5 rounded-2xl text-center border border-brand-border/60">
+          <div class="font-display text-2xl sm:text-3xl font-extrabold text-brand-gold mb-1">99.8%</div>
+          <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">AI OCR Precision</div>
+        </div>
+        <div class="glass-card p-5 rounded-2xl text-center border border-brand-border/60">
+          <div class="font-display text-2xl sm:text-3xl font-extrabold text-emerald-400 mb-1">&lt; 30s</div>
+          <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Instant Payout Time</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Active Tournaments Section -->
+  <section id="tournaments" class="py-20 bg-brand-dark relative border-t border-brand-border/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
+        <div>
+          <div class="flex items-center gap-2 text-brand-orange font-bold text-xs uppercase tracking-widest mb-2">
+            <i data-lucide="zap" class="w-4 h-4"></i> Live & Upcoming Battles
+          </div>
+          <h2 class="font-display text-3xl sm:text-4xl font-extrabold text-white uppercase">
+            Featured Tournaments
+          </h2>
+        </div>
+        <div class="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
+          <button class="px-4 py-2 rounded-lg bg-brand-orange text-white text-xs font-bold uppercase tracking-wider shadow">All Matches</button>
+          <button class="px-4 py-2 rounded-lg bg-brand-card hover:bg-brand-border text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors">Solo</button>
+          <button class="px-4 py-2 rounded-lg bg-brand-card hover:bg-brand-border text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors">Duo</button>
+          <button class="px-4 py-2 rounded-lg bg-brand-card hover:bg-brand-border text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors">Squad</button>
+        </div>
+      </div>
+
+      <!-- Tournament Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        
+        <!-- Card 1 -->
+        <div class="glass-card rounded-2xl overflow-hidden border border-brand-border flex flex-col group hover:-translate-y-1 transition-all duration-300">
+          <div class="relative h-48 bg-gradient-to-t from-brand-card to-gray-900 overflow-hidden">
+            <div class="absolute inset-0 bg-brand-orange/10 group-hover:bg-brand-orange/20 transition-colors"></div>
+            <div class="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span> LIVE NOW
+            </div>
+            <div class="absolute top-4 right-4 bg-brand-dark/80 backdrop-blur-md border border-brand-border text-gray-300 text-xs font-bold px-3 py-1 rounded-lg uppercase">
+              Bermuda Map
+            </div>
+            <div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+              <div>
+                <span class="text-xs text-brand-orange font-bold uppercase tracking-widest block">Squad Battle</span>
+                <h3 class="font-display font-bold text-xl text-white">Apex Warriors Showdown #402</h3>
+              </div>
+            </div>
+          </div>
+          <div class="p-6 flex-1 flex flex-col justify-between gap-6 bg-brand-card/50">
+            <div class="grid grid-cols-3 gap-2 py-3 px-4 rounded-xl bg-brand-dark/60 border border-brand-border/40 text-center">
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Prize Pool</span>
+                <span class="font-display font-bold text-brand-gold text-base">$500</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Entry Fee</span>
+                <span class="font-display font-bold text-emerald-400 text-base">$5.00</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Per Kill</span>
+                <span class="font-display font-bold text-brand-neon text-base">$0.50</span>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs text-gray-400 mb-2 font-semibold">
+                <span>Slots Filled</span>
+                <span class="text-white font-bold">42 / 48 Squads</span>
+              </div>
+              <div class="w-full h-2 bg-brand-dark rounded-full overflow-hidden border border-brand-border/40">
+                <div class="h-full bg-gradient-to-r from-brand-orange to-brand-fire rounded-full" style="width: 87.5%"></div>
+              </div>
+            </div>
+            <a href="/arena" class="w-full py-3 rounded-xl bg-brand-orange hover:bg-brand-fire text-white font-bold text-center text-sm uppercase tracking-wider transition-colors shadow-lg flex items-center justify-center gap-2">
+              <i data-lucide="swords" class="w-4 h-4"></i> Join Tournament
+            </a>
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="glass-card rounded-2xl overflow-hidden border border-brand-border flex flex-col group hover:-translate-y-1 transition-all duration-300">
+          <div class="relative h-48 bg-gradient-to-t from-brand-card to-gray-900 overflow-hidden">
+            <div class="absolute inset-0 bg-brand-neon/10 group-hover:bg-brand-neon/20 transition-colors"></div>
+            <div class="absolute top-4 left-4 bg-brand-neon/20 border border-brand-neon/40 text-brand-neon text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+              <i data-lucide="clock" class="w-3 h-3"></i> UPCOMING
+            </div>
+            <div class="absolute top-4 right-4 bg-brand-dark/80 backdrop-blur-md border border-brand-border text-gray-300 text-xs font-bold px-3 py-1 rounded-lg uppercase">
+              Kalahari Map
+            </div>
+            <div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+              <div>
+                <span class="text-xs text-brand-neon font-bold uppercase tracking-widest block">Duo Clash</span>
+                <h3 class="font-display font-bold text-xl text-white">Desert Rush Cup #118</h3>
+              </div>
+            </div>
+          </div>
+          <div class="p-6 flex-1 flex flex-col justify-between gap-6 bg-brand-card/50">
+            <div class="grid grid-cols-3 gap-2 py-3 px-4 rounded-xl bg-brand-dark/60 border border-brand-border/40 text-center">
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Prize Pool</span>
+                <span class="font-display font-bold text-brand-gold text-base">$250</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Entry Fee</span>
+                <span class="font-display font-bold text-emerald-400 text-base">$3.00</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Per Kill</span>
+                <span class="font-display font-bold text-brand-neon text-base">$0.30</span>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs text-gray-400 mb-2 font-semibold">
+                <span>Slots Filled</span>
+                <span class="text-white font-bold">18 / 24 Duos</span>
+              </div>
+              <div class="w-full h-2 bg-brand-dark rounded-full overflow-hidden border border-brand-border/40">
+                <div class="h-full bg-brand-neon rounded-full" style="width: 75%"></div>
+              </div>
+            </div>
+            <a href="/arena" class="w-full py-3 rounded-xl bg-brand-card hover:bg-brand-border text-white font-bold text-center text-sm uppercase tracking-wider transition-colors border border-brand-border flex items-center justify-center gap-2">
+              <i data-lucide="ticket" class="w-4 h-4 text-brand-neon"></i> Reserve Slot
+            </a>
+          </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="glass-card rounded-2xl overflow-hidden border border-brand-border flex flex-col group hover:-translate-y-1 transition-all duration-300">
+          <div class="relative h-48 bg-gradient-to-t from-brand-card to-gray-900 overflow-hidden">
+            <div class="absolute inset-0 bg-brand-gold/10 group-hover:bg-brand-gold/20 transition-colors"></div>
+            <div class="absolute top-4 left-4 bg-brand-gold/20 border border-brand-gold/40 text-brand-gold text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+              <i data-lucide="zap" class="w-3 h-3"></i> REGISTERING
+            </div>
+            <div class="absolute top-4 right-4 bg-brand-dark/80 backdrop-blur-md border border-brand-border text-gray-300 text-xs font-bold px-3 py-1 rounded-lg uppercase">
+              Purgatory Map
+            </div>
+            <div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+              <div>
+                <span class="text-xs text-brand-gold font-bold uppercase tracking-widest block">Solo Survival</span>
+                <h3 class="font-display font-bold text-xl text-white">Lone Wolf Championship</h3>
+              </div>
+            </div>
+          </div>
+          <div class="p-6 flex-1 flex flex-col justify-between gap-6 bg-brand-card/50">
+            <div class="grid grid-cols-3 gap-2 py-3 px-4 rounded-xl bg-brand-dark/60 border border-brand-border/40 text-center">
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Prize Pool</span>
+                <span class="font-display font-bold text-brand-gold text-base">$150</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Entry Fee</span>
+                <span class="font-display font-bold text-emerald-400 text-base">$2.00</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-gray-500 uppercase block font-semibold">Per Kill</span>
+                <span class="font-display font-bold text-brand-neon text-base">$0.20</span>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs text-gray-400 mb-2 font-semibold">
+                <span>Slots Filled</span>
+                <span class="text-white font-bold">35 / 48 Solo</span>
+              </div>
+              <div class="w-full h-2 bg-brand-dark rounded-full overflow-hidden border border-brand-border/40">
+                <div class="h-full bg-brand-gold rounded-full" style="width: 72.9%"></div>
+              </div>
+            </div>
+            <a href="/arena" class="w-full py-3 rounded-xl bg-brand-card hover:bg-brand-border text-white font-bold text-center text-sm uppercase tracking-wider transition-colors border border-brand-border flex items-center justify-center gap-2">
+              <i data-lucide="crosshair" class="w-4 h-4 text-brand-gold"></i> Register Solo
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Security & Escrow Section -->
+  <section id="features" class="py-20 relative bg-brand-dark/95 border-t border-brand-border/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <div class="inline-flex items-center gap-2 text-brand-neon font-bold text-xs uppercase tracking-widest mb-3">
+          <i data-lucide="shield-check" class="w-4 h-4"></i> Security & Automated Escrow
+        </div>
+        <h2 class="font-display text-3xl sm:text-4xl font-extrabold text-white uppercase mb-4">
+          Built for Fair Play & Instant Cashouts
+        </h2>
+        <p class="text-gray-400 text-base">
+          Our security architecture combines cryptographic match validation, AI OCR kill verification, and non-custodial automated escrow payouts.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="glass-card p-8 rounded-2xl border border-brand-border hover:border-brand-orange/40 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-brand-orange/10 border border-brand-orange/30 text-brand-orange flex items-center justify-center mb-6">
+            <i data-lucide="lock" class="w-6 h-6"></i>
+          </div>
+          <h3 class="font-display font-bold text-xl text-white mb-3">Escrow Protected Vault</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Tournament entry fees are locked into secure escrow smart contracts. Funds are instantly released to winners upon match verification.
+          </p>
+        </div>
+
+        <div class="glass-card p-8 rounded-2xl border border-brand-border hover:border-brand-neon/40 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-brand-neon/10 border border-brand-neon/30 text-brand-neon flex items-center justify-center mb-6">
+            <i data-lucide="eye" class="w-6 h-6"></i>
+          </div>
+          <h3 class="font-display font-bold text-xl text-white mb-3">AI OCR Screenshot Analysis</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Automated computer vision parses match end screens to verify squad kills, placements, and total points with 99.8% precision.
+          </p>
+        </div>
+
+        <div class="glass-card p-8 rounded-2xl border border-brand-border hover:border-emerald-500/40 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-6">
+            <i data-lucide="zap" class="w-6 h-6"></i>
+          </div>
+          <h3 class="font-display font-bold text-xl text-white mb-3">Instant Withdrawals</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Cash out your winnings directly to UPI, bank accounts, or crypto wallets in under 30 seconds with 24/7 automated processing.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Leaderboard Section -->
+  <section id="leaderboard" class="py-20 bg-brand-dark border-t border-brand-border/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
+        <div>
+          <div class="flex items-center gap-2 text-brand-gold font-bold text-xs uppercase tracking-widest mb-2">
+            <i data-lucide="crown" class="w-4 h-4"></i> Hall of Fame
+          </div>
+          <h2 class="font-display text-3xl sm:text-4xl font-extrabold text-white uppercase">
+            Season Top Champions
+          </h2>
+        </div>
+        <a href="/dashboard" class="text-xs text-brand-orange font-bold uppercase tracking-wider hover:underline flex items-center gap-1">
+          View Full Leaderboard &rarr;
+        </a>
+      </div>
+
+      <!-- Leaderboard Table -->
+      <div class="glass-card rounded-2xl border border-brand-border overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-brand-border/60 bg-brand-card/80 text-[11px] uppercase tracking-wider text-gray-400 font-bold">
+                <th class="py-4 px-6">Rank</th>
+                <th class="py-4 px-6">Player / Squad</th>
+                <th class="py-4 px-6 text-center">Matches</th>
+                <th class="py-4 px-6 text-center">Kills</th>
+                <th class="py-4 px-6 text-center">Win Rate</th>
+                <th class="py-4 px-6 text-right">Total Earnings</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-brand-border/40 text-sm font-semibold">
+              <tr class="hover:bg-brand-card/40 transition-colors">
+                <td class="py-4 px-6">
+                  <span class="w-8 h-8 rounded-lg bg-brand-gold/20 border border-brand-gold/40 text-brand-gold font-display font-extrabold flex items-center justify-center">#1</span>
+                </td>
+                <td class="py-4 px-6 flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-brand-orange/20 border border-brand-orange/40 flex items-center justify-center font-display font-bold text-brand-orange">
+                    FF
+                  </div>
+                  <div>
+                    <div class="font-bold text-white">Viper_Pro99</div>
+                    <div class="text-xs text-gray-400">UID: 884719201</div>
+                  </div>
+                </td>
+                <td class="py-4 px-6 text-center text-gray-300">248</td>
+                <td class="py-4 px-6 text-center text-brand-neon font-bold">1,842</td>
+                <td class="py-4 px-6 text-center text-emerald-400 font-bold">68.4%</td>
+                <td class="py-4 px-6 text-right font-display font-bold text-brand-gold text-base">$4,250.00</td>
+              </tr>
+              <tr class="hover:bg-brand-card/40 transition-colors">
+                <td class="py-4 px-6">
+                  <span class="w-8 h-8 rounded-lg bg-gray-400/20 border border-gray-400/40 text-gray-300 font-display font-extrabold flex items-center justify-center">#2</span>
+                </td>
+                <td class="py-4 px-6 flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-brand-neon/20 border border-brand-neon/40 flex items-center justify-center font-display font-bold text-brand-neon">
+                    SK
+                  </div>
+                  <div>
+                    <div class="font-bold text-white">ShadowKing_07</div>
+                    <div class="text-xs text-gray-400">UID: 910284712</div>
+                  </div>
+                </td>
+                <td class="py-4 px-6 text-center text-gray-300">210</td>
+                <td class="py-4 px-6 text-center text-brand-neon font-bold">1,510</td>
+                <td class="py-4 px-6 text-center text-emerald-400 font-bold">61.2%</td>
+                <td class="py-4 px-6 text-right font-display font-bold text-brand-gold text-base">$3,180.00</td>
+              </tr>
+              <tr class="hover:bg-brand-card/40 transition-colors">
+                <td class="py-4 px-6">
+                  <span class="w-8 h-8 rounded-lg bg-amber-700/20 border border-amber-700/40 text-amber-500 font-display font-extrabold flex items-center justify-center">#3</span>
+                </td>
+                <td class="py-4 px-6 flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-brand-fire/20 border border-brand-fire/40 flex items-center justify-center font-display font-bold text-brand-fire">
+                    RA
+                  </div>
+                  <div>
+                    <div class="font-bold text-white">RedAlpha_Squad</div>
+                    <div class="text-xs text-gray-400">UID: 772910384</div>
+                  </div>
+                </td>
+                <td class="py-4 px-6 text-center text-gray-300">195</td>
+                <td class="py-4 px-6 text-center text-brand-neon font-bold">1,390</td>
+                <td class="py-4 px-6 text-center text-emerald-400 font-bold">59.8%</td>
+                <td class="py-4 px-6 text-right font-display font-bold text-brand-gold text-base">$2,940.00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download App Section -->
+  <section id="download" class="py-20 relative bg-brand-dark/95 border-t border-brand-border/40 overflow-hidden">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="glass-card rounded-3xl p-8 sm:p-12 border border-brand-orange/30 bg-gradient-to-r from-brand-card via-brand-dark to-brand-card flex flex-col lg:flex-row items-center justify-between gap-12 relative">
+        <div class="max-w-xl">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-4">
+            <i data-lucide="smartphone" class="w-3.5 h-3.5"></i> Android App v2.4.0 Available
+          </div>
+          <h2 class="font-display text-3xl sm:text-5xl font-extrabold text-white uppercase mb-4 leading-tight">
+            Play Anywhere with the <span class="gradient-text">FireArena App</span>
+          </h2>
+          <p class="text-gray-400 text-base mb-8 leading-relaxed">
+            Get instant match notifications, real-time custom room IDs, automated screenshot submission, and instant wallet withdrawals straight from your mobile device.
+          </p>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+            <a href="/downloads/neobattle.apk" class="px-8 py-4 rounded-xl bg-gradient-to-r from-brand-orange to-brand-fire hover:from-brand-fire hover:to-red-600 text-white font-bold text-base shadow-xl glow-orange flex items-center justify-center gap-3 transition-all hover:scale-105">
+              <i data-lucide="download" class="w-5 h-5"></i> Download APK Direct (42 MB)
+            </a>
+            <div class="text-xs text-gray-500 text-center sm:text-left font-semibold">
+              Android 8.0+ Required <br/>100% Virus-free & Verified
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-center">
+          <div class="glass-card p-6 rounded-2xl border border-brand-border text-center flex flex-col items-center">
+            <div class="w-40 h-40 bg-white p-3 rounded-xl mb-4 flex items-center justify-center shadow-lg">
+              <!-- Simulated QR Code -->
+              <div class="w-full h-full bg-slate-950 rounded flex items-center justify-center p-2 text-center text-xs font-mono text-brand-orange">
+                [ QR CODE ]
+              </div>
+            </div>
+            <span class="text-xs font-bold text-gray-300 uppercase tracking-wider">Scan to Install APK</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-brand-dark border-t border-brand-border/60 py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-fire to-brand-orange flex items-center justify-center shadow">
+            <i data-lucide="flame" class="w-5 h-5 text-white"></i>
+          </div>
+          <span class="font-display font-bold text-xl text-white">FIRE<span class="text-brand-orange">ARENA</span></span>
+        </div>
+
+        <p class="text-xs text-gray-500 text-center md:text-left font-medium">
+          &copy; 2026 FireArena Esports Platform. All rights reserved. Free Fire is a registered trademark of Garena.
+        </p>
+
+        <div class="flex items-center gap-6 text-gray-400 text-sm">
+          <a href="/disclaimer" class="hover:text-white transition-colors">Disclaimer</a>
+          <a href="/about" class="hover:text-white transition-colors">About Us</a>
+          <a href="#tournaments" class="hover:text-white transition-colors">Tournaments</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Initialize Lucide Icons -->
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
