@@ -1,4 +1,4 @@
-# 🔥 FIREARENA — Free Fire Tournament Platform
+# 🔥 NEOBATTLE — Free Fire Tournament Platform
 
 A production-ready, full-stack tournament management platform for Free Fire esports. Built with security-first architecture, escrow-based payments, and OCR-powered player verification.
 
